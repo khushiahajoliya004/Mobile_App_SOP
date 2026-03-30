@@ -33,15 +33,36 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _logout() async {
     await _auth.logout();
     if (mounted) {
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      );
     }
   }
 
   List<_MenuItem> _getMenuItems() {
     final items = <_MenuItem>[
-      _MenuItem(icon: Icons.mic_rounded, activeIcon: Icons.mic, label: 'Record', permission: null, screen: const CallRecorderScreen()),
-      _MenuItem(icon: Icons.upload_file_outlined, activeIcon: Icons.upload_file_rounded, label: 'Upload', permission: 'CALL_CREATE', screen: const CallUploadScreen()),
-      _MenuItem(icon: Icons.history_outlined, activeIcon: Icons.history_rounded, label: 'History', permission: 'CALL_VIEW', screen: const CallHistoryScreen()),
+      _MenuItem(
+        icon: Icons.mic_rounded,
+        activeIcon: Icons.mic,
+        label: 'Record',
+        permission: null,
+        screen: const CallRecorderScreen(),
+      ),
+      _MenuItem(
+        icon: Icons.upload_file_outlined,
+        activeIcon: Icons.upload_file_rounded,
+        label: 'Upload',
+        permission: 'CALL_CREATE',
+        screen: const CallUploadScreen(),
+      ),
+      _MenuItem(
+        icon: Icons.history_outlined,
+        activeIcon: Icons.history_rounded,
+        label: 'History',
+        permission: 'CALL_VIEW',
+        screen: const CallHistoryScreen(),
+      ),
     ];
     return items.where((item) {
       if (item.permission == null) return true;
@@ -67,7 +88,11 @@ class _HomeScreenState extends State<HomeScreen> {
               end: Alignment.bottomRight,
             ),
             boxShadow: [
-              BoxShadow(color: Color(0x30000000), blurRadius: 8, offset: Offset(0, 2)),
+              BoxShadow(
+                color: Color(0x30000000),
+                blurRadius: 8,
+                offset: Offset(0, 2),
+              ),
             ],
           ),
           child: AppBar(
@@ -79,7 +104,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   padding: const EdgeInsets.only(right: 4),
                   child: Container(
                     margin: const EdgeInsets.symmetric(vertical: 12),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(24),
@@ -89,43 +117,75 @@ class _HomeScreenState extends State<HomeScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Container(
-                          width: 26, height: 26,
+                          width: 26,
+                          height: 26,
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
-                              colors: [AppColors.accent, AppColors.primaryLight],
+                              colors: [
+                                AppColors.accent,
+                                AppColors.primaryLight,
+                              ],
                             ),
                             shape: BoxShape.circle,
                           ),
                           child: Center(
                             child: Text(
-                              _user!.firstName.isNotEmpty ? _user!.firstName[0].toUpperCase() : 'U',
-                              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
+                              _user!.firstName.isNotEmpty
+                                  ? _user!.firstName[0].toUpperCase()
+                                  : 'U',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Text(_user!.userType, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500)),
+                        Text(
+                          _user!.userType,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                       ],
                     ),
                   ),
                 ),
               IconButton(
-                icon: const Icon(Icons.logout_rounded, color: Colors.white, size: 22),
+                icon: const Icon(
+                  Icons.logout_rounded,
+                  color: Colors.white,
+                  size: 22,
+                ),
                 tooltip: 'Logout',
                 onPressed: () {
                   showDialog(
                     context: context,
                     builder: (ctx) => AlertDialog(
-                      title: const Text('Logout', style: TextStyle(fontWeight: FontWeight.w600)),
+                      title: const Text(
+                        'Logout',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
                       content: const Text('Are you sure you want to logout?'),
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.pop(ctx),
-                          child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+                          child: const Text(
+                            'Cancel',
+                            style: TextStyle(color: AppColors.textSecondary),
+                          ),
                         ),
                         FilledButton(
-                          onPressed: () { Navigator.pop(ctx); _logout(); },
-                          style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            _logout();
+                          },
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.error,
+                          ),
                           child: const Text('Logout'),
                         ),
                       ],
@@ -141,7 +201,13 @@ class _HomeScreenState extends State<HomeScreen> {
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: Colors.white,
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, -4))],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 20,
+              offset: const Offset(0, -4),
+            ),
+          ],
           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
         child: ClipRRect(
@@ -153,11 +219,15 @@ class _HomeScreenState extends State<HomeScreen> {
             elevation: 0,
             height: 70,
             animationDuration: const Duration(milliseconds: 400),
-            destinations: menuItems.map((item) => NavigationDestination(
-              icon: Icon(item.icon),
-              selectedIcon: Icon(item.activeIcon),
-              label: item.label,
-            )).toList(),
+            destinations: menuItems
+                .map(
+                  (item) => NavigationDestination(
+                    icon: Icon(item.icon),
+                    selectedIcon: Icon(item.activeIcon),
+                    label: item.label,
+                  ),
+                )
+                .toList(),
           ),
         ),
       ),
@@ -171,5 +241,11 @@ class _MenuItem {
   final String label;
   final String? permission;
   final Widget screen;
-  _MenuItem({required this.icon, required this.activeIcon, required this.label, required this.permission, required this.screen});
+  _MenuItem({
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+    required this.permission,
+    required this.screen,
+  });
 }

@@ -7,6 +7,8 @@ class UserModel {
   final String userType;
   final String? companyId;
   final String? distributorId;
+  final String? sopId;
+  final bool aiEnabled;
   final List<String> permissions;
   final List<String> allowedModules;
   final List<RoleModel> roles;
@@ -20,6 +22,8 @@ class UserModel {
     required this.userType,
     this.companyId,
     this.distributorId,
+    this.sopId,
+    this.aiEnabled = true,
     required this.permissions,
     required this.allowedModules,
     required this.roles,
@@ -52,6 +56,8 @@ class UserModel {
       userType: json['userType'] ?? 'USER',
       companyId: json['companyId'],
       distributorId: json['distributorId'],
+      sopId: json['sopId'],
+      aiEnabled: json['aiEnabled'] ?? true,
       permissions: perms.toList(),
       allowedModules: List<String>.from(json['_allowedModules'] ?? []),
       roles: roles,
@@ -67,6 +73,8 @@ class UserModel {
     'userType': userType,
     'companyId': companyId,
     'distributorId': distributorId,
+    'sopId': sopId,
+    'aiEnabled': aiEnabled,
     '_allowedModules': allowedModules,
     'roles': roles.map((r) => r.toJson()).toList(),
   };
@@ -89,9 +97,11 @@ class RoleModel {
     return RoleModel(
       id: json['id'] ?? '',
       name: json['name'] ?? '',
-      permissions: (json['permissions'] as List?)
-          ?.map((p) => PermissionModel.fromJson(p))
-          .toList() ?? [],
+      permissions:
+          (json['permissions'] as List?)
+              ?.map((p) => PermissionModel.fromJson(p))
+              .toList() ??
+          [],
     );
   }
 
@@ -109,10 +119,7 @@ class PermissionModel {
   PermissionModel({required this.id, required this.code});
 
   factory PermissionModel.fromJson(Map<String, dynamic> json) {
-    return PermissionModel(
-      id: json['id'] ?? '',
-      code: json['code'] ?? '',
-    );
+    return PermissionModel(id: json['id'] ?? '', code: json['code'] ?? '');
   }
 
   Map<String, dynamic> toJson() => {'id': id, 'code': code};
