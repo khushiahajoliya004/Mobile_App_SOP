@@ -4,7 +4,9 @@ import 'auth_service.dart';
 class ApiService {
   // Backend runs on port 3000, no /api prefix
   // For Android emulator use 10.0.2.2, for real device use your machine IP
-  static const String baseUrl = 'https://api.mysterymentor.in';
+  // static const String baseUrl = 'https://api.mysterymentor.in';
+  static const String baseUrl = 'http://192.168.137.1:3000';
+
 
   late final Dio _dio;
   final AuthService _auth = AuthService();
@@ -91,14 +93,14 @@ class ApiService {
   // ─── Calls ───
 
   /// POST /calls  (multipart with audio file)
-  /// Required: customerName, companyId, categoryId, salesStageId, userId
-  /// Optional: notes, audio file
+  /// Required: customerName, companyId, userId
+  /// Optional: categoryId, salesStageId, notes, audio file
   Future<Response> createCall({
     required String customerName,
     required String companyId,
-    required String categoryId,
-    required String salesStageId,
     required String userId,
+    String? categoryId,
+    String? salesStageId,
     String? notes,
     String? audioFilePath,
     String? audioFileName,
@@ -106,9 +108,9 @@ class ApiService {
     final map = <String, dynamic>{
       'customerName': customerName,
       'companyId': companyId,
-      'categoryId': categoryId,
-      'salesStageId': salesStageId,
       'userId': userId,
+      if (categoryId != null && categoryId.isNotEmpty) 'categoryId': categoryId,
+      if (salesStageId != null && salesStageId.isNotEmpty) 'salesStageId': salesStageId,
       if (notes != null) 'notes': notes,
     };
 

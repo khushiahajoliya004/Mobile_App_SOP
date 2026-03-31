@@ -109,8 +109,6 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
         customerName:
             'Call ${DateTime.now().day}/${DateTime.now().month} ${DateTime.now().hour}:${DateTime.now().minute.toString().padLeft(2, '0')}',
         companyId: _user!.companyId!,
-        categoryId: '',
-        salesStageId: '',
         userId: _user!.id,
         notes: 'Recorded from mobile app',
         audioFilePath: path,
