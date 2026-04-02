@@ -14,8 +14,9 @@ class ApiService {
   ApiService() {
     _dio = Dio(BaseOptions(
       baseUrl: baseUrl,
-      connectTimeout: const Duration(seconds: 15),
-      receiveTimeout: const Duration(seconds: 30),
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 120), // 2 min for large audio uploads
+      sendTimeout: const Duration(seconds: 120),    // 2 min for large audio uploads
       headers: {'Content-Type': 'application/json'},
     ));
 
@@ -186,6 +187,11 @@ class ApiService {
   /// GET /users/:id
   Future<Response> getUser(String id) async {
     return _dio.get('/users/$id');
+  }
+
+  /// GET /users/me/sop — returns { sopId, categoryId, salesStageId }
+  Future<Response> getMySop() async {
+    return _dio.get('/users/me/sop');
   }
 
   // ─── Companies ───

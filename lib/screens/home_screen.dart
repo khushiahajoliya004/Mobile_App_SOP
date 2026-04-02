@@ -64,12 +64,21 @@ class _HomeScreenState extends State<HomeScreen> {
         screen: const CallHistoryScreen(),
       ),
     ];
-    return items.where((item) {
+
+    // While user is loading, show all items to avoid < 2 destinations crash
+    if (_user == null) return items;
+
+    final filtered = items.where((item) {
       if (item.permission == null) return true;
-      if (_user == null) return true;
-      if (_user!.isSuperAdmin) return true;
+      if (_user!.isSuperAdmin || _user!.isCompanyAdmin) return true;
       return _user!.hasPermission(item.permission!);
     }).toList();
+
+    // NavigationBar requires at least 2 destinations — always keep Record + Upload
+    if (filtered.length < 2) {
+      return items.take(2).toList();
+    }
+    return filtered;
   }
 
   @override

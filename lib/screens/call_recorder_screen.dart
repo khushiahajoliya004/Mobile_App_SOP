@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:ui';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../main.dart';
@@ -23,13 +24,17 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
 
   UserModel? _user;
   bool _isRecording = false;
-  bool _isUploading = false;
+  bool _isSaving = false;
   int _seconds = 0;
   Timer? _timer;
   late AnimationController _pulseController;
   String? _statusMessage;
   bool _hasSop = false;
   bool _loading = true;
+
+  // SOP-resolved fields (fetched on load)
+  String? _sopCategoryId;
+  String? _sopSalesStageId;
 
   @override
   void initState() {
@@ -49,6 +54,22 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
         _hasSop = user?.sopId != null && user!.sopId!.isNotEmpty;
         _loading = false;
       });
+    }
+
+    // Fetch SOP details (categoryId + salesStageId) in background
+    if (user?.sopId != null && user!.sopId!.isNotEmpty) {
+      try {
+        final res = await _api.getMySop();
+        final sopData = res.data is Map ? res.data['data'] : null;
+        if (sopData != null && mounted) {
+          setState(() {
+            _sopCategoryId = sopData['categoryId'];
+            _sopSalesStageId = sopData['salesStageId'];
+          });
+        }
+      } catch (_) {
+        // Non-fatal — backend auto-resolves from SOP if not provided
+      }
     }
   }
 
@@ -82,75 +103,81 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
 
     setState(() {
       _isRecording = false;
-      _isUploading = true;
+      _isSaving = true;
       _statusMessage = 'Uploading...';
     });
 
     final path = await _recorder.stopRecording();
     if (path == null) {
-      setState(() {
-        _isUploading = false;
-        _statusMessage = 'Recording failed';
-      });
+      setState(() { _isSaving = false; _statusMessage = 'Recording failed to save'; });
       return;
     }
 
     if (_user == null || _user!.companyId == null) {
-      setState(() {
-        _isUploading = false;
-        _statusMessage = 'User data missing. Please re-login.';
-      });
+      setState(() { _isSaving = false; _statusMessage = 'User data missing. Please re-login.'; });
       return;
     }
 
     try {
+      final now = DateTime.now();
       final fileName = path.split('/').last;
       final response = await _api.createCall(
-        customerName:
-            'Call ${DateTime.now().day}/${DateTime.now().month} ${DateTime.now().hour}:${DateTime.now().minute.toString().padLeft(2, '0')}',
+        customerName: 'Call ${now.day}/${now.month} ${now.hour}:${now.minute.toString().padLeft(2, '0')}',
         companyId: _user!.companyId!,
         userId: _user!.id,
+        categoryId: _sopCategoryId,
+        salesStageId: _sopSalesStageId,
         notes: 'Recorded from mobile app',
         audioFilePath: path,
         audioFileName: fileName,
       );
 
-      final data = response.data;
-      final callData = data is Map ? data['data'] : null;
-      final analysisStatus = callData?['analysisStatus'] ?? '';
-
       if (mounted) {
-        setState(() {
-          _isUploading = false;
-          _seconds = 0;
-        });
+        final callData = response.data is Map ? response.data['data'] : null;
+        final analysisStatus = callData?['analysisStatus'] ?? '';
 
-        if (_user!.aiEnabled &&
-            (analysisStatus == 'PENDING' || analysisStatus == 'PROCESSING')) {
-          setState(() => _statusMessage = 'Uploaded! AI analysis started.');
-          _showMessage('Call uploaded — AI analysis in progress');
-        } else {
-          setState(() => _statusMessage = 'Uploaded! Awaiting admin approval.');
-          _showMessage('Call submitted for approval');
-        }
+        // aiEnabled=true → PENDING/PROCESSING (direct AI analysis)
+        // aiEnabled=false → APPROVAL_PENDING (admin must approve first)
+        final isAiFlow = _user!.aiEnabled &&
+            (analysisStatus == 'PENDING' || analysisStatus == 'PROCESSING');
+
+        final msg = isAiFlow
+            ? 'Uploaded! AI analysis started.'
+            : 'Submitted for admin approval.';
+
+        setState(() { _isSaving = false; _seconds = 0; _statusMessage = msg; });
+        _showMessage(msg, success: true);
       }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _isUploading = false;
-          _statusMessage = 'Upload failed. Try again.';
-        });
-        _showMessage(
-          'Upload failed: ${e.toString().length > 60 ? e.toString().substring(0, 60) : e}',
-        );
+        String errorMsg = 'Upload failed. Try again.';
+        if (e is DioException) {
+          final serverMsg = e.response?.data?['message'];
+          if (serverMsg != null) {
+            errorMsg = serverMsg is List ? serverMsg.join(', ') : serverMsg.toString();
+          } else if (e.type == DioExceptionType.connectionTimeout ||
+                     e.type == DioExceptionType.sendTimeout ||
+                     e.type == DioExceptionType.receiveTimeout) {
+            errorMsg = 'Connection timed out. Check your internet.';
+          } else if (e.type == DioExceptionType.connectionError) {
+            errorMsg = 'No internet connection.';
+          }
+        }
+        debugPrint('[Recorder] Upload error: $e');
+        setState(() { _isSaving = false; _statusMessage = errorMsg; });
+        _showMessage(errorMsg);
       }
     }
   }
 
-  void _showMessage(String msg) {
+  void _showMessage(String msg, {bool success = false}) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating),
+        SnackBar(
+          content: Text(msg),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: success ? AppColors.success : null,
+        ),
       );
     }
   }
@@ -284,7 +311,7 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
 
               // Record button with pulse animation
               GestureDetector(
-                onTap: _isUploading
+                onTap: _isSaving
                     ? null
                     : (_isRecording ? _stopAndUpload : _startRecording),
                 child: AnimatedBuilder(
@@ -305,7 +332,7 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
                             end: Alignment.bottomRight,
                             colors: _isRecording
                                 ? [AppColors.error, const Color(0xFFDC2626)]
-                                : _isUploading
+                                : _isSaving
                                 ? [AppColors.warning, const Color(0xFFF59E0B)]
                                 : [AppColors.primary, AppColors.gradientEnd],
                           ),
@@ -321,7 +348,7 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
                             ),
                           ],
                         ),
-                        child: _isUploading
+                        child: _isSaving
                             ? const Center(
                                 child: CircularProgressIndicator(
                                   color: Colors.white,
@@ -358,7 +385,7 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
 
               // Label
               Text(
-                _isUploading
+                _isSaving
                     ? 'Uploading...'
                     : _isRecording
                     ? 'Tap to stop & upload'
@@ -419,11 +446,11 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
               const SizedBox(height: 40),
 
               // Info text
-              if (!_isRecording && !_isUploading)
+              if (!_isRecording && !_isSaving)
                 Text(
                   _user!.aiEnabled
-                      ? 'Recording will be analyzed by AI automatically'
-                      : 'Recording will be sent for admin approval',
+                      ? 'Stop recording → auto AI analysis'
+                      : 'Stop recording → sent for admin approval',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontSize: 13,
