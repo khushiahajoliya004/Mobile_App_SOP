@@ -312,9 +312,15 @@ class FloatingButtonService : Service() {
     }
 
     private fun buildNotification(): Notification {
+        val mainActivityClass = try {
+            Class.forName("com.mysterymentor.app.MainActivity")
+        } catch (e: ClassNotFoundException) {
+            Class.forName("com.callrecorder.call_recorder_app.MainActivity")
+        }
+        
         val intent = PendingIntent.getActivity(
             this, 0,
-            Intent(this, MainActivity::class.java),
+            Intent(this, mainActivityClass),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)

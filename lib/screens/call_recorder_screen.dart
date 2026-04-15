@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -7,6 +6,7 @@ import '../main.dart';
 import '../services/call_recorder_service.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
+import '../services/foreground_service.dart';
 import '../models/user_model.dart';
 
 class CallRecorderScreen extends StatefulWidget {
@@ -80,19 +80,33 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
       return;
     }
 
-    final started = await _recorder.startRecording(audioSource: 'mic');
-    if (started) {
-      setState(() {
-        _isRecording = true;
-        _seconds = 0;
-        _statusMessage = null;
-      });
-      _pulseController.repeat(reverse: true);
-      _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-        if (mounted) setState(() => _seconds++);
-      });
-    } else {
-      _showMessage('Failed to start recording');
+    try {
+      // Start foreground service to keep recording alive in background
+      final serviceStarted = await ForegroundServiceManager.startService();
+      if (!serviceStarted) {
+        _showMessage('Failed to start background service');
+        return;
+      }
+
+      final started = await _recorder.startRecording(audioSource: 'voice_communication');
+      if (started) {
+        setState(() {
+          _isRecording = true;
+          _seconds = 0;
+          _statusMessage = null;
+        });
+        _pulseController.repeat(reverse: true);
+        _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+          if (mounted) setState(() => _seconds++);
+        });
+      } else {
+        _showMessage('Failed to start recording');
+        // Stop foreground service if recording failed
+        await ForegroundServiceManager.stopService();
+      }
+    } catch (e) {
+      _showMessage('Error: ${e.toString()}');
+      debugPrint('[Recorder] Start error: $e');
     }
   }
 
@@ -100,6 +114,9 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
     _timer?.cancel();
     _pulseController.stop();
     _pulseController.reset();
+
+    // Stop foreground service
+    await ForegroundServiceManager.stopService();
 
     setState(() {
       _isRecording = false;
@@ -193,6 +210,10 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
     _timer?.cancel();
     _pulseController.dispose();
     _recorder.dispose();
+    // Stop foreground service if still running
+    if (_isRecording) {
+      ForegroundServiceManager.stopService();
+    }
     super.dispose();
   }
 

@@ -14,7 +14,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.callrecorder.call_recorder_app"
+    namespace = "com.mysterymentor.app"
     compileSdk = 35
     ndkVersion = "27.0.12077973"
 
@@ -28,7 +28,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.callrecorder.call_recorder_app"
+        applicationId = "com.mysterymentor.app"
         minSdk = 24
         targetSdk = 35
         versionCode = flutter.versionCode

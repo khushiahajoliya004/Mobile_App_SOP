@@ -293,9 +293,15 @@ class CallMonitorService : Service() {
     }
 
     private fun buildNotification(text: String): Notification {
+        val mainActivityClass = try {
+            Class.forName("com.mysterymentor.app.MainActivity")
+        } catch (e: ClassNotFoundException) {
+            Class.forName("com.callrecorder.call_recorder_app.MainActivity")
+        }
+        
         val pendingIntent = PendingIntent.getActivity(
             this, 0,
-            Intent(this, MainActivity::class.java),
+            Intent(this, mainActivityClass),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 

@@ -6,6 +6,7 @@ import 'login_screen.dart';
 import 'call_upload_screen.dart';
 import 'call_recorder_screen.dart';
 import 'call_history_screen.dart';
+import 'audio_library_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -55,6 +56,13 @@ class _HomeScreenState extends State<HomeScreen> {
         label: 'Upload',
         permission: 'CALL_CREATE',
         screen: const CallUploadScreen(),
+      ),
+      _MenuItem(
+        icon: Icons.music_note_outlined,
+        activeIcon: Icons.music_note_rounded,
+        label: 'Audio',
+        permission: null,
+        screen: const AudioLibraryScreen(),
       ),
       _MenuItem(
         icon: Icons.history_outlined,

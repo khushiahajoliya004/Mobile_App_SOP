@@ -1,7 +1,8 @@
-package com.callrecorder.call_recorder_app
+package com.mysterymentor.app
 
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import com.callrecorder.call_recorder_app.CallRecorderPlugin
 
 /**
  * MainActivity: Entry point for the Flutter app.

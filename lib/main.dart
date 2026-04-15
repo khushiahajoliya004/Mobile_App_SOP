@@ -4,13 +4,16 @@ import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/overlay_button.dart';
 import 'services/auth_service.dart';
+import 'services/foreground_service.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
   ));
+  // Initialize foreground service
+  await ForegroundServiceManager.initService();
   runApp(const CallRecorderApp());
 }
 
