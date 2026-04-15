@@ -12,8 +12,15 @@ void main() async {
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
   ));
-  // Initialize foreground service
-  await ForegroundServiceManager.initService();
+  
+  // Initialize foreground service with error handling
+  try {
+    await ForegroundServiceManager.initService();
+  } catch (e) {
+    debugPrint('Failed to initialize foreground service: $e');
+    // Continue anyway - the app should still work
+  }
+  
   runApp(const CallRecorderApp());
 }
 

@@ -81,15 +81,27 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
     }
 
     try {
-      // Start foreground service to keep recording alive in background
-      final serviceStarted = await ForegroundServiceManager.startService();
-      if (!serviceStarted) {
-        _showMessage('Failed to start background service');
+      debugPrint('[Recorder] Starting recording...');
+      
+      // Start recording first (don't wait for foreground service)
+      final started = await _recorder.startRecording(audioSource: 'voice_communication');
+      if (!started) {
+        _showMessage('Failed to start recording');
         return;
       }
 
-      final started = await _recorder.startRecording(audioSource: 'voice_communication');
-      if (started) {
+      debugPrint('[Recorder] Recording started successfully');
+      
+      // Try to start foreground service in background (don't block on failure)
+      try {
+        await ForegroundServiceManager.startService();
+        debugPrint('[Recorder] Foreground service started');
+      } catch (e) {
+        debugPrint('[Recorder] Foreground service error (non-fatal): $e');
+        // Continue anyway - recording is already started
+      }
+
+      if (mounted) {
         setState(() {
           _isRecording = true;
           _seconds = 0;
@@ -99,14 +111,14 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
         _timer = Timer.periodic(const Duration(seconds: 1), (_) {
           if (mounted) setState(() => _seconds++);
         });
-      } else {
-        _showMessage('Failed to start recording');
-        // Stop foreground service if recording failed
-        await ForegroundServiceManager.stopService();
       }
     } catch (e) {
       _showMessage('Error: ${e.toString()}');
       debugPrint('[Recorder] Start error: $e');
+      // Ensure service is stopped on error
+      try {
+        await ForegroundServiceManager.stopService();
+      } catch (_) {}
     }
   }
 

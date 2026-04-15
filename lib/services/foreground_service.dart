@@ -31,98 +31,116 @@ class SimpleTaskHandler extends TaskHandler {
 /// while native services handle actual call detection and recording.
 class ForegroundServiceManager {
   static Future<void> initService() async {
-    FlutterForegroundTask.init(
-      androidNotificationOptions: AndroidNotificationOptions(
-        channelId: 'call_recorder_channel',
-        channelName: 'Call Recorder Service',
-        channelDescription: 'Call recording service with floating button',
-        channelImportance: NotificationChannelImportance.DEFAULT,
-        priority: NotificationPriority.DEFAULT,
-      ),
-      iosNotificationOptions: const IOSNotificationOptions(
-        showNotification: true,
-        playSound: false,
-      ),
-      foregroundTaskOptions: ForegroundTaskOptions(
-        eventAction: ForegroundTaskEventAction.repeat(5000),
-        autoRunOnBoot: true,
-        autoRunOnMyPackageReplaced: true,
-        allowWakeLock: true,
-        allowWifiLock: true,
-      ),
-    );
+    try {
+      FlutterForegroundTask.init(
+        androidNotificationOptions: AndroidNotificationOptions(
+          channelId: 'call_recorder_channel',
+          channelName: 'Call Recorder Service',
+          channelDescription: 'Call recording service with floating button',
+          channelImportance: NotificationChannelImportance.DEFAULT,
+          priority: NotificationPriority.DEFAULT,
+        ),
+        iosNotificationOptions: const IOSNotificationOptions(
+          showNotification: true,
+          playSound: false,
+        ),
+        foregroundTaskOptions: ForegroundTaskOptions(
+          eventAction: ForegroundTaskEventAction.repeat(5000),
+          autoRunOnBoot: true,
+          autoRunOnMyPackageReplaced: true,
+          allowWakeLock: true,
+          allowWifiLock: true,
+        ),
+      );
+      print('Foreground service initialized successfully');
+    } catch (e) {
+      print('Failed to initialize foreground service: $e');
+      rethrow;
+    }
   }
 
   static Future<bool> startService() async {
-    if (await FlutterForegroundTask.isRunningService) {
-      return true;
-    }
-
-    // Clear stale command file
     try {
-      final dir = await getApplicationDocumentsDirectory();
-      final cmdFile = File('${dir.path}/.recorder_command');
-      if (cmdFile.existsSync()) cmdFile.writeAsStringSync('idle|');
-    } catch (_) {}
-
-    try {
-      final result = await FlutterForegroundTask.startService(
-        notificationTitle: 'Call Recorder',
-        notificationText: 'Monitoring calls. Tap floating button to record.',
-        callback: startCallback,
-      );
-      if (result is ServiceRequestFailure) {
-        print('Foreground service error: ${result.error}');
+      if (await FlutterForegroundTask.isRunningService) {
+        return true;
       }
-    } catch (e) {
-      print('Foreground service exception: $e');
-    }
 
-    await Future.delayed(const Duration(seconds: 1));
-    final running = await FlutterForegroundTask.isRunningService;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('service_running', running);
-    return running;
+      // Clear stale command file
+      try {
+        final dir = await getApplicationDocumentsDirectory();
+        final cmdFile = File('${dir.path}/.recorder_command');
+        if (cmdFile.existsSync()) cmdFile.writeAsStringSync('idle|');
+      } catch (_) {}
+
+      try {
+        final result = await FlutterForegroundTask.startService(
+          notificationTitle: 'Call Recorder',
+          notificationText: 'Monitoring calls. Tap floating button to record.',
+          callback: startCallback,
+        );
+        if (result is ServiceRequestFailure) {
+          print('Foreground service error: ${result.error}');
+          return false;
+        }
+      } catch (e) {
+        print('Foreground service exception: $e');
+        return false;
+      }
+
+      await Future.delayed(const Duration(seconds: 1));
+      final running = await FlutterForegroundTask.isRunningService;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('service_running', running);
+      return running;
+    } catch (e) {
+      print('startService error: $e');
+      return false;
+    }
   }
 
   static Future<bool> stopService() async {
-    // Signal stop recording via command file
     try {
-      final dir = await getApplicationDocumentsDirectory();
-      final cmdFile = File('${dir.path}/.recorder_command');
-      cmdFile.writeAsStringSync('stop|');
-    } catch (_) {}
-    await Future.delayed(const Duration(milliseconds: 500));
+      // Signal stop recording via command file
+      try {
+        final dir = await getApplicationDocumentsDirectory();
+        final cmdFile = File('${dir.path}/.recorder_command');
+        cmdFile.writeAsStringSync('stop|');
+      } catch (_) {}
+      await Future.delayed(const Duration(milliseconds: 500));
 
-    // Hide native overlay
-    try {
-      await NativeOverlayService.hideOverlay();
-    } catch (_) {}
+      // Hide native overlay
+      try {
+        await NativeOverlayService.hideOverlay();
+      } catch (_) {}
 
-    // Also try Flutter overlay
-    try {
-      final isActive = await FlutterOverlayWindow.isActive();
-      if (isActive) await FlutterOverlayWindow.closeOverlay();
-    } catch (_) {}
+      // Also try Flutter overlay
+      try {
+        final isActive = await FlutterOverlayWindow.isActive();
+        if (isActive) await FlutterOverlayWindow.closeOverlay();
+      } catch (_) {}
 
-    try {
-      await FlutterForegroundTask.stopService();
+      try {
+        await FlutterForegroundTask.stopService();
+      } catch (e) {
+        print('Foreground service stop exception: $e');
+      }
+
+      await SharedPreferences.getInstance()
+          .then((p) => p.setBool('service_running', false));
+
+      // Clear command file
+      try {
+        final dir = await getApplicationDocumentsDirectory();
+        final cmdFile = File('${dir.path}/.recorder_command');
+        if (cmdFile.existsSync()) cmdFile.writeAsStringSync('idle|');
+      } catch (_) {}
+
+      await Future.delayed(const Duration(milliseconds: 500));
+      return !(await FlutterForegroundTask.isRunningService);
     } catch (e) {
-      print('Foreground service stop exception: $e');
+      print('stopService error: $e');
+      return false;
     }
-
-    await SharedPreferences.getInstance()
-        .then((p) => p.setBool('service_running', false));
-
-    // Clear command file
-    try {
-      final dir = await getApplicationDocumentsDirectory();
-      final cmdFile = File('${dir.path}/.recorder_command');
-      if (cmdFile.existsSync()) cmdFile.writeAsStringSync('idle|');
-    } catch (_) {}
-
-    await Future.delayed(const Duration(milliseconds: 500));
-    return !(await FlutterForegroundTask.isRunningService);
   }
 
   /// Show the native draggable floating button overlay.
