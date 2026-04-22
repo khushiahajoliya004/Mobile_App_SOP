@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/permission_onboarding_screen.dart';
 import 'screens/overlay_button.dart';
 import 'services/auth_service.dart';
 import 'services/foreground_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.light,
-  ));
-  
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+    ),
+  );
+
   // Initialize foreground service with error handling
   try {
     await ForegroundServiceManager.initService();
@@ -20,7 +24,7 @@ void main() async {
     debugPrint('Failed to initialize foreground service: $e');
     // Continue anyway - the app should still work
   }
-  
+
   runApp(const CallRecorderApp());
 }
 
@@ -28,10 +32,9 @@ void main() async {
 @pragma("vm:entry-point")
 void overlayMain() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const MaterialApp(
-    debugShowCheckedModeBanner: false,
-    home: OverlayButton(),
-  ));
+  runApp(
+    const MaterialApp(debugShowCheckedModeBanner: false, home: OverlayButton()),
+  );
 }
 
 class AppColors {
@@ -144,7 +147,10 @@ class CallRecorderApp extends StatelessWidget {
             borderRadius: BorderRadius.circular(14),
             borderSide: const BorderSide(color: AppColors.primary, width: 2),
           ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 18,
+            vertical: 16,
+          ),
           labelStyle: const TextStyle(color: AppColors.textSecondary),
           hintStyle: const TextStyle(color: AppColors.textHint),
         ),
@@ -152,9 +158,14 @@ class CallRecorderApp extends StatelessWidget {
           style: FilledButton.styleFrom(
             backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
             minimumSize: const Size(double.infinity, 52),
-            textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            textStyle: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
@@ -163,23 +174,31 @@ class CallRecorderApp extends StatelessWidget {
             foregroundColor: Colors.white,
             elevation: 2,
             shadowColor: AppColors.primary.withOpacity(0.3),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
           ),
         ),
         outlinedButtonTheme: OutlinedButtonThemeData(
           style: OutlinedButton.styleFrom(
             foregroundColor: AppColors.primary,
             side: const BorderSide(color: AppColors.primary),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
           ),
         ),
         dialogTheme: DialogThemeData(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           surfaceTintColor: Colors.transparent,
         ),
         snackBarTheme: SnackBarThemeData(
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           backgroundColor: AppColors.textPrimary,
         ),
         dividerTheme: DividerThemeData(color: Colors.grey.shade100),
@@ -199,6 +218,7 @@ class AuthGate extends StatefulWidget {
 class _AuthGateState extends State<AuthGate> {
   bool _loading = true;
   bool _loggedIn = false;
+  bool _onboardingComplete = false;
 
   @override
   void initState() {
@@ -209,8 +229,15 @@ class _AuthGateState extends State<AuthGate> {
   Future<void> _checkAuth() async {
     final auth = AuthService();
     final token = await auth.getToken();
+
+    // Check if permission onboarding is complete
+    final prefs = await SharedPreferences.getInstance();
+    final onboardingComplete =
+        prefs.getBool('permissions_onboarding_complete') ?? false;
+
     setState(() {
       _loggedIn = token != null;
+      _onboardingComplete = onboardingComplete;
       _loading = false;
     });
   }
@@ -228,11 +255,26 @@ class _AuthGateState extends State<AuthGate> {
             ),
           ),
           child: const Center(
-            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
+            child: CircularProgressIndicator(
+              color: Colors.white,
+              strokeWidth: 3,
+            ),
           ),
         ),
       );
     }
-    return _loggedIn ? const HomeScreen() : const LoginScreen();
+
+    // Not logged in -> show login
+    if (!_loggedIn) {
+      return const LoginScreen();
+    }
+
+    // Logged in but onboarding not complete -> show permission onboarding
+    if (!_onboardingComplete) {
+      return const PermissionOnboardingScreen();
+    }
+
+    // All good -> show home
+    return const HomeScreen();
   }
 }

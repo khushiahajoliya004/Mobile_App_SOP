@@ -70,12 +70,17 @@ class CallMonitorService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        createNotificationChannel()
-        startForeground(NOTIFICATION_ID, buildNotification("Monitoring calls..."))
-        registerPhoneStateReceiver()
-        startPolling()
-        isMonitoring = true
-        Log.i(TAG, "CallMonitorService created and monitoring")
+        try {
+            createNotificationChannel()
+            startForeground(NOTIFICATION_ID, buildNotification("Ready"))
+            registerPhoneStateReceiver()
+            startPolling()
+            isMonitoring = true
+            Log.i(TAG, "CallMonitorService created and monitoring")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in onCreate: ${e.message}", e)
+            stopSelf()
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -151,56 +156,72 @@ class CallMonitorService : Service() {
     }
 
     private fun handleCallStateChange(state: Int, number: String?) {
-        when (state) {
-            TelephonyManager.CALL_STATE_RINGING -> {
-                isIncoming = true
-                savedNumber = number
-                Log.i(TAG, "Call ringing - incoming from: $number")
-                updateNotification("Incoming call from ${number ?: "unknown"}...")
-            }
-            TelephonyManager.CALL_STATE_OFFHOOK -> {
-                val callType = if (isIncoming) "incoming" else "outgoing"
-                Log.i(TAG, "Call active - $callType, number: $savedNumber")
-                updateNotification("Call active ($callType) - Recording...")
+        try {
+            when (state) {
+                TelephonyManager.CALL_STATE_RINGING -> {
+                    isIncoming = true
+                    savedNumber = number
+                    Log.i(TAG, "Call ringing - incoming from: $number")
+                    updateNotification("Incoming call...")
+                }
+                TelephonyManager.CALL_STATE_OFFHOOK -> {
+                    val callType = if (isIncoming) "incoming" else "outgoing"
+                    Log.i(TAG, "Call active - $callType, number: $savedNumber")
+                    updateNotification("Recording...")
 
-                // Auto-record if enabled and not already recording from overlay
-                if (autoRecordEnabled && !CallRecorderEngine.isRecording) {
-                    autoStartRecording(callType)
+                    // Auto-record if enabled and not already recording from overlay
+                    if (autoRecordEnabled && !CallRecorderEngine.isRecording) {
+                        autoStartRecording(callType)
+                    }
+                }
+                TelephonyManager.CALL_STATE_IDLE -> {
+                    val callType = if (isIncoming) "incoming" else if (savedNumber != null) "outgoing" else "unknown"
+                    Log.i(TAG, "Call ended - $callType")
+
+                    // Auto-stop recording if we auto-started it
+                    if (autoRecordedPath != null && CallRecorderEngine.isRecording) {
+                        try {
+                            val info = CallRecorderEngine.stopRecording()
+                            saveCallMetadata(callType, savedNumber, info)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error stopping recording: ${e.message}")
+                        }
+                        autoRecordedPath = null
+                    }
+
+                    updateNotification("Ready")
+                    isIncoming = false
+                    savedNumber = null
                 }
             }
-            TelephonyManager.CALL_STATE_IDLE -> {
-                val callType = if (isIncoming) "incoming" else if (savedNumber != null) "outgoing" else "unknown"
-                Log.i(TAG, "Call ended - $callType")
-
-                // Auto-stop recording if we auto-started it
-                if (autoRecordedPath != null && CallRecorderEngine.isRecording) {
-                    val info = CallRecorderEngine.stopRecording()
-                    saveCallMetadata(callType, savedNumber, info)
-                    autoRecordedPath = null
-                }
-
-                updateNotification("Monitoring calls...")
-                isIncoming = false
-                savedNumber = null
-            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error handling call state change: ${e.message}", e)
         }
     }
 
     private fun autoStartRecording(callType: String) {
-        val dir = File(filesDir.parentFile, "app_flutter")
-        if (!dir.exists()) dir.mkdirs()
+        try {
+            val dir = File(filesDir.parentFile, "app_flutter")
+            if (!dir.exists()) {
+                val created = dir.mkdirs()
+                Log.d(TAG, "Output directory created: $created")
+            }
 
-        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-        val path = "${dir.absolutePath}/${callType}_call_$timestamp.m4a"
+            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+            val path = "${dir.absolutePath}/${callType}_call_$timestamp.m4a"
 
-        val success = CallRecorderEngine.startRecording(path, "voice_communication", applicationContext)
-        if (success) {
-            autoRecordedPath = path
-            Log.i(TAG, "Auto-recording started: $path (source: ${CallRecorderEngine.activeSource})")
-            updateNotification("Recording $callType call...")
-        } else {
-            Log.w(TAG, "Auto-recording failed to start")
-            updateNotification("Recording failed - mic may be in use")
+            val success = CallRecorderEngine.startRecording(path, "voice_communication", applicationContext)
+            if (success) {
+                autoRecordedPath = path
+                Log.i(TAG, "Auto-recording started: $path (source: ${CallRecorderEngine.activeSource})")
+                updateNotification("Recording...")
+            } else {
+                Log.w(TAG, "Auto-recording failed to start - all audio sources failed")
+                updateNotification("Failed to record")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Auto-recording error: ${e.message}", e)
+            updateNotification("Recording error")
         }
     }
 
@@ -306,7 +327,7 @@ class CallMonitorService : Service() {
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Call Recorder")
+            .setContentTitle("Recording")
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentIntent(pendingIntent)

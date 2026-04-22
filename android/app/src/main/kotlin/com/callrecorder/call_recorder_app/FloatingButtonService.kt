@@ -324,8 +324,8 @@ class FloatingButtonService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Call Recorder")
-            .setContentText("Floating button active")
+            .setContentTitle("Recording")
+            .setContentText("Tap to control")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentIntent(intent)
             .setOngoing(true)

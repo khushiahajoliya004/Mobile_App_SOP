@@ -84,20 +84,25 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
       final files = dir
           .listSync()
           .whereType<File>()
-          .where((f) =>
-              f.path.endsWith('.m4a') ||
-              f.path.endsWith('.wav') ||
-              f.path.endsWith('.mp3') ||
-              f.path.endsWith('.aac'))
+          .where(
+            (f) =>
+                f.path.endsWith('.m4a') ||
+                f.path.endsWith('.wav') ||
+                f.path.endsWith('.mp3') ||
+                f.path.endsWith('.aac'),
+          )
           .toList();
-      files.sort((a, b) => b.statSync().modified.compareTo(a.statSync().modified));
+      files.sort(
+        (a, b) => b.statSync().modified.compareTo(a.statSync().modified),
+      );
       _localRecordings = files;
     } catch (e) {
       _localRecordings = [];
     }
   }
 
-  String _getFileName(File file) => file.path.split(Platform.pathSeparator).last;
+  String _getFileName(File file) =>
+      file.path.split(Platform.pathSeparator).last;
 
   String _getFileInfo(File file) {
     final stat = file.statSync();
@@ -126,7 +131,8 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
   String? get _audioFileName {
     if (_audioSource == AudioSource.local && _selectedLocalRecording != null) {
       return _getFileName(_selectedLocalRecording!);
-    } else if (_audioSource == AudioSource.device && _selectedDeviceFile != null) {
+    } else if (_audioSource == AudioSource.device &&
+        _selectedDeviceFile != null) {
       return _selectedDeviceFile!.name;
     }
     return null;
@@ -134,15 +140,24 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
 
   Future<void> _upload() async {
     if (_customerNameController.text.trim().isEmpty) {
-      setState(() { _statusMessage = 'Customer name is required'; _isError = true; });
+      setState(() {
+        _statusMessage = 'Customer name is required';
+        _isError = true;
+      });
       return;
     }
     if (_user?.companyId == null) {
-      setState(() { _statusMessage = 'User data missing. Please re-login.'; _isError = true; });
+      setState(() {
+        _statusMessage = 'User data missing. Please re-login.';
+        _isError = true;
+      });
       return;
     }
 
-    setState(() { _uploading = true; _statusMessage = null; });
+    setState(() {
+      _uploading = true;
+      _statusMessage = null;
+    });
 
     try {
       await _api.createCall(
@@ -151,7 +166,9 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
         userId: _user!.id,
         categoryId: _sopCategoryId,
         salesStageId: _sopSalesStageId,
-        notes: _notesController.text.trim().isNotEmpty ? _notesController.text.trim() : null,
+        notes: _notesController.text.trim().isNotEmpty
+            ? _notesController.text.trim()
+            : null,
         audioFilePath: _audioFilePath,
         audioFileName: _audioFileName,
       );
@@ -169,7 +186,10 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() { _statusMessage = 'Upload failed. Check credits or try again.'; _isError = true; });
+        setState(() {
+          _statusMessage = 'Upload failed. Check credits or try again.';
+          _isError = true;
+        });
         _showSnack('Upload failed. Try again.');
       }
     } finally {
@@ -178,11 +198,13 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
   }
 
   void _showSnack(String msg, {bool success = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      behavior: SnackBarBehavior.floating,
-      backgroundColor: success ? AppColors.success : AppColors.error,
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: success ? AppColors.success : AppColors.error,
+      ),
+    );
   }
 
   String _formatFileSize(int bytes) {
@@ -201,7 +223,12 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
   @override
   Widget build(BuildContext context) {
     if (_loadingData) {
-      return const Center(child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 3));
+      return const Center(
+        child: CircularProgressIndicator(
+          color: AppColors.primary,
+          strokeWidth: 3,
+        ),
+      );
     }
 
     // No SOP assigned
@@ -213,21 +240,36 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 72, height: 72,
+                width: 72,
+                height: 72,
                 decoration: BoxDecoration(
                   color: AppColors.warning.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.assignment_late_rounded, size: 36, color: AppColors.warning),
+                child: const Icon(
+                  Icons.assignment_late_rounded,
+                  size: 36,
+                  color: AppColors.warning,
+                ),
               ),
               const SizedBox(height: 20),
-              const Text('SOP Not Assigned',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+              const Text(
+                'SOP Not Assigned',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+              ),
               const SizedBox(height: 8),
               const Text(
                 'Please ask your admin to assign an SOP before uploading calls.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14, color: AppColors.textSecondary, height: 1.5),
+                style: TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textSecondary,
+                  height: 1.5,
+                ),
               ),
             ],
           ),
@@ -249,11 +291,21 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
                   color: AppColors.primarySurface,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.upload_file_rounded, size: 20, color: AppColors.primary),
+                child: const Icon(
+                  Icons.upload_file_rounded,
+                  size: 20,
+                  color: AppColors.primary,
+                ),
               ),
               const SizedBox(width: 12),
-              const Text('Upload Call Recording',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17, color: AppColors.textPrimary)),
+              const Text(
+                'Upload Call Recording',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 17,
+                  color: AppColors.textPrimary,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 20),
@@ -268,30 +320,52 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.book_outlined, size: 18, color: AppColors.primary),
+                const Icon(
+                  Icons.book_outlined,
+                  size: 18,
+                  color: AppColors.primary,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: _sopLoading
-                      ? const Text('Loading SOP details...',
-                          style: TextStyle(fontSize: 13, color: AppColors.textSecondary))
+                      ? const Text(
+                          'Loading SOP details...',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textSecondary,
+                          ),
+                        )
                       : Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              _sopName != null ? 'SOP: $_sopName' : 'SOP Assigned',
+                              _sopName != null
+                                  ? 'SOP: $_sopName'
+                                  : 'SOP Assigned',
                               style: const TextStyle(
-                                  fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.primary,
+                              ),
                             ),
-                            if (_sopCategoryId != null || _sopSalesStageId != null)
+                            if (_sopCategoryId != null ||
+                                _sopSalesStageId != null)
                               const Text(
                                 'Category & stage auto-resolved from SOP',
-                                style: TextStyle(fontSize: 11, color: AppColors.textHint),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.textHint,
+                                ),
                               ),
                           ],
                         ),
                 ),
                 if (!_sopLoading)
-                  const Icon(Icons.check_circle_rounded, size: 18, color: AppColors.success),
+                  const Icon(
+                    Icons.check_circle_rounded,
+                    size: 18,
+                    color: AppColors.success,
+                  ),
               ],
             ),
           ),
@@ -304,7 +378,13 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
               color: Colors.white,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(color: Colors.grey.shade100),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 3))],
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.03),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
+                ),
+              ],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -317,7 +397,10 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
                   decoration: InputDecoration(
                     labelText: 'Customer Name *',
                     hintText: 'Enter customer name',
-                    prefixIcon: Icon(Icons.person_outline_rounded, color: AppColors.primary.withOpacity(0.6)),
+                    prefixIcon: Icon(
+                      Icons.person_outline_rounded,
+                      color: AppColors.primary.withOpacity(0.6),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 18),
@@ -331,7 +414,10 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
                     hintText: 'Add any call notes...',
                     prefixIcon: Padding(
                       padding: const EdgeInsets.only(bottom: 48),
-                      child: Icon(Icons.notes_outlined, color: AppColors.primary.withOpacity(0.6)),
+                      child: Icon(
+                        Icons.notes_outlined,
+                        color: AppColors.primary.withOpacity(0.6),
+                      ),
                     ),
                   ),
                 ),
@@ -347,21 +433,41 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
               color: Colors.white,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(color: Colors.grey.shade100),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 3))],
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.03),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
+                ),
+              ],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Audio File',
-                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: AppColors.textPrimary)),
+                const Text(
+                  'Audio File',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
                 const SizedBox(height: 12),
 
                 // Source toggle
                 Row(
                   children: [
-                    _sourceTab(AudioSource.local, Icons.folder_rounded, 'Local Recording'),
+                    _sourceTab(
+                      AudioSource.local,
+                      Icons.folder_rounded,
+                      'Local Recording',
+                    ),
                     const SizedBox(width: 10),
-                    _sourceTab(AudioSource.device, Icons.phone_android_rounded, 'Device File'),
+                    _sourceTab(
+                      AudioSource.device,
+                      Icons.phone_android_rounded,
+                      'Device File',
+                    ),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -375,8 +481,7 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
                 ],
 
                 // Device file picker
-                if (_audioSource == AudioSource.device)
-                  _deviceFilePicker(),
+                if (_audioSource == AudioSource.device) _deviceFilePicker(),
               ],
             ),
           ),
@@ -388,16 +493,22 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               margin: const EdgeInsets.only(bottom: 16),
               decoration: BoxDecoration(
-                color: _isError ? AppColors.error.withOpacity(0.08) : AppColors.success.withOpacity(0.08),
+                color: _isError
+                    ? AppColors.error.withOpacity(0.08)
+                    : AppColors.success.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: _isError ? AppColors.error.withOpacity(0.2) : AppColors.success.withOpacity(0.2),
+                  color: _isError
+                      ? AppColors.error.withOpacity(0.2)
+                      : AppColors.success.withOpacity(0.2),
                 ),
               ),
               child: Row(
                 children: [
                   Icon(
-                    _isError ? Icons.error_outline_rounded : Icons.check_circle_outline_rounded,
+                    _isError
+                        ? Icons.error_outline_rounded
+                        : Icons.check_circle_outline_rounded,
                     size: 18,
                     color: _isError ? AppColors.error : AppColors.success,
                   ),
@@ -421,15 +532,24 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
             onPressed: _uploading ? null : _upload,
             icon: _uploading
                 ? const SizedBox(
-                    width: 18, height: 18,
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
                 : const Icon(Icons.cloud_upload_rounded, size: 20),
-            label: Text(_uploading ? 'Uploading...' : 'Submit for Approval',
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+            label: Text(
+              _uploading ? 'Uploading...' : 'Submit for Approval',
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+            ),
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.primary,
               padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
             ),
           ),
           const SizedBox(height: 8),
@@ -450,8 +570,10 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
       child: GestureDetector(
         onTap: () => setState(() {
           _audioSource = source;
-          if (source == AudioSource.local) _selectedDeviceFile = null;
-          else _selectedLocalRecording = null;
+          if (source == AudioSource.local)
+            _selectedDeviceFile = null;
+          else
+            _selectedLocalRecording = null;
         }),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
@@ -467,13 +589,20 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 18, color: active ? Colors.white : AppColors.textSecondary),
+              Icon(
+                icon,
+                size: 18,
+                color: active ? Colors.white : AppColors.textSecondary,
+              ),
               const SizedBox(width: 6),
-              Text(label,
-                  style: TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w600,
-                    color: active ? Colors.white : AppColors.textSecondary,
-                  )),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: active ? Colors.white : AppColors.textSecondary,
+                ),
+              ),
             ],
           ),
         ),
@@ -490,16 +619,27 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
       ),
       child: Column(
         children: [
-          Icon(Icons.mic_off_rounded, size: 32, color: AppColors.textHint.withOpacity(0.5)),
+          Icon(
+            Icons.mic_off_rounded,
+            size: 32,
+            color: AppColors.textHint.withOpacity(0.5),
+          ),
           const SizedBox(height: 8),
-          const Text('No local recordings found',
-              style: TextStyle(color: AppColors.textHint, fontSize: 13)),
+          const Text(
+            'No local recordings found',
+            style: TextStyle(color: AppColors.textHint, fontSize: 13),
+          ),
           const SizedBox(height: 4),
-          const Text('Record calls using the Call Recorder tab',
-              style: TextStyle(color: AppColors.textHint, fontSize: 11)),
+          const Text(
+            'Record calls using the Recorder tab',
+            style: TextStyle(color: AppColors.textHint, fontSize: 11),
+          ),
           const SizedBox(height: 12),
           GestureDetector(
-            onTap: () async { await _loadLocalRecordings(); setState(() {}); },
+            onTap: () async {
+              await _loadLocalRecordings();
+              setState(() {});
+            },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
@@ -509,9 +649,20 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.refresh_rounded, size: 16, color: AppColors.primary),
+                  Icon(
+                    Icons.refresh_rounded,
+                    size: 16,
+                    color: AppColors.primary,
+                  ),
                   SizedBox(width: 6),
-                  Text('Refresh', style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
+                  Text(
+                    'Refresh',
+                    style: TextStyle(
+                      color: AppColors.primary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -529,10 +680,20 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
           isExpanded: true,
           decoration: InputDecoration(
             labelText: 'Select Recording',
-            prefixIcon: Icon(Icons.audio_file_rounded, color: AppColors.primary.withOpacity(0.6)),
+            prefixIcon: Icon(
+              Icons.audio_file_rounded,
+              color: AppColors.primary.withOpacity(0.6),
+            ),
             suffixIcon: IconButton(
-              icon: const Icon(Icons.refresh_rounded, size: 20, color: AppColors.textHint),
-              onPressed: () async { await _loadLocalRecordings(); setState(() {}); },
+              icon: const Icon(
+                Icons.refresh_rounded,
+                size: 20,
+                color: AppColors.textHint,
+              ),
+              onPressed: () async {
+                await _loadLocalRecordings();
+                setState(() {});
+              },
             ),
           ),
           items: _localRecordings.map((file) {
@@ -542,22 +703,49 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(_getFileName(file), maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-                  Text(_getFileInfo(file), style: const TextStyle(fontSize: 11, color: AppColors.textHint)),
+                  Text(
+                    _getFileName(file),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  Text(
+                    _getFileInfo(file),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textHint,
+                    ),
+                  ),
                 ],
               ),
             );
           }).toList(),
-          selectedItemBuilder: (context) => _localRecordings.map((file) => Align(
-            alignment: Alignment.centerLeft,
-            child: Text(_getFileName(file), maxLines: 1, overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-          )).toList(),
+          selectedItemBuilder: (context) => _localRecordings
+              .map(
+                (file) => Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    _getFileName(file),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              )
+              .toList(),
           onChanged: (val) {
             if (val != null) {
               setState(() {
-                _selectedLocalRecording = _localRecordings.firstWhere((f) => f.path == val);
+                _selectedLocalRecording = _localRecordings.firstWhere(
+                  (f) => f.path == val,
+                );
                 _statusMessage = null;
               });
             }
@@ -574,22 +762,42 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
             child: Row(
               children: [
                 Container(
-                  width: 40, height: 40,
+                  width: 40,
+                  height: 40,
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [AppColors.primary, AppColors.accent]),
+                    gradient: const LinearGradient(
+                      colors: [AppColors.primary, AppColors.accent],
+                    ),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.audio_file_rounded, size: 20, color: Colors.white),
+                  child: const Icon(
+                    Icons.audio_file_rounded,
+                    size: 20,
+                    color: Colors.white,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(_getFileName(_selectedLocalRecording!), maxLines: 1, overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary)),
-                      Text(_getFileInfo(_selectedLocalRecording!),
-                          style: const TextStyle(fontSize: 11, color: AppColors.textHint)),
+                      Text(
+                        _getFileName(_selectedLocalRecording!),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      Text(
+                        _getFileInfo(_selectedLocalRecording!),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textHint,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -601,7 +809,11 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
                       color: AppColors.error.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.close_rounded, size: 16, color: AppColors.error),
+                    child: const Icon(
+                      Icons.close_rounded,
+                      size: 16,
+                      color: AppColors.error,
+                    ),
                   ),
                 ),
               ],
@@ -619,10 +831,14 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
         duration: const Duration(milliseconds: 200),
         height: 110,
         decoration: BoxDecoration(
-          color: _selectedDeviceFile != null ? AppColors.primarySurface : Colors.grey.shade50,
+          color: _selectedDeviceFile != null
+              ? AppColors.primarySurface
+              : Colors.grey.shade50,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: _selectedDeviceFile != null ? AppColors.primary.withOpacity(0.4) : Colors.grey.shade200,
+            color: _selectedDeviceFile != null
+                ? AppColors.primary.withOpacity(0.4)
+                : Colors.grey.shade200,
             width: 1.5,
           ),
         ),
@@ -631,12 +847,19 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
                 children: [
                   const SizedBox(width: 16),
                   Container(
-                    width: 44, height: 44,
+                    width: 44,
+                    height: 44,
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(colors: [AppColors.primary, AppColors.accent]),
+                      gradient: const LinearGradient(
+                        colors: [AppColors.primary, AppColors.accent],
+                      ),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.audio_file_rounded, size: 22, color: Colors.white),
+                    child: const Icon(
+                      Icons.audio_file_rounded,
+                      size: 22,
+                      color: Colors.white,
+                    ),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -644,11 +867,24 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(_selectedDeviceFile!.name, maxLines: 1, overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary)),
+                        Text(
+                          _selectedDeviceFile!.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
                         const SizedBox(height: 2),
-                        Text(_formatFileSize(_selectedDeviceFile!.size),
-                            style: const TextStyle(color: AppColors.textHint, fontSize: 12)),
+                        Text(
+                          _formatFileSize(_selectedDeviceFile!.size),
+                          style: const TextStyle(
+                            color: AppColors.textHint,
+                            fontSize: 12,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -661,7 +897,11 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
                         color: AppColors.error.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(Icons.close_rounded, size: 16, color: AppColors.error),
+                      child: const Icon(
+                        Icons.close_rounded,
+                        size: 16,
+                        color: AppColors.error,
+                      ),
                     ),
                   ),
                 ],
@@ -669,13 +909,21 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
             : Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.cloud_upload_outlined, size: 32, color: AppColors.textHint.withOpacity(0.5)),
+                  Icon(
+                    Icons.cloud_upload_outlined,
+                    size: 32,
+                    color: AppColors.textHint.withOpacity(0.5),
+                  ),
                   const SizedBox(height: 8),
-                  const Text('Tap to browse audio file',
-                      style: TextStyle(color: AppColors.textHint, fontSize: 13)),
+                  const Text(
+                    'Tap to browse audio file',
+                    style: TextStyle(color: AppColors.textHint, fontSize: 13),
+                  ),
                   const SizedBox(height: 2),
-                  const Text('MP3, WAV, M4A, AAC (max 100MB)',
-                      style: TextStyle(color: AppColors.textHint, fontSize: 11)),
+                  const Text(
+                    'MP3, WAV, M4A, AAC (max 100MB)',
+                    style: TextStyle(color: AppColors.textHint, fontSize: 11),
+                  ),
                 ],
               ),
       ),

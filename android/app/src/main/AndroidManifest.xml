@@ -3,18 +3,30 @@
     <!-- Network -->
     <uses-permission android:name="android.permission.INTERNET"/>
 
-    <!-- Audio Recording -->
+    <!-- Audio Recording - REQUIRED -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
-    <uses-permission android:name="android.permission.CAPTURE_AUDIO_OUTPUT"/>
+    
+    <!-- CRASH FIX: Removed CAPTURE_AUDIO_OUTPUT - not needed for microphone recording
+         and causes issues on Android 10+ -->
+    <!-- <uses-permission android:name="android.permission.CAPTURE_AUDIO_OUTPUT"/> -->
+    
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+
+    <!-- Phone State (for call detection) -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
+    <uses-permission android:name="android.permission.READ_CALL_LOG"/>
 
     <!-- Storage -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
 
-    <!-- Foreground Service -->
+    <!-- Foreground Service - CRITICAL for background recording -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
+    
+    <!-- CRASH FIX: Removed FOREGROUND_SERVICE_SPECIAL_USE - not needed for microphone recording -->
+    <!-- <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/> -->
 
     <!-- Overlay (Draw over other apps) -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
@@ -63,11 +75,12 @@
             android:exported="false"
             android:foregroundServiceType="microphone" />
 
-        <!-- Floating Button Service: draggable overlay -->
+        <!-- Floating Button Service: Optional overlay -->
+        <!-- CRASH FIX: Use microphone type instead of specialUse -->
         <service
             android:name="com.callrecorder.call_recorder_app.FloatingButtonService"
             android:exported="false"
-            android:foregroundServiceType="specialUse" />
+            android:foregroundServiceType="microphone" />
 
         <!-- Flutter Foreground Task plugin service -->
         <service

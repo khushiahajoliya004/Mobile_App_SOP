@@ -5,6 +5,8 @@ import android.media.MediaRecorder
 import android.os.Build
 import android.os.SystemClock
 import android.util.Log
+import java.io.File
+import java.io.IOException
 
 /**
  * CallRecorderEngine: Core native recording engine.
@@ -47,12 +49,37 @@ object CallRecorderEngine {
             stopRecording()
         }
 
+        // Validate and prepare output directory
+        val file = File(path)
+        val dir = file.parentFile
+        if (dir != null && !dir.exists()) {
+            try {
+                val created = dir.mkdirs()
+                Log.d(TAG, "Directory created: $created, path: ${dir.absolutePath}")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to create directory: ${e.message}")
+                return false
+            }
+        }
+
         // Build ordered list of audio sources to try
         val sources = buildSourceList(preferredSource)
+        var lastError: Exception? = null
 
         for ((sourceName, sourceId) in sources) {
+            var recorder: MediaRecorder? = null
             try {
-                val recorder = createRecorder(context)
+                recorder = createRecorder(context)
+                
+                // Configure recorder with proper error handling
+                recorder.setOnErrorListener { _, what, extra ->
+                    Log.e(TAG, "MediaRecorder error: what=$what, extra=$extra, source=$sourceName")
+                }
+                
+                recorder.setOnInfoListener { _, what, extra ->
+                    Log.d(TAG, "MediaRecorder info: what=$what, extra=$extra, source=$sourceName")
+                }
+                
                 recorder.apply {
                     setAudioSource(sourceId)
                     setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
@@ -60,9 +87,12 @@ object CallRecorderEngine {
                     setAudioEncodingBitRate(128000)
                     setAudioSamplingRate(44100)
                     setOutputFile(path)
-                    prepare()
-                    start()
                 }
+                
+                // Prepare and start
+                recorder.prepare()
+                recorder.start()
+                
                 mediaRecorder = recorder
                 currentPath = path
                 activeSource = sourceName
@@ -70,14 +100,27 @@ object CallRecorderEngine {
                 startTimeMs = SystemClock.elapsedRealtime()
                 Log.i(TAG, "Recording started with source: $sourceName -> $path")
                 return true
+                
+            } catch (e: IllegalStateException) {
+                Log.w(TAG, "IllegalStateException for source $sourceName: ${e.message}")
+                lastError = e
+                safeReleaseRecorder(recorder)
+            } catch (e: IOException) {
+                Log.w(TAG, "IOException for source $sourceName: ${e.message}")
+                lastError = e
+                safeReleaseRecorder(recorder)
+            } catch (e: RuntimeException) {
+                Log.w(TAG, "RuntimeException for source $sourceName: ${e.message}")
+                lastError = e
+                safeReleaseRecorder(recorder)
             } catch (e: Exception) {
-                Log.w(TAG, "Source $sourceName failed: ${e.message}")
-                try { mediaRecorder?.release() } catch (_: Exception) {}
-                mediaRecorder = null
+                Log.w(TAG, "Exception for source $sourceName: ${e.message}")
+                lastError = e
+                safeReleaseRecorder(recorder)
             }
         }
 
-        Log.e(TAG, "All audio sources failed for path: $path")
+        Log.e(TAG, "All audio sources failed for path: $path, last error: ${lastError?.message}")
         isRecording = false
         return false
     }
@@ -92,18 +135,21 @@ object CallRecorderEngine {
         val durationMs = getElapsedMs()
 
         try {
-            if (isRecording) {
-                mediaRecorder?.stop()
-                Log.i(TAG, "Recording stopped: $path (${durationMs}ms, source: $source)")
+            if (isRecording && mediaRecorder != null) {
+                try {
+                    mediaRecorder?.stop()
+                    Log.i(TAG, "Recording stopped: $path (${durationMs}ms, source: $source)")
+                } catch (e: IllegalStateException) {
+                    Log.w(TAG, "Error stopping recorder (illegal state): ${e.message}")
+                } catch (e: RuntimeException) {
+                    Log.w(TAG, "Error stopping recorder (runtime): ${e.message}")
+                }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Error stopping recorder: ${e.message}")
+            Log.w(TAG, "Error in stop recording: ${e.message}")
         }
 
-        try {
-            mediaRecorder?.release()
-        } catch (_: Exception) {}
-
+        safeReleaseRecorder(mediaRecorder)
         mediaRecorder = null
         isRecording = false
         currentPath = null
@@ -115,6 +161,17 @@ object CallRecorderEngine {
             "durationMs" to durationMs,
             "source" to source
         )
+    }
+    
+    /**
+     * Safely release MediaRecorder without throwing exceptions
+     */
+    private fun safeReleaseRecorder(recorder: MediaRecorder?) {
+        try {
+            recorder?.release()
+        } catch (e: Exception) {
+            Log.d(TAG, "Error releasing recorder: ${e.message}")
+        }
     }
 
     /**
@@ -146,9 +203,10 @@ object CallRecorderEngine {
                 all.add("mic" to MediaRecorder.AudioSource.MIC)
             }
             else -> {
+                // Default: MIC first for maximum compatibility
                 all.add("mic" to MediaRecorder.AudioSource.MIC)
-                all.add("voice_communication" to MediaRecorder.AudioSource.VOICE_COMMUNICATION)
                 all.add("voice_recognition" to MediaRecorder.AudioSource.VOICE_RECOGNITION)
+                all.add("voice_communication" to MediaRecorder.AudioSource.VOICE_COMMUNICATION)
             }
         }
 

@@ -25,6 +25,7 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
   UserModel? _user;
   bool _isRecording = false;
   bool _isSaving = false;
+  bool _isStarting = false; // CRASH FIX: Prevent multiple start requests
   int _seconds = 0;
   Timer? _timer;
   late AnimationController _pulseController;
@@ -73,37 +74,90 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
     }
   }
 
+  /// CRASH FIX: Correct recording flow with proper sequence
+  /// Flow: Check permissions -> Start foreground service -> Wait -> Start recording
   Future<void> _startRecording() async {
-    final status = await Permission.microphone.request();
-    if (!status.isGranted) {
-      _showMessage('Microphone permission required');
+    // CRASH FIX: Prevent multiple start requests
+    if (_isStarting || _isRecording) {
+      debugPrint('[Recorder] Already starting or recording');
       return;
     }
 
+    _isStarting = true;
+
     try {
-      debugPrint('[Recorder] Starting recording...');
-      
-      // Start recording first (don't wait for foreground service)
-      final started = await _recorder.startRecording(audioSource: 'voice_communication');
+      // STEP 1: Check and request microphone permission
+      debugPrint('[Recorder] Step 1: Checking microphone permission...');
+      final micStatus = await Permission.microphone.status;
+
+      if (!micStatus.isGranted) {
+        debugPrint('[Recorder] Requesting microphone permission...');
+        final requested = await Permission.microphone.request();
+
+        if (!requested.isGranted) {
+          _isStarting = false;
+          _showMessage('Microphone permission required');
+
+          // Handle permanently denied
+          if (requested.isPermanentlyDenied) {
+            _showPermissionSettingsDialog('Microphone');
+          }
+          return;
+        }
+      }
+
+      // STEP 2: Check notification permission (Android 13+)
+      debugPrint('[Recorder] Step 2: Checking notification permission...');
+      final notifStatus = await Permission.notification.status;
+      if (!notifStatus.isGranted) {
+        await Permission.notification.request();
+        // Continue even if denied - notification is optional
+      }
+
+      // STEP 3: Start foreground service FIRST
+      debugPrint('[Recorder] Step 3: Starting foreground service...');
+      try {
+        final serviceStarted = await ForegroundServiceManager.startService();
+        if (!serviceStarted) {
+          debugPrint(
+            '[Recorder] Warning: Foreground service may not have started',
+          );
+          // Continue anyway - recording might still work
+        }
+      } catch (e) {
+        debugPrint('[Recorder] Foreground service error: $e');
+        // Continue - recording might still work without foreground service
+      }
+
+      // STEP 4: CRITICAL - Wait for service to stabilize
+      debugPrint('[Recorder] Step 4: Waiting for service to stabilize...');
+      await Future.delayed(const Duration(milliseconds: 800));
+
+      // STEP 5: Start recording
+      debugPrint('[Recorder] Step 5: Starting audio recording...');
+      final started = await _recorder.startRecording(
+        audioSource: 'mic', // CRASH FIX: Use 'mic' for maximum compatibility
+      );
+
       if (!started) {
-        _showMessage('Failed to start recording');
+        debugPrint('[Recorder] Failed to start recording');
+        _isStarting = false;
+
+        // Stop foreground service if recording failed
+        try {
+          await ForegroundServiceManager.stopService();
+        } catch (_) {}
+
+        _showMessage('Failed to start recording. Please check permissions.');
         return;
       }
 
       debugPrint('[Recorder] Recording started successfully');
-      
-      // Try to start foreground service in background (don't block on failure)
-      try {
-        await ForegroundServiceManager.startService();
-        debugPrint('[Recorder] Foreground service started');
-      } catch (e) {
-        debugPrint('[Recorder] Foreground service error (non-fatal): $e');
-        // Continue anyway - recording is already started
-      }
 
       if (mounted) {
         setState(() {
           _isRecording = true;
+          _isStarting = false;
           _seconds = 0;
           _statusMessage = null;
         });
@@ -113,22 +167,24 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
         });
       }
     } catch (e) {
-      _showMessage('Error: ${e.toString()}');
-      debugPrint('[Recorder] Start error: $e');
-      // Ensure service is stopped on error
+      debugPrint('[Recorder] Start recording error: $e');
+      _isStarting = false;
+      _isRecording = false;
+
+      // Clean up
       try {
         await ForegroundServiceManager.stopService();
       } catch (_) {}
+
+      _showMessage('Error starting recording: ${e.toString()}');
     }
   }
 
+  /// Stop recording with proper cleanup
   Future<void> _stopAndUpload() async {
     _timer?.cancel();
     _pulseController.stop();
     _pulseController.reset();
-
-    // Stop foreground service
-    await ForegroundServiceManager.stopService();
 
     setState(() {
       _isRecording = false;
@@ -136,14 +192,52 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
       _statusMessage = 'Uploading...';
     });
 
+    // STEP 1: Stop recording
+    debugPrint('[Recorder] Stopping recording...');
     final path = await _recorder.stopRecording();
-    if (path == null) {
-      setState(() { _isSaving = false; _statusMessage = 'Recording failed to save'; });
+    debugPrint('[Recorder] Stop result: $path');
+
+    // STEP 2: Stop foreground service
+    debugPrint('[Recorder] Stopping foreground service...');
+    try {
+      await ForegroundServiceManager.stopService();
+    } catch (e) {
+      debugPrint('[Recorder] Error stopping service: $e');
+    }
+
+    // Handle missing path
+    if (path == null || path.isEmpty) {
+      // Try to find the most recent recording
+      try {
+        final files = await _recorder.getRecordedFiles();
+        if (files.isNotEmpty) {
+          final mostRecent = files.first.path;
+          debugPrint('[Recorder] Using most recent file: $mostRecent');
+          await _uploadRecording(mostRecent);
+          return;
+        }
+      } catch (e) {
+        debugPrint('[Recorder] Error finding recent file: $e');
+      }
+
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+          _statusMessage = 'Recording failed to save';
+        });
+      }
       return;
     }
 
+    await _uploadRecording(path);
+  }
+
+  Future<void> _uploadRecording(String path) async {
     if (_user == null || _user!.companyId == null) {
-      setState(() { _isSaving = false; _statusMessage = 'User data missing. Please re-login.'; });
+      setState(() {
+        _isSaving = false;
+        _statusMessage = 'User data missing. Please re-login.';
+      });
       return;
     }
 
@@ -151,7 +245,8 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
       final now = DateTime.now();
       final fileName = path.split('/').last;
       final response = await _api.createCall(
-        customerName: 'Call ${now.day}/${now.month} ${now.hour}:${now.minute.toString().padLeft(2, '0')}',
+        customerName:
+            'Call ${now.day}/${now.month} ${now.hour}:${now.minute.toString().padLeft(2, '0')}',
         companyId: _user!.companyId!,
         userId: _user!.id,
         categoryId: _sopCategoryId,
@@ -167,14 +262,19 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
 
         // aiEnabled=true → PENDING/PROCESSING (direct AI analysis)
         // aiEnabled=false → APPROVAL_PENDING (admin must approve first)
-        final isAiFlow = _user!.aiEnabled &&
+        final isAiFlow =
+            _user!.aiEnabled &&
             (analysisStatus == 'PENDING' || analysisStatus == 'PROCESSING');
 
         final msg = isAiFlow
             ? 'Uploaded! AI analysis started.'
             : 'Submitted for admin approval.';
 
-        setState(() { _isSaving = false; _seconds = 0; _statusMessage = msg; });
+        setState(() {
+          _isSaving = false;
+          _seconds = 0;
+          _statusMessage = msg;
+        });
         _showMessage(msg, success: true);
       }
     } catch (e) {
@@ -183,17 +283,22 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
         if (e is DioException) {
           final serverMsg = e.response?.data?['message'];
           if (serverMsg != null) {
-            errorMsg = serverMsg is List ? serverMsg.join(', ') : serverMsg.toString();
+            errorMsg = serverMsg is List
+                ? serverMsg.join(', ')
+                : serverMsg.toString();
           } else if (e.type == DioExceptionType.connectionTimeout ||
-                     e.type == DioExceptionType.sendTimeout ||
-                     e.type == DioExceptionType.receiveTimeout) {
+              e.type == DioExceptionType.sendTimeout ||
+              e.type == DioExceptionType.receiveTimeout) {
             errorMsg = 'Connection timed out. Check your internet.';
           } else if (e.type == DioExceptionType.connectionError) {
             errorMsg = 'No internet connection.';
           }
         }
         debugPrint('[Recorder] Upload error: $e');
-        setState(() { _isSaving = false; _statusMessage = errorMsg; });
+        setState(() {
+          _isSaving = false;
+          _statusMessage = errorMsg;
+        });
         _showMessage(errorMsg);
       }
     }
@@ -209,6 +314,33 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
         ),
       );
     }
+  }
+
+  /// CRASH FIX: Show permission settings dialog for permanently denied permissions
+  void _showPermissionSettingsDialog(String permissionName) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('$permissionName Permission Required'),
+        content: Text(
+          '$permissionName permission is permanently denied. '
+          'Please enable it in app settings.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              openAppSettings();
+            },
+            child: const Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
   }
 
   String get _formattedTime {

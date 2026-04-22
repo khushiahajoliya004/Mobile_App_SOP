@@ -35,8 +35,8 @@ class ForegroundServiceManager {
       FlutterForegroundTask.init(
         androidNotificationOptions: AndroidNotificationOptions(
           channelId: 'call_recorder_channel',
-          channelName: 'Call Recorder Service',
-          channelDescription: 'Call recording service with floating button',
+          channelName: 'Recorder Service',
+          channelDescription: 'recording service with floating button',
           channelImportance: NotificationChannelImportance.DEFAULT,
           priority: NotificationPriority.DEFAULT,
         ),
@@ -74,8 +74,8 @@ class ForegroundServiceManager {
 
       try {
         final result = await FlutterForegroundTask.startService(
-          notificationTitle: 'Call Recorder',
-          notificationText: 'Monitoring calls. Tap floating button to record.',
+          notificationTitle: 'Recorder',
+          notificationText: 'Monitoring. Tap floating button to record.',
           callback: startCallback,
         );
         if (result is ServiceRequestFailure) {
@@ -125,8 +125,9 @@ class ForegroundServiceManager {
         print('Foreground service stop exception: $e');
       }
 
-      await SharedPreferences.getInstance()
-          .then((p) => p.setBool('service_running', false));
+      await SharedPreferences.getInstance().then(
+        (p) => p.setBool('service_running', false),
+      );
 
       // Clear command file
       try {
@@ -159,7 +160,7 @@ class ForegroundServiceManager {
 
       await FlutterOverlayWindow.showOverlay(
         enableDrag: true,
-        overlayTitle: 'Call Recorder',
+        overlayTitle: 'Recorder',
         overlayContent: 'Tap to record',
         flag: OverlayFlag.focusPointer,
         positionGravity: PositionGravity.right,
