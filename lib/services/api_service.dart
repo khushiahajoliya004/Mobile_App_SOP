@@ -200,4 +200,86 @@ class ApiService {
   Future<Response> getMyCompany() async {
     return _dio.get('/companies/my-company/details');
   }
+
+  // ─── CRM ───
+
+  Future<Response> getCrmDashboard() async {
+    return _dio.get('/crm-dashboard/summary');
+  }
+
+  Future<Response> getBranches() async {
+    return _dio.get('/branches');
+  }
+
+  Future<Response> getLeadPipelines() async {
+    return _dio.get('/lead-pipelines');
+  }
+
+  Future<Response> getLeads() async {
+    return _dio.get('/leads');
+  }
+
+  Future<Response> getAssignedLeads() async {
+    return _dio.get('/leads', queryParameters: {'status': 'OPEN'});
+  }
+
+  Future<Response> createLead({
+    required String customerName,
+    String? phone,
+    String? source,
+    String? branchId,
+    String? pipelineId,
+    String? leadStageId,
+  }) async {
+    return _dio.post('/leads', data: {
+      'customerName': customerName,
+      if (phone != null && phone.isNotEmpty) 'phone': phone,
+      if (source != null && source.isNotEmpty) 'source': source,
+      if (branchId != null && branchId.isNotEmpty) 'branchId': branchId,
+      if (pipelineId != null && pipelineId.isNotEmpty) 'pipelineId': pipelineId,
+      if (leadStageId != null && leadStageId.isNotEmpty) 'leadStageId': leadStageId,
+    });
+  }
+
+  Future<Response> updateLeadStatus(String leadId, Map<String, dynamic> data) async {
+    return _dio.patch('/leads/$leadId/status', data: data);
+  }
+
+  Future<Response> createLeadActivity({
+    required String leadId,
+    String type = 'NOTE',
+    String? callId,
+    String? notes,
+    String? outcome,
+  }) async {
+    return _dio.post('/leads/$leadId/activities', data: {
+      'leadId': leadId,
+      'type': type,
+      if (callId != null && callId.isNotEmpty) 'callId': callId,
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
+      if (outcome != null && outcome.isNotEmpty) 'outcome': outcome,
+    });
+  }
+
+  Future<Response> createFollowUp({
+    required String leadId,
+    required DateTime scheduledAt,
+    String type = 'CALL',
+    String? notes,
+  }) async {
+    return _dio.post('/follow-ups', data: {
+      'leadId': leadId,
+      'scheduledAt': scheduledAt.toUtc().toIso8601String(),
+      'type': type,
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
+    });
+  }
+
+  Future<Response> getFollowUps() async {
+    return _dio.get('/follow-ups');
+  }
+
+  Future<Response> getVisits() async {
+    return _dio.get('/visits');
+  }
 }

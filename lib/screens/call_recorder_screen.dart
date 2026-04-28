@@ -10,7 +10,10 @@ import '../services/foreground_service.dart';
 import '../models/user_model.dart';
 
 class CallRecorderScreen extends StatefulWidget {
-  const CallRecorderScreen({super.key});
+  final String? leadId;
+  final String? leadCustomerName;
+
+  const CallRecorderScreen({super.key, this.leadId, this.leadCustomerName});
 
   @override
   State<CallRecorderScreen> createState() => _CallRecorderScreenState();
@@ -246,6 +249,7 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
       final fileName = path.split('/').last;
       final response = await _api.createCall(
         customerName:
+            widget.leadCustomerName ??
             'Call ${now.day}/${now.month} ${now.hour}:${now.minute.toString().padLeft(2, '0')}',
         companyId: _user!.companyId!,
         userId: _user!.id,
@@ -258,7 +262,17 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
 
       if (mounted) {
         final callData = response.data is Map ? response.data['data'] : null;
+        final callId = callData?['id']?.toString();
         final analysisStatus = callData?['analysisStatus'] ?? '';
+
+        if (widget.leadId != null && callId != null) {
+          await _api.createLeadActivity(
+            leadId: widget.leadId!,
+            type: 'CALL',
+            callId: callId,
+            notes: 'Recording completed from mobile app',
+          );
+        }
 
         // aiEnabled=true → PENDING/PROCESSING (direct AI analysis)
         // aiEnabled=false → APPROVAL_PENDING (admin must approve first)
@@ -276,6 +290,9 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
           _statusMessage = msg;
         });
         _showMessage(msg, success: true);
+        if (widget.leadId != null) {
+          _showPostRecordingFlow();
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -314,6 +331,83 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
         ),
       );
     }
+  }
+
+  Future<void> _showPostRecordingFlow() async {
+    DateTime selected = DateTime.now().add(const Duration(days: 1));
+    final remarkController = TextEditingController();
+    if (!mounted) return;
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Padding(
+          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('Next Step', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 12),
+              TextField(controller: remarkController, decoration: const InputDecoration(labelText: 'Remark')),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final date = await showDatePicker(
+                    context: ctx,
+                    initialDate: selected,
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                  );
+                  if (date == null) return;
+                  if (!ctx.mounted) return;
+                  final time = await showTimePicker(context: ctx, initialTime: TimeOfDay.fromDateTime(selected));
+                  if (time == null) return;
+                  setSheetState(() {
+                    selected = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+                  });
+                },
+                icon: const Icon(Icons.schedule_rounded),
+                label: Text('Follow-up: ${selected.day}/${selected.month} ${selected.hour}:${selected.minute.toString().padLeft(2, '0')}'),
+              ),
+              const SizedBox(height: 12),
+              FilledButton(
+                onPressed: () async {
+                  await _api.updateLeadStatus(widget.leadId!, {
+                    'nextFollowUpAt': selected.toUtc().toIso8601String(),
+                  });
+                  if (remarkController.text.trim().isNotEmpty) {
+                    await _api.createLeadActivity(
+                      leadId: widget.leadId!,
+                      type: 'NOTE',
+                      notes: remarkController.text.trim(),
+                    );
+                  }
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  _showMessage('Follow-up scheduled', success: true);
+                },
+                child: const Text('Schedule Follow-up'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  await _api.updateLeadStatus(widget.leadId!, {
+                    'status': 'LOST',
+                    'lostReason': remarkController.text.trim().isEmpty ? 'Marked lost from mobile app' : remarkController.text.trim(),
+                  });
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  _showMessage('Lead marked lost', success: true);
+                },
+                child: const Text('Mark Lost'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    remarkController.dispose();
   }
 
   /// CRASH FIX: Show permission settings dialog for permanently denied permissions
@@ -433,6 +527,28 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               // AI badge
+              if (widget.leadCustomerName != null) ...[
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.primarySurface,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.person_rounded, color: AppColors.primary),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          widget.leadCustomerName!,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 14,

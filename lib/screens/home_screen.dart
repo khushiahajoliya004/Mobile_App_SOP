@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import '../main.dart';
 import '../services/auth_service.dart';
 import '../models/user_model.dart';
+import '../models/crm_model.dart';
+import '../services/api_service.dart';
 import 'login_screen.dart';
 import 'call_upload_screen.dart';
 import 'call_recorder_screen.dart';
 import 'call_history_screen.dart';
 import 'audio_library_screen.dart';
+import 'crm_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -17,8 +20,10 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final _auth = AuthService();
+  final _api = ApiService();
   UserModel? _user;
   int _currentIndex = 0;
+  bool _leadPopupShown = false;
 
   @override
   void initState() {
@@ -29,6 +34,38 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadUser() async {
     final user = await _auth.getUser();
     setState(() => _user = user);
+    _showAssignedLeadPopup();
+  }
+
+  Future<void> _showAssignedLeadPopup() async {
+    if (_leadPopupShown) return;
+    try {
+      final res = await _api.getAssignedLeads();
+      final list = ((res.data['data'] ?? []) as List)
+          .map((e) => CrmLead.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+      if (!mounted || list.isEmpty) return;
+      _leadPopupShown = true;
+      final lead = list.first;
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Assigned Lead'),
+          content: Text('${lead.customerName}\n${lead.phone ?? ''}'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Later')),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                final crmIndex = _getMenuItems().indexWhere((item) => item.label == 'CRM');
+                if (crmIndex >= 0) setState(() => _currentIndex = crmIndex);
+              },
+              child: const Text('Open'),
+            ),
+          ],
+        ),
+      );
+    } catch (_) {}
   }
 
   Future<void> _logout() async {
@@ -70,6 +107,13 @@ class _HomeScreenState extends State<HomeScreen> {
         label: 'History',
         permission: 'CALL_VIEW',
         screen: const CallHistoryScreen(),
+      ),
+      _MenuItem(
+        icon: Icons.groups_2_outlined,
+        activeIcon: Icons.groups_2_rounded,
+        label: 'CRM',
+        permission: 'CRM_DASHBOARD_VIEW',
+        screen: const CrmScreen(),
       ),
     ];
 
