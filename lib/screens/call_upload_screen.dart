@@ -231,48 +231,70 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
       );
     }
 
-    // No SOP assigned
+    // No SOP assigned — show warning but still allow upload
     if (!_hasSop) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  color: AppColors.warning.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.assignment_late_rounded,
-                  size: 36,
-                  color: AppColors.warning,
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Warning banner
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: AppColors.warning.withValues(alpha: 0.2),
                 ),
               ),
-              const SizedBox(height: 20),
-              const Text(
-                'SOP Not Assigned',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
-                ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: AppColors.warning.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.info_outline_rounded,
+                      color: AppColors.warning,
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'No SOP Assigned',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Upload will work but AI analysis needs SOP. Ask admin to assign one.',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textSecondary,
+                            height: 1.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 8),
-              const Text(
-                'Please ask your admin to assign an SOP before uploading calls.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: AppColors.textSecondary,
-                  height: 1.5,
-                ),
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 16),
+            // Form card
+            _buildUploadForm(),
+          ],
         ),
       );
     }
@@ -311,256 +333,260 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
           const SizedBox(height: 20),
 
           // SOP info chip
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: AppColors.primarySurface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.primary.withOpacity(0.15)),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.book_outlined,
-                  size: 18,
-                  color: AppColors.primary,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _sopLoading
-                      ? const Text(
-                          'Loading SOP details...',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: AppColors.textSecondary,
-                          ),
-                        )
-                      : Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _sopName != null
-                                  ? 'SOP: $_sopName'
-                                  : 'SOP Assigned',
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                            if (_sopCategoryId != null ||
-                                _sopSalesStageId != null)
-                              const Text(
-                                'Category & stage auto-resolved from SOP',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: AppColors.textHint,
-                                ),
-                              ),
-                          ],
-                        ),
-                ),
-                if (!_sopLoading)
-                  const Icon(
-                    Icons.check_circle_rounded,
-                    size: 18,
-                    color: AppColors.success,
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Form card
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.grey.shade100),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 10,
-                  offset: const Offset(0, 3),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Customer name
-                TextField(
-                  controller: _customerNameController,
-                  style: const TextStyle(color: AppColors.textPrimary),
-                  textCapitalization: TextCapitalization.words,
-                  decoration: InputDecoration(
-                    labelText: 'Customer Name *',
-                    hintText: 'Enter customer name',
-                    prefixIcon: Icon(
-                      Icons.person_outline_rounded,
-                      color: AppColors.primary.withOpacity(0.6),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                // Notes
-                TextField(
-                  controller: _notesController,
-                  maxLines: 3,
-                  style: const TextStyle(color: AppColors.textPrimary),
-                  decoration: InputDecoration(
-                    labelText: 'Notes (optional)',
-                    hintText: 'Add any call notes...',
-                    prefixIcon: Padding(
-                      padding: const EdgeInsets.only(bottom: 48),
-                      child: Icon(
-                        Icons.notes_outlined,
-                        color: AppColors.primary.withOpacity(0.6),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Audio source card
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.grey.shade100),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 10,
-                  offset: const Offset(0, 3),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Audio File',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                // Source toggle
-                Row(
-                  children: [
-                    _sourceTab(
-                      AudioSource.local,
-                      Icons.folder_rounded,
-                      'Local Recording',
-                    ),
-                    const SizedBox(width: 10),
-                    _sourceTab(
-                      AudioSource.device,
-                      Icons.phone_android_rounded,
-                      'Device File',
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-
-                // Local recordings list
-                if (_audioSource == AudioSource.local) ...[
-                  if (_localRecordings.isEmpty)
-                    _emptyRecordingsPlaceholder()
-                  else
-                    _localRecordingPicker(),
-                ],
-
-                // Device file picker
-                if (_audioSource == AudioSource.device) _deviceFilePicker(),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // Status message
-          if (_statusMessage != null)
+          if (_hasSop)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               margin: const EdgeInsets.only(bottom: 16),
               decoration: BoxDecoration(
-                color: _isError
-                    ? AppColors.error.withOpacity(0.08)
-                    : AppColors.success.withOpacity(0.08),
+                color: AppColors.primarySurface,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: _isError
-                      ? AppColors.error.withOpacity(0.2)
-                      : AppColors.success.withOpacity(0.2),
+                  color: AppColors.primary.withValues(alpha: 0.15),
                 ),
               ),
               child: Row(
                 children: [
-                  Icon(
-                    _isError
-                        ? Icons.error_outline_rounded
-                        : Icons.check_circle_outline_rounded,
+                  const Icon(
+                    Icons.book_outlined,
                     size: 18,
-                    color: _isError ? AppColors.error : AppColors.success,
+                    color: AppColors.primary,
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Text(
-                      _statusMessage!,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: _isError ? AppColors.error : AppColors.success,
-                      ),
-                    ),
+                    child: _sopLoading
+                        ? const Text(
+                            'Loading SOP...',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: AppColors.textSecondary,
+                            ),
+                          )
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _sopName != null
+                                    ? 'SOP: $_sopName'
+                                    : 'SOP Assigned',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                              if (_sopCategoryId != null ||
+                                  _sopSalesStageId != null)
+                                const Text(
+                                  'Category & stage auto-resolved',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: AppColors.textHint,
+                                  ),
+                                ),
+                            ],
+                          ),
                   ),
+                  if (!_sopLoading)
+                    const Icon(
+                      Icons.check_circle_rounded,
+                      size: 18,
+                      color: AppColors.success,
+                    ),
                 ],
               ),
             ),
 
-          // Upload button
-          FilledButton.icon(
-            onPressed: _uploading ? null : _upload,
-            icon: _uploading
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 2,
-                    ),
-                  )
-                : const Icon(Icons.cloud_upload_rounded, size: 20),
-            label: Text(
-              _uploading ? 'Uploading...' : 'Submit for Approval',
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-            ),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            '1 credit will be deducted upon admin approval',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, color: AppColors.textHint),
-          ),
-          const SizedBox(height: 24),
+          _buildUploadForm(),
         ],
       ),
+    );
+  }
+
+  Widget _buildUploadForm() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Form card
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.grey.shade100),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: _customerNameController,
+                style: const TextStyle(color: AppColors.textPrimary),
+                textCapitalization: TextCapitalization.words,
+                decoration: InputDecoration(
+                  labelText: 'Customer Name *',
+                  hintText: 'Enter customer name',
+                  prefixIcon: Icon(
+                    Icons.person_outline_rounded,
+                    color: AppColors.primary.withValues(alpha: 0.6),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              TextField(
+                controller: _notesController,
+                maxLines: 3,
+                style: const TextStyle(color: AppColors.textPrimary),
+                decoration: InputDecoration(
+                  labelText: 'Notes (optional)',
+                  hintText: 'Add any call notes...',
+                  prefixIcon: Padding(
+                    padding: const EdgeInsets.only(bottom: 48),
+                    child: Icon(
+                      Icons.notes_outlined,
+                      color: AppColors.primary.withValues(alpha: 0.6),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // Audio source card
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.grey.shade100),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Audio File',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  _sourceTab(
+                    AudioSource.local,
+                    Icons.folder_rounded,
+                    'Local Recording',
+                  ),
+                  const SizedBox(width: 10),
+                  _sourceTab(
+                    AudioSource.device,
+                    Icons.phone_android_rounded,
+                    'Device File',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (_audioSource == AudioSource.local) ...[
+                if (_localRecordings.isEmpty)
+                  _emptyRecordingsPlaceholder()
+                else
+                  _localRecordingPicker(),
+              ],
+              if (_audioSource == AudioSource.device) _deviceFilePicker(),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // Status message
+        if (_statusMessage != null)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            margin: const EdgeInsets.only(bottom: 16),
+            decoration: BoxDecoration(
+              color: _isError
+                  ? AppColors.error.withValues(alpha: 0.08)
+                  : AppColors.success.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _isError
+                    ? AppColors.error.withValues(alpha: 0.2)
+                    : AppColors.success.withValues(alpha: 0.2),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  _isError
+                      ? Icons.error_outline_rounded
+                      : Icons.check_circle_outline_rounded,
+                  size: 18,
+                  color: _isError ? AppColors.error : AppColors.success,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    _statusMessage!,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: _isError ? AppColors.error : AppColors.success,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+        // Upload button
+        FilledButton.icon(
+          onPressed: _uploading ? null : _upload,
+          icon: _uploading
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                )
+              : const Icon(Icons.cloud_upload_rounded, size: 20),
+          label: Text(
+            _uploading ? 'Uploading...' : 'Submit for Approval',
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+          ),
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          '1 credit will be deducted upon admin approval',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 12, color: AppColors.textHint),
+        ),
+        const SizedBox(height: 24),
+      ],
     );
   }
 

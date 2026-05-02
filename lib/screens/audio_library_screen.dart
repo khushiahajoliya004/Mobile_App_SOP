@@ -83,9 +83,9 @@ class _AudioLibraryScreenState extends State<AudioLibraryScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error playing audio: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error playing audio: $e')));
       }
     }
   }
@@ -94,7 +94,11 @@ class _AudioLibraryScreenState extends State<AudioLibraryScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete Audio'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Delete Audio',
+          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
+        ),
         content: Text('Delete "${file.name}"?'),
         actions: [
           TextButton(
@@ -123,9 +127,9 @@ class _AudioLibraryScreenState extends State<AudioLibraryScreen> {
       if (success) {
         await _loadAudioFiles();
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Audio deleted')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Audio deleted')));
         }
       }
     }
@@ -140,164 +144,271 @@ class _AudioLibraryScreenState extends State<AudioLibraryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.scaffoldBg,
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+              child: CircularProgressIndicator(
+                color: AppColors.primary,
+                strokeWidth: 3,
+              ),
+            )
           : _audioFiles.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.music_note_outlined,
-                        size: 64,
-                        color: Colors.grey.shade300,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No Audio Files',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              color: AppColors.textSecondary,
-                            ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Record or upload audio files to see them here',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: AppColors.textHint,
-                            ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 24),
-                      FilledButton.icon(
-                        onPressed: () => setState(() {}),
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Refresh'),
+          ? _buildEmptyState()
+          : RefreshIndicator(
+              onRefresh: _loadAudioFiles,
+              color: AppColors.primary,
+              child: ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: _audioFiles.length,
+                itemBuilder: (ctx, i) => _buildAudioTile(_audioFiles[i]),
+              ),
+            ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: const BoxDecoration(
+              color: AppColors.primarySurface,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.music_note_rounded,
+              size: 28,
+              color: AppColors.primary,
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'No Audio Files',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Record or upload audio files to see them here',
+            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 20),
+          GestureDetector(
+            onTap: _loadAudioFiles,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.refresh_rounded,
+                    size: 16,
+                    color: AppColors.primary,
+                  ),
+                  SizedBox(width: 8),
+                  Text(
+                    'Refresh',
+                    style: TextStyle(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAudioTile(AudioFile audio) {
+    final isPlaying = _playingId == audio.id;
+    final isCurrentlyPlaying = isPlaying && _isPlaying;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+        border: isPlaying
+            ? Border.all(
+                color: AppColors.primary.withValues(alpha: 0.2),
+                width: 1.5,
+              )
+            : null,
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              // Play button
+              GestureDetector(
+                onTap: () => _playAudio(audio),
+                child: Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: isCurrentlyPlaying
+                          ? [AppColors.primary, AppColors.primaryDark]
+                          : [AppColors.primary, AppColors.primaryLight],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.25),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
                       ),
                     ],
                   ),
-                )
-              : RefreshIndicator(
-                  onRefresh: _loadAudioFiles,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _audioFiles.length,
-                    itemBuilder: (ctx, i) {
-                      final audio = _audioFiles[i];
-                      final isPlaying = _playingId == audio.id;
-
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          leading: Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: isPlaying
-                                    ? [AppColors.primary, AppColors.primaryDark]
-                                    : [AppColors.accent, AppColors.primaryLight],
-                              ),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Center(
-                              child: Icon(
-                                isPlaying ? Icons.pause : Icons.play_arrow,
-                                color: Colors.white,
-                                size: 24,
-                              ),
-                            ),
-                          ),
-                          title: Text(
-                            audio.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                            ),
-                          ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  Text(
-                                    audio.formattedDuration,
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.textSecondary,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Text(
-                                    audio.formattedSize,
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.textSecondary,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Text(
-                                    audio.formattedDate,
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.textHint,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              if (isPlaying) ...[
-                                const SizedBox(height: 8),
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(4),
-                                  child: LinearProgressIndicator(
-                                    value: _totalDuration.inMilliseconds > 0
-                                        ? _currentPosition.inMilliseconds /
-                                            _totalDuration.inMilliseconds
-                                        : 0,
-                                    minHeight: 3,
-                                    backgroundColor: Colors.grey.shade200,
-                                    valueColor: const AlwaysStoppedAnimation<Color>(
-                                      AppColors.primary,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${_currentPosition.inMinutes}:${(_currentPosition.inSeconds % 60).toString().padLeft(2, '0')} / ${_totalDuration.inMinutes}:${(_totalDuration.inSeconds % 60).toString().padLeft(2, '0')}',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: AppColors.textHint,
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                          trailing: PopupMenuButton(
-                            itemBuilder: (ctx) => [
-                              PopupMenuItem(
-                                child: const Row(
-                                  children: [
-                                    Icon(Icons.delete_outline, size: 20),
-                                    SizedBox(width: 12),
-                                    Text('Delete'),
-                                  ],
-                                ),
-                                onTap: () => _deleteAudio(audio),
-                              ),
-                            ],
-                          ),
-                          onTap: () => _playAudio(audio),
-                        ),
-                      );
-                    },
+                  child: Icon(
+                    isCurrentlyPlaying
+                        ? Icons.pause_rounded
+                        : Icons.play_arrow_rounded,
+                    color: Colors.white,
+                    size: 24,
                   ),
                 ),
+              ),
+              const SizedBox(width: 14),
+              // Title + metadata
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      audio.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        _metaChip(
+                          Icons.timer_outlined,
+                          audio.formattedDuration,
+                        ),
+                        const SizedBox(width: 8),
+                        _metaChip(Icons.storage_rounded, audio.formattedSize),
+                        const SizedBox(width: 8),
+                        _metaChip(
+                          Icons.calendar_today_rounded,
+                          audio.formattedDate,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Delete button
+              GestureDetector(
+                onTap: () => _deleteAudio(audio),
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: AppColors.error.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.delete_outline_rounded,
+                    size: 15,
+                    color: AppColors.error,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          // Progress bar when playing
+          if (isPlaying) ...[
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: _totalDuration.inMilliseconds > 0
+                    ? _currentPosition.inMilliseconds /
+                          _totalDuration.inMilliseconds
+                    : 0,
+                minHeight: 4,
+                backgroundColor: AppColors.surfaceLight,
+                valueColor: const AlwaysStoppedAnimation<Color>(
+                  AppColors.primary,
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '${_currentPosition.inMinutes}:${(_currentPosition.inSeconds % 60).toString().padLeft(2, '0')}',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textHint,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                Text(
+                  '${_totalDuration.inMinutes}:${(_totalDuration.inSeconds % 60).toString().padLeft(2, '0')}',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textHint,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _metaChip(IconData icon, String text) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 10, color: AppColors.textHint),
+        const SizedBox(width: 3),
+        Text(
+          text,
+          style: const TextStyle(
+            fontSize: 10,
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
     );
   }
 }

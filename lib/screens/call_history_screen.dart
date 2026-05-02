@@ -22,7 +22,10 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
   }
 
   Future<void> _loadCalls() async {
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final response = await _api.getCalls();
       final responseData = response.data;
@@ -32,14 +35,22 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
         _loading = false;
       });
     } catch (e) {
-      setState(() { _error = 'Failed to load call history'; _loading = false; });
+      setState(() {
+        _error = 'Failed to load call history';
+        _loading = false;
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 3));
+      return const Center(
+        child: CircularProgressIndicator(
+          color: AppColors.primary,
+          strokeWidth: 3,
+        ),
+      );
     }
 
     if (_error != null) {
@@ -48,25 +59,63 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 72, height: 72,
+              width: 56,
+              height: 56,
               decoration: BoxDecoration(
-                color: AppColors.error.withOpacity(0.1),
+                color: AppColors.error.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.error_outline_rounded, size: 36, color: AppColors.error),
+              child: const Icon(
+                Icons.error_outline_rounded,
+                size: 28,
+                color: AppColors.error,
+              ),
             ),
             const SizedBox(height: 16),
-            Text(_error!, style: const TextStyle(color: AppColors.textSecondary, fontSize: 15)),
+            Text(
+              _error!,
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Please check your connection and try again',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            ),
             const SizedBox(height: 20),
-            OutlinedButton.icon(
-              onPressed: _loadCalls,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Retry'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.primary,
-                side: const BorderSide(color: AppColors.primary),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            GestureDetector(
+              onTap: _loadCalls,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.refresh_rounded,
+                      size: 16,
+                      color: AppColors.primary,
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      'Retry',
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -80,17 +129,32 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 80, height: 80,
-              decoration: BoxDecoration(
+              width: 56,
+              height: 56,
+              decoration: const BoxDecoration(
                 color: AppColors.primarySurface,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.history_rounded, size: 40, color: AppColors.primary),
+              child: const Icon(
+                Icons.history_rounded,
+                size: 28,
+                color: AppColors.primary,
+              ),
             ),
             const SizedBox(height: 16),
-            const Text('No calls found', style: TextStyle(color: AppColors.textSecondary, fontSize: 16, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 6),
-            const Text('Your call history will appear here', style: TextStyle(color: AppColors.textHint, fontSize: 14)),
+            const Text(
+              'No calls found',
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Your call history will appear here',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            ),
           ],
         ),
       );
@@ -111,17 +175,21 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
           final sopScore = call['sopScore'];
           final date = call['createdAt'] ?? '';
           final userName = call['user'] != null
-              ? '${call['user']['firstName'] ?? ''} ${call['user']['lastName'] ?? ''}'.trim()
+              ? '${call['user']['firstName'] ?? ''} ${call['user']['lastName'] ?? ''}'
+                    .trim()
               : '';
 
           return Container(
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: Colors.grey.shade100),
+              borderRadius: BorderRadius.circular(16),
               boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 3)),
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
               ],
             ),
             child: Padding(
@@ -131,11 +199,13 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
                 children: [
                   Row(
                     children: [
+                      // Avatar
                       Container(
-                        width: 46, height: 46,
+                        width: 46,
+                        height: 46,
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
-                            colors: [AppColors.primary, AppColors.accent],
+                            colors: [AppColors.primary, AppColors.primaryLight],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           ),
@@ -143,42 +213,73 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
                         ),
                         child: Center(
                           child: Text(
-                            customerName.isNotEmpty ? customerName[0].toUpperCase() : '?',
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 18),
+                            customerName.isNotEmpty
+                                ? customerName[0].toUpperCase()
+                                : '?',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 18,
+                            ),
                           ),
                         ),
                       ),
                       const SizedBox(width: 14),
+                      // Name + user
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(customerName,
-                                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: AppColors.textPrimary)),
+                            Text(
+                              customerName,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
                             if (userName.isNotEmpty)
                               Padding(
                                 padding: const EdgeInsets.only(top: 2),
-                                child: Text('by $userName',
-                                    style: const TextStyle(color: AppColors.textHint, fontSize: 12)),
+                                child: Text(
+                                  'by $userName',
+                                  style: const TextStyle(
+                                    color: AppColors.textHint,
+                                    fontSize: 11,
+                                  ),
+                                ),
                               ),
                           ],
                         ),
                       ),
-                      _buildStatusChip(analysisStatus),
+                      // Status badge
+                      _buildStatusBadge(analysisStatus),
                     ],
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 12),
+                  // Tags row
                   Wrap(
-                    spacing: 10,
+                    spacing: 8,
                     runSpacing: 8,
                     children: [
+                      if (sopScore != null) _buildScoreBadge(sopScore),
                       if (categoryName.isNotEmpty)
-                        _buildTag(Icons.category_outlined, categoryName, AppColors.primary),
+                        _buildTag(
+                          Icons.label_rounded,
+                          categoryName,
+                          AppColors.primary,
+                        ),
                       if (stageName.isNotEmpty)
-                        _buildTag(Icons.trending_up_rounded, stageName, AppColors.accent),
-                      if (sopScore != null)
-                        _buildTag(Icons.score_rounded, 'Score: $sopScore', AppColors.warning),
-                      _buildTag(Icons.calendar_today_rounded, _formatDate(date), AppColors.textSecondary),
+                        _buildTag(
+                          Icons.flag_rounded,
+                          stageName,
+                          AppColors.accent,
+                        ),
+                      _buildTag(
+                        Icons.calendar_today_rounded,
+                        _formatDate(date),
+                        AppColors.textSecondary,
+                      ),
                     ],
                   ),
                 ],
@@ -190,7 +291,42 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
     );
   }
 
-  Widget _buildStatusChip(String status) {
+  Widget _buildScoreBadge(dynamic score) {
+    final numScore = score is num ? score.toInt() : int.tryParse('$score') ?? 0;
+    Color color;
+    if (numScore >= 80) {
+      color = AppColors.success;
+    } else if (numScore >= 60) {
+      color = AppColors.warning;
+    } else {
+      color = AppColors.error;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.score_rounded, size: 12, color: color),
+          const SizedBox(width: 4),
+          Text(
+            '$numScore%',
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusBadge(String status) {
     Color color;
     IconData icon;
     switch (status) {
@@ -211,18 +347,24 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
         icon = Icons.schedule_rounded;
     }
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.25)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: color),
+          Icon(icon, size: 12, color: color),
           const SizedBox(width: 4),
-          Text(status, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700)),
+          Text(
+            status,
+            style: TextStyle(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ],
       ),
     );
@@ -230,17 +372,24 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
 
   Widget _buildTag(IconData icon, String text, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(8),
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: color.withOpacity(0.7)),
+          Icon(icon, size: 12, color: color.withValues(alpha: 0.8)),
           const SizedBox(width: 5),
-          Text(text, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w500)),
+          Text(
+            text,
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );

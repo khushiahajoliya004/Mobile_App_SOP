@@ -5,6 +5,7 @@ class CrmLead {
   final String? phone;
   final String? source;
   final String? assignedToUserId;
+  final String? assignedToUserName;
   final DateTime? bookingDate;
   final DateTime? deliveryDate;
   final DateTime? nextFollowUpAt;
@@ -16,22 +17,37 @@ class CrmLead {
     this.phone,
     this.source,
     this.assignedToUserId,
+    this.assignedToUserName,
     this.bookingDate,
     this.deliveryDate,
     this.nextFollowUpAt,
   });
 
-  factory CrmLead.fromJson(Map<String, dynamic> json) => CrmLead(
-    id: json['id'] ?? '',
-    customerName: json['customerName'] ?? '',
-    status: json['status'] ?? 'OPEN',
-    phone: json['phone'],
-    source: json['source'],
-    assignedToUserId: json['assignedToUserId'],
-    bookingDate: DateTime.tryParse(json['bookingDate'] ?? ''),
-    deliveryDate: DateTime.tryParse(json['deliveryDate'] ?? ''),
-    nextFollowUpAt: DateTime.tryParse(json['nextFollowUpAt'] ?? ''),
-  );
+  factory CrmLead.fromJson(Map<String, dynamic> json) {
+    final assignedTo = json['assignedTo'];
+    String? assignedName;
+    if (assignedTo is Map) {
+      assignedName =
+          '${assignedTo['firstName'] ?? ''} ${assignedTo['lastName'] ?? ''}'
+              .trim();
+      if (assignedName.isEmpty) assignedName = null;
+    }
+    return CrmLead(
+      id: json['id'] ?? '',
+      customerName: json['customerName'] ?? '',
+      status: json['status'] ?? 'OPEN',
+      phone: json['phone'],
+      source: json['source'],
+      assignedToUserId: json['assignedToUserId'],
+      assignedToUserName: assignedName,
+      bookingDate: DateTime.tryParse(json['bookingDate'] ?? ''),
+      deliveryDate: DateTime.tryParse(json['deliveryDate'] ?? ''),
+      nextFollowUpAt: DateTime.tryParse(json['nextFollowUpAt'] ?? ''),
+    );
+  }
+
+  bool get isAssigned =>
+      assignedToUserId != null && assignedToUserId!.isNotEmpty;
 }
 
 class CrmFollowUp {

@@ -80,6 +80,7 @@ class UserModel {
   };
 
   bool hasPermission(String permission) => permissions.contains(permission);
+  bool hasModule(String moduleCode) => allowedModules.contains(moduleCode);
 
   bool get isSuperAdmin => userType == 'SUPER_ADMIN';
   bool get isCompanyAdmin => userType == 'COMPANY';

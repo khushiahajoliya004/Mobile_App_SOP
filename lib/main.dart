@@ -38,35 +38,35 @@ void overlayMain() {
 }
 
 class AppColors {
-  // Primary blues
-  static const primary = Color(0xFF1A73E8);
-  static const primaryDark = Color(0xFF0D47A1);
-  static const primaryLight = Color(0xFF4FC3F7);
-  static const primarySurface = Color(0xFFE3F2FD);
+  // Primary — Indigo (single consistent color)
+  static const primary = Color(0xFF4F46E5);
+  static const primaryDark = Color(0xFF3730A3);
+  static const primaryLight = Color(0xFF818CF8);
+  static const primarySurface = Color(0xFFEEF2FF);
 
   // Accent
-  static const accent = Color(0xFF00BCD4);
-  static const accentLight = Color(0xFFB2EBF2);
+  static const accent = Color(0xFF06B6D4);
+  static const accentLight = Color(0xFFCFFAFE);
 
   // Backgrounds
-  static const scaffoldBg = Color(0xFFF0F4FF);
+  static const scaffoldBg = Color(0xFFF8FAFC);
   static const cardBg = Colors.white;
-  static const surfaceLight = Color(0xFFF5F8FF);
+  static const surfaceLight = Color(0xFFF1F5F9);
 
   // Text
-  static const textPrimary = Color(0xFF1A1D26);
-  static const textSecondary = Color(0xFF5F6B7A);
-  static const textHint = Color(0xFF9CA3AF);
+  static const textPrimary = Color(0xFF0F172A);
+  static const textSecondary = Color(0xFF64748B);
+  static const textHint = Color(0xFF94A3B8);
 
   // Status
   static const success = Color(0xFF10B981);
   static const warning = Color(0xFFF59E0B);
   static const error = Color(0xFFEF4444);
 
-  // Gradients
-  static const gradientStart = Color(0xFF0D47A1);
-  static const gradientMid = Color(0xFF1565C0);
-  static const gradientEnd = Color(0xFF1A73E8);
+  // Gradients — single consistent gradient
+  static const gradientStart = Color(0xFF4F46E5);
+  static const gradientMid = Color(0xFF6366F1);
+  static const gradientEnd = Color(0xFF818CF8);
 }
 
 class CallRecorderApp extends StatelessWidget {
@@ -105,7 +105,7 @@ class CallRecorderApp extends StatelessWidget {
         navigationBarTheme: NavigationBarThemeData(
           backgroundColor: Colors.white,
           surfaceTintColor: Colors.transparent,
-          indicatorColor: AppColors.primary.withOpacity(0.12),
+          indicatorColor: AppColors.primary.withValues(alpha: 0.12),
           labelTextStyle: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.selected)) {
               return const TextStyle(
@@ -173,7 +173,7 @@ class CallRecorderApp extends StatelessWidget {
             backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,
             elevation: 2,
-            shadowColor: AppColors.primary.withOpacity(0.3),
+            shadowColor: AppColors.primary.withValues(alpha: 0.3),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
             ),

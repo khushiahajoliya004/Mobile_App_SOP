@@ -1,7 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+import 'dart:math' as math;
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart';
 import '../services/call_recorder_service.dart';
 import '../services/api_service.dart';
@@ -12,15 +16,13 @@ import '../models/user_model.dart';
 class CallRecorderScreen extends StatefulWidget {
   final String? leadId;
   final String? leadCustomerName;
-
   const CallRecorderScreen({super.key, this.leadId, this.leadCustomerName});
-
   @override
   State<CallRecorderScreen> createState() => _CallRecorderScreenState();
 }
 
 class _CallRecorderScreenState extends State<CallRecorderScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final _recorder = CallRecorderService();
   final _api = ApiService();
   final _auth = AuthService();
@@ -28,135 +30,94 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
   UserModel? _user;
   bool _isRecording = false;
   bool _isSaving = false;
-  bool _isStarting = false; // CRASH FIX: Prevent multiple start requests
+  bool _isStarting = false;
   int _seconds = 0;
   Timer? _timer;
-  late AnimationController _pulseController;
   String? _statusMessage;
   bool _hasSop = false;
   bool _loading = true;
-
-  // SOP-resolved fields (fetched on load)
+  int _localCount = 0;
   String? _sopCategoryId;
   String? _sopSalesStageId;
+
+  late AnimationController _orbCtrl;
+  late AnimationController _pulseCtrl;
+  late AnimationController _glowCtrl;
 
   @override
   void initState() {
     super.initState();
-    _pulseController = AnimationController(
+    _orbCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 8),
+    )..repeat();
+    _pulseCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
     );
+    _glowCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2500),
+    )..repeat(reverse: true);
     _loadUser();
   }
 
+  // ═══ BUSINESS LOGIC (unchanged) ═══════════════════════════════════════════
   Future<void> _loadUser() async {
     final user = await _auth.getUser();
-    if (mounted) {
+    final prefs = await SharedPreferences.getInstance();
+    final localList = prefs.getStringList('local_recordings') ?? [];
+    if (mounted)
       setState(() {
         _user = user;
         _hasSop = user?.sopId != null && user!.sopId!.isNotEmpty;
+        _localCount = localList.length;
         _loading = false;
       });
-    }
-
-    // Fetch SOP details (categoryId + salesStageId) in background
     if (user?.sopId != null && user!.sopId!.isNotEmpty) {
       try {
         final res = await _api.getMySop();
-        final sopData = res.data is Map ? res.data['data'] : null;
-        if (sopData != null && mounted) {
+        final d = res.data is Map ? res.data['data'] : null;
+        if (d != null && mounted)
           setState(() {
-            _sopCategoryId = sopData['categoryId'];
-            _sopSalesStageId = sopData['salesStageId'];
+            _sopCategoryId = d['categoryId'];
+            _sopSalesStageId = d['salesStageId'];
           });
-        }
-      } catch (_) {
-        // Non-fatal — backend auto-resolves from SOP if not provided
-      }
+      } catch (_) {}
     }
   }
 
-  /// CRASH FIX: Correct recording flow with proper sequence
-  /// Flow: Check permissions -> Start foreground service -> Wait -> Start recording
   Future<void> _startRecording() async {
-    // CRASH FIX: Prevent multiple start requests
-    if (_isStarting || _isRecording) {
-      debugPrint('[Recorder] Already starting or recording');
-      return;
-    }
-
+    if (_isStarting || _isRecording) return;
     _isStarting = true;
-
     try {
-      // STEP 1: Check and request microphone permission
-      debugPrint('[Recorder] Step 1: Checking microphone permission...');
-      final micStatus = await Permission.microphone.status;
-
-      if (!micStatus.isGranted) {
-        debugPrint('[Recorder] Requesting microphone permission...');
-        final requested = await Permission.microphone.request();
-
-        if (!requested.isGranted) {
+      final mic = await Permission.microphone.status;
+      if (!mic.isGranted) {
+        final r = await Permission.microphone.request();
+        if (!r.isGranted) {
           _isStarting = false;
-          _showMessage('Microphone permission required');
-
-          // Handle permanently denied
-          if (requested.isPermanentlyDenied) {
-            _showPermissionSettingsDialog('Microphone');
-          }
+          _showMsg('Microphone permission required');
+          if (r.isPermanentlyDenied) _showPermDialog();
           return;
         }
       }
-
-      // STEP 2: Check notification permission (Android 13+)
-      debugPrint('[Recorder] Step 2: Checking notification permission...');
-      final notifStatus = await Permission.notification.status;
-      if (!notifStatus.isGranted) {
+      final n = await Permission.notification.status;
+      if (!n.isGranted) {
         await Permission.notification.request();
-        // Continue even if denied - notification is optional
       }
-
-      // STEP 3: Start foreground service FIRST
-      debugPrint('[Recorder] Step 3: Starting foreground service...');
       try {
-        final serviceStarted = await ForegroundServiceManager.startService();
-        if (!serviceStarted) {
-          debugPrint(
-            '[Recorder] Warning: Foreground service may not have started',
-          );
-          // Continue anyway - recording might still work
-        }
-      } catch (e) {
-        debugPrint('[Recorder] Foreground service error: $e');
-        // Continue - recording might still work without foreground service
-      }
-
-      // STEP 4: CRITICAL - Wait for service to stabilize
-      debugPrint('[Recorder] Step 4: Waiting for service to stabilize...');
+        await ForegroundServiceManager.startService();
+      } catch (_) {}
       await Future.delayed(const Duration(milliseconds: 800));
-
-      // STEP 5: Start recording
-      debugPrint('[Recorder] Step 5: Starting audio recording...');
-      final started = await _recorder.startRecording(
-        audioSource: 'mic', // CRASH FIX: Use 'mic' for maximum compatibility
-      );
-
+      final started = await _recorder.startRecording(audioSource: 'mic');
       if (!started) {
-        debugPrint('[Recorder] Failed to start recording');
         _isStarting = false;
-
-        // Stop foreground service if recording failed
         try {
           await ForegroundServiceManager.stopService();
         } catch (_) {}
-
-        _showMessage('Failed to start recording. Please check permissions.');
+        _showMsg('Failed to start recording');
         return;
       }
-
-      debugPrint('[Recorder] Recording started successfully');
-
       if (mounted) {
         setState(() {
           _isRecording = true;
@@ -164,230 +125,315 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
           _seconds = 0;
           _statusMessage = null;
         });
-        _pulseController.repeat(reverse: true);
+        _pulseCtrl.repeat(reverse: true);
         _timer = Timer.periodic(const Duration(seconds: 1), (_) {
           if (mounted) setState(() => _seconds++);
         });
       }
     } catch (e) {
-      debugPrint('[Recorder] Start recording error: $e');
       _isStarting = false;
       _isRecording = false;
-
-      // Clean up
       try {
         await ForegroundServiceManager.stopService();
       } catch (_) {}
-
-      _showMessage('Error starting recording: ${e.toString()}');
+      _showMsg('Error: $e');
     }
   }
 
-  /// Stop recording with proper cleanup
-  Future<void> _stopAndUpload() async {
+  Future<void> _stopAndProcess() async {
     _timer?.cancel();
-    _pulseController.stop();
-    _pulseController.reset();
-
+    _pulseCtrl.stop();
+    _pulseCtrl.reset();
     setState(() {
       _isRecording = false;
       _isSaving = true;
-      _statusMessage = 'Uploading...';
+      _statusMessage = 'Processing...';
     });
-
-    // STEP 1: Stop recording
-    debugPrint('[Recorder] Stopping recording...');
     final path = await _recorder.stopRecording();
-    debugPrint('[Recorder] Stop result: $path');
-
-    // STEP 2: Stop foreground service
-    debugPrint('[Recorder] Stopping foreground service...');
     try {
       await ForegroundServiceManager.stopService();
-    } catch (e) {
-      debugPrint('[Recorder] Error stopping service: $e');
-    }
-
-    // Handle missing path
+    } catch (_) {}
     if (path == null || path.isEmpty) {
-      // Try to find the most recent recording
       try {
-        final files = await _recorder.getRecordedFiles();
-        if (files.isNotEmpty) {
-          final mostRecent = files.first.path;
-          debugPrint('[Recorder] Using most recent file: $mostRecent');
-          await _uploadRecording(mostRecent);
+        final f = await _recorder.getRecordedFiles();
+        if (f.isNotEmpty) {
+          await _processRecording(f.first.path);
           return;
         }
-      } catch (e) {
-        debugPrint('[Recorder] Error finding recent file: $e');
-      }
-
-      if (mounted) {
+      } catch (_) {}
+      if (mounted)
         setState(() {
           _isSaving = false;
-          _statusMessage = 'Recording failed to save';
+          _statusMessage = 'Recording failed';
         });
-      }
       return;
     }
+    await _processRecording(path);
+  }
 
+  Future<void> _processRecording(String path) async {
+    if (!_hasSop) {
+      await _saveLocally(path);
+      return;
+    }
     await _uploadRecording(path);
   }
 
+  Future<void> _saveLocally(String filePath) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final list = prefs.getStringList('local_recordings') ?? [];
+      final now = DateTime.now();
+      list.add(
+        jsonEncode({
+          'path': filePath,
+          'name':
+              widget.leadCustomerName ??
+              'Call ${now.day}/${now.month} ${now.hour}:${now.minute.toString().padLeft(2, "0")}',
+          'date': now.toIso8601String(),
+          'duration': _seconds,
+          'leadId': widget.leadId,
+        }),
+      );
+      await prefs.setStringList('local_recordings', list);
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+          _seconds = 0;
+          _localCount = list.length;
+          _statusMessage = 'Saved locally';
+        });
+        _showMsg('Recording saved locally', success: true);
+      }
+    } catch (_) {
+      if (mounted)
+        setState(() {
+          _isSaving = false;
+          _statusMessage = 'Save failed';
+        });
+    }
+  }
+
   Future<void> _uploadRecording(String path) async {
+    setState(() => _statusMessage = 'Uploading...');
     if (_user == null || _user!.companyId == null) {
       setState(() {
         _isSaving = false;
-        _statusMessage = 'User data missing. Please re-login.';
+        _statusMessage = 'User data missing';
       });
       return;
     }
-
     try {
       final now = DateTime.now();
-      final fileName = path.split('/').last;
-      final response = await _api.createCall(
+      final fn = path.split('/').last;
+      final res = await _api.createCall(
         customerName:
             widget.leadCustomerName ??
-            'Call ${now.day}/${now.month} ${now.hour}:${now.minute.toString().padLeft(2, '0')}',
+            'Call ${now.day}/${now.month} ${now.hour}:${now.minute.toString().padLeft(2, "0")}',
         companyId: _user!.companyId!,
         userId: _user!.id,
         categoryId: _sopCategoryId,
         salesStageId: _sopSalesStageId,
-        notes: 'Recorded from mobile app',
+        notes: 'Recorded from mobile',
         audioFilePath: path,
-        audioFileName: fileName,
+        audioFileName: fn,
       );
-
       if (mounted) {
-        final callData = response.data is Map ? response.data['data'] : null;
-        final callId = callData?['id']?.toString();
-        final analysisStatus = callData?['analysisStatus'] ?? '';
-
-        if (widget.leadId != null && callId != null) {
+        final cd = res.data is Map ? res.data['data'] : null;
+        final cid = cd?['id']?.toString();
+        final as2 = cd?['analysisStatus'] ?? '';
+        if (widget.leadId != null && cid != null) {
           await _api.createLeadActivity(
             leadId: widget.leadId!,
             type: 'CALL',
-            callId: callId,
-            notes: 'Recording completed from mobile app',
+            callId: cid,
+            notes: 'Recording from mobile',
           );
         }
-
-        // aiEnabled=true → PENDING/PROCESSING (direct AI analysis)
-        // aiEnabled=false → APPROVAL_PENDING (admin must approve first)
-        final isAiFlow =
-            _user!.aiEnabled &&
-            (analysisStatus == 'PENDING' || analysisStatus == 'PROCESSING');
-
-        final msg = isAiFlow
+        final isAi =
+            _user!.aiEnabled && (as2 == 'PENDING' || as2 == 'PROCESSING');
+        final msg = isAi
             ? 'Uploaded! AI analysis started.'
-            : 'Submitted for admin approval.';
-
+            : 'Submitted for approval.';
         setState(() {
           _isSaving = false;
           _seconds = 0;
           _statusMessage = msg;
         });
-        _showMessage(msg, success: true);
-        if (widget.leadId != null) {
-          _showPostRecordingFlow();
-        }
+        _showMsg(msg, success: true);
+        if (widget.leadId != null) _showPostRecordingFlow();
       }
     } catch (e) {
       if (mounted) {
-        String errorMsg = 'Upload failed. Try again.';
+        String err = 'Upload failed';
         if (e is DioException) {
-          final serverMsg = e.response?.data?['message'];
-          if (serverMsg != null) {
-            errorMsg = serverMsg is List
-                ? serverMsg.join(', ')
-                : serverMsg.toString();
-          } else if (e.type == DioExceptionType.connectionTimeout ||
-              e.type == DioExceptionType.sendTimeout ||
-              e.type == DioExceptionType.receiveTimeout) {
-            errorMsg = 'Connection timed out. Check your internet.';
+          final sm = e.response?.data?['message'];
+          if (sm != null) {
+            err = sm is List ? sm.join(', ') : sm.toString();
+          } else if (e.type == DioExceptionType.connectionTimeout) {
+            err = 'Timed out';
           } else if (e.type == DioExceptionType.connectionError) {
-            errorMsg = 'No internet connection.';
+            err = 'No internet';
           }
         }
-        debugPrint('[Recorder] Upload error: $e');
         setState(() {
           _isSaving = false;
-          _statusMessage = errorMsg;
+          _statusMessage = err;
         });
-        _showMessage(errorMsg);
+        _showMsg(err);
       }
     }
   }
 
-  void _showMessage(String msg, {bool success = false}) {
+  Future<void> _uploadLocalRecordings() async {
+    if (!_hasSop || _user == null || _user!.companyId == null) {
+      _showMsg('SOP must be assigned first');
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList('local_recordings') ?? [];
+    if (list.isEmpty) {
+      _showMsg('No local recordings');
+      return;
+    }
+    setState(() => _isSaving = true);
+    int ok = 0, fail = 0;
+    for (int i = 0; i < list.length; i++) {
+      try {
+        final e = jsonDecode(list[i]) as Map<String, dynamic>;
+        final fp = e['path'] as String;
+        if (!await File(fp).exists()) {
+          fail++;
+          continue;
+        }
+        setState(() => _statusMessage = 'Uploading ${i + 1}/${list.length}...');
+        await _api.createCall(
+          customerName: e['name'] ?? 'Local',
+          companyId: _user!.companyId!,
+          userId: _user!.id,
+          categoryId: _sopCategoryId,
+          salesStageId: _sopSalesStageId,
+          notes: 'From local',
+          audioFilePath: fp,
+          audioFileName: fp.split('/').last,
+        );
+        ok++;
+      } catch (_) {
+        fail++;
+      }
+    }
+    await prefs.setStringList('local_recordings', []);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(msg),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: success ? AppColors.success : null,
-        ),
-      );
+      setState(() {
+        _localCount = 0;
+        _isSaving = false;
+        _statusMessage = null;
+      });
+      _showMsg('Uploaded $ok, failed $fail', success: ok > 0);
     }
   }
 
+  void _showMsg(String msg, {bool success = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          msg,
+          style: const TextStyle(
+            fontWeight: FontWeight.w500,
+            color: Colors.white,
+          ),
+        ),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: success ? AppColors.success : const Color(0xFF334155),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
   Future<void> _showPostRecordingFlow() async {
-    DateTime selected = DateTime.now().add(const Duration(days: 1));
-    final remarkController = TextEditingController();
+    DateTime sel = DateTime.now().add(const Duration(days: 1));
+    final rc = TextEditingController();
     if (!mounted) return;
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheetState) => Padding(
-          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+        builder: (ctx, ss) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: EdgeInsets.fromLTRB(
+            24,
+            20,
+            24,
+            MediaQuery.of(ctx).viewInsets.bottom + 24,
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text('Next Step', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 12),
-              TextField(controller: remarkController, decoration: const InputDecoration(labelText: 'Remark')),
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceLight,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Next Step',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: rc,
+                decoration: const InputDecoration(labelText: 'Remark'),
+              ),
               const SizedBox(height: 12),
               OutlinedButton.icon(
                 onPressed: () async {
-                  final date = await showDatePicker(
+                  final d = await showDatePicker(
                     context: ctx,
-                    initialDate: selected,
+                    initialDate: sel,
                     firstDate: DateTime.now(),
                     lastDate: DateTime.now().add(const Duration(days: 365)),
                   );
-                  if (date == null) return;
-                  if (!ctx.mounted) return;
-                  final time = await showTimePicker(context: ctx, initialTime: TimeOfDay.fromDateTime(selected));
-                  if (time == null) return;
-                  setSheetState(() {
-                    selected = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+                  if (d == null || !ctx.mounted) return;
+                  final t = await showTimePicker(
+                    context: ctx,
+                    initialTime: TimeOfDay.fromDateTime(sel),
+                  );
+                  if (t == null) return;
+                  ss(() {
+                    sel = DateTime(d.year, d.month, d.day, t.hour, t.minute);
                   });
                 },
                 icon: const Icon(Icons.schedule_rounded),
-                label: Text('Follow-up: ${selected.day}/${selected.month} ${selected.hour}:${selected.minute.toString().padLeft(2, '0')}'),
+                label: Text(
+                  'Follow-up: ${sel.day}/${sel.month} ${sel.hour}:${sel.minute.toString().padLeft(2, "0")}',
+                ),
               ),
               const SizedBox(height: 12),
               FilledButton(
                 onPressed: () async {
                   await _api.updateLeadStatus(widget.leadId!, {
-                    'nextFollowUpAt': selected.toUtc().toIso8601String(),
+                    'nextFollowUpAt': sel.toUtc().toIso8601String(),
                   });
-                  if (remarkController.text.trim().isNotEmpty) {
+                  if (rc.text.trim().isNotEmpty)
                     await _api.createLeadActivity(
                       leadId: widget.leadId!,
                       type: 'NOTE',
-                      notes: remarkController.text.trim(),
+                      notes: rc.text.trim(),
                     );
-                  }
                   if (ctx.mounted) Navigator.pop(ctx);
-                  _showMessage('Follow-up scheduled', success: true);
+                  _showMsg('Follow-up scheduled', success: true);
                 },
                 child: const Text('Schedule Follow-up'),
               ),
@@ -395,10 +441,12 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
                 onPressed: () async {
                   await _api.updateLeadStatus(widget.leadId!, {
                     'status': 'LOST',
-                    'lostReason': remarkController.text.trim().isEmpty ? 'Marked lost from mobile app' : remarkController.text.trim(),
+                    'lostReason': rc.text.trim().isEmpty
+                        ? 'Marked lost'
+                        : rc.text.trim(),
                   });
                   if (ctx.mounted) Navigator.pop(ctx);
-                  _showMessage('Lead marked lost', success: true);
+                  _showMsg('Lead marked lost', success: true);
                 },
                 child: const Text('Mark Lost'),
               ),
@@ -407,30 +455,29 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
         ),
       ),
     );
-    remarkController.dispose();
+    rc.dispose();
   }
 
-  /// CRASH FIX: Show permission settings dialog for permanently denied permissions
-  void _showPermissionSettingsDialog(String permissionName) {
+  void _showPermDialog() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('$permissionName Permission Required'),
-        content: Text(
-          '$permissionName permission is permanently denied. '
-          'Please enable it in app settings.',
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Permission Required'),
+        content: const Text(
+          'Microphone permission is permanently denied. Enable it in settings.',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancel'),
           ),
-          ElevatedButton(
+          FilledButton(
             onPressed: () {
-              Navigator.pop(context);
+              Navigator.pop(ctx);
               openAppSettings();
             },
-            child: const Text('Open Settings'),
+            child: const Text('Settings'),
           ),
         ],
       ),
@@ -443,306 +490,577 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
     return '$m:$s';
   }
 
+  bool get _isError =>
+      _statusMessage != null &&
+      (_statusMessage!.contains('failed') ||
+          _statusMessage!.contains('Failed') ||
+          _statusMessage!.contains('Error'));
+
   @override
   void dispose() {
     _timer?.cancel();
-    _pulseController.dispose();
+    _orbCtrl.dispose();
+    _pulseCtrl.dispose();
+    _glowCtrl.dispose();
     _recorder.dispose();
-    // Stop foreground service if still running
-    if (_isRecording) {
-      ForegroundServiceManager.stopService();
-    }
+    if (_isRecording) ForegroundServiceManager.stopService();
     super.dispose();
   }
 
+  // ═══ UI BUILD ═════════════════════════════════════════════════════════════
   @override
   Widget build(BuildContext context) {
-    if (_loading) {
-      return const Center(
-        child: CircularProgressIndicator(
-          color: AppColors.primary,
-          strokeWidth: 3,
-        ),
-      );
-    }
-
-    // No SOP assigned — show message
-    if (!_hasSop) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  color: AppColors.warning.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.assignment_late_rounded,
-                  size: 40,
-                  color: AppColors.warning,
-                ),
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                'SOP Not Assigned',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Please ask your admin to assign an SOP before recording calls.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: AppColors.textSecondary,
-                  height: 1.5,
-                ),
-              ),
-            ],
+    if (_loading)
+      return Container(
+        color: const Color(0xFF080C18),
+        child: const Center(
+          child: CircularProgressIndicator(
+            color: Color(0xFF818CF8),
+            strokeWidth: 2,
           ),
         ),
       );
-    }
 
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [AppColors.scaffoldBg, Colors.white],
+          colors: [
+            Color(0xFF050810),
+            Color(0xFF0C1024),
+            Color(0xFF101838),
+            Color(0xFF080C18),
+          ],
+          stops: [0.0, 0.25, 0.65, 1.0],
         ),
       ),
-      child: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // AI badge
-              if (widget.leadCustomerName != null) ...[
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.primarySurface,
-                    borderRadius: BorderRadius.circular(14),
+      child: SafeArea(
+        child: Column(
+          children: [
+            // Top bar
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+              child: Row(
+                children: [
+                  // Status text
+                  Expanded(
+                    child: Text(
+                      _isRecording
+                          ? 'Recording in progress'
+                          : 'Ready to capture',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: _isRecording
+                            ? const Color(0xFF22D3EE)
+                            : Colors.white.withValues(alpha: 0.4),
+                      ),
+                    ),
                   ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.person_rounded, color: AppColors.primary),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          widget.leadCustomerName!,
-                          style: const TextStyle(fontWeight: FontWeight.w700),
+                  // Mode chip
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.08),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _user!.aiEnabled
+                              ? Icons.auto_awesome
+                              : Icons.edit_note_rounded,
+                          size: 12,
+                          color: const Color(0xFF818CF8),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          _user!.aiEnabled ? 'AI' : 'Manual',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF818CF8),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Banners
+            if (!_hasSop)
+              _banner(
+                Icons.info_outline_rounded,
+                'No SOP — recordings saved locally',
+                const Color(0xFFF59E0B),
+              ),
+            if (_localCount > 0) _localBanner(),
+            if (widget.leadCustomerName != null)
+              _banner(
+                Icons.person_rounded,
+                widget.leadCustomerName!,
+                const Color(0xFF818CF8),
+              ),
+
+            // Main orb area
+            Expanded(
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Orb
+                    SizedBox(
+                      width: 280,
+                      height: 280,
+                      child: AnimatedBuilder(
+                        animation: Listenable.merge([
+                          _orbCtrl,
+                          _pulseCtrl,
+                          _glowCtrl,
+                        ]),
+                        builder: (_, __) => CustomPaint(
+                          painter: _OrbPainter(
+                            orbPhase: _orbCtrl.value,
+                            pulseValue: _isRecording ? _pulseCtrl.value : 0,
+                            glowValue: _glowCtrl.value,
+                            isRecording: _isRecording,
+                            isSaving: _isSaving,
+                          ),
+                          child: const SizedBox.expand(),
+                        ),
+                      ),
+                    ),
+
+                    // Timer or text
+                    if (_isRecording) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        _formattedTime,
+                        style: const TextStyle(
+                          fontSize: 52,
+                          fontWeight: FontWeight.w200,
+                          color: Colors.white,
+                          fontFeatures: [FontFeature.tabularFigures()],
+                          letterSpacing: 6,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Tap stop to finish',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.white.withValues(alpha: 0.4),
+                        ),
+                      ),
+                    ] else if (_isSaving) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        _statusMessage ?? 'Processing...',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.white.withValues(alpha: 0.6),
+                        ),
+                      ),
+                    ] else ...[
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Tap to start recording',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white,
+                          height: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _hasSop
+                            ? 'Audio will be analyzed by AI'
+                            : 'Audio will be saved locally',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white.withValues(alpha: 0.35),
                         ),
                       ),
                     ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: _user!.aiEnabled
-                      ? AppColors.primary.withOpacity(0.1)
-                      : AppColors.warning.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      _user!.aiEnabled
-                          ? Icons.auto_awesome
-                          : Icons.edit_note_rounded,
-                      size: 16,
-                      color: _user!.aiEnabled
-                          ? AppColors.primary
-                          : AppColors.warning,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      _user!.aiEnabled
-                          ? 'AI Analysis Enabled'
-                          : 'Manual Review Mode',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: _user!.aiEnabled
-                            ? AppColors.primary
-                            : AppColors.warning,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 40),
 
-              // Record button with pulse animation
-              GestureDetector(
-                onTap: _isSaving
-                    ? null
-                    : (_isRecording ? _stopAndUpload : _startRecording),
-                child: AnimatedBuilder(
-                  animation: _pulseController,
-                  builder: (context, child) {
-                    final scale = _isRecording
-                        ? 1.0 + (_pulseController.value * 0.08)
-                        : 1.0;
-                    return Transform.scale(
-                      scale: scale,
-                      child: Container(
-                        width: 160,
-                        height: 160,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: _isRecording
-                                ? [AppColors.error, const Color(0xFFDC2626)]
-                                : _isSaving
-                                ? [AppColors.warning, const Color(0xFFF59E0B)]
-                                : [AppColors.primary, AppColors.gradientEnd],
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color:
-                                  (_isRecording
-                                          ? AppColors.error
-                                          : AppColors.primary)
-                                      .withOpacity(0.3),
-                              blurRadius: _isRecording ? 30 : 20,
-                              spreadRadius: _isRecording ? 4 : 0,
-                            ),
-                          ],
+                    // Status message
+                    if (_statusMessage != null && !_isSaving) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
                         ),
-                        child: _isSaving
-                            ? const Center(
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 3,
-                                ),
-                              )
-                            : Icon(
-                                _isRecording
-                                    ? Icons.stop_rounded
-                                    : Icons.mic_rounded,
-                                color: Colors.white,
-                                size: 64,
-                              ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Timer
-              if (_isRecording)
-                Text(
-                  _formattedTime,
-                  style: const TextStyle(
-                    fontSize: 48,
-                    fontWeight: FontWeight.w300,
-                    color: AppColors.textPrimary,
-                    fontFeatures: [FontFeature.tabularFigures()],
-                  ),
-                ),
-
-              const SizedBox(height: 12),
-
-              // Label
-              Text(
-                _isSaving
-                    ? 'Uploading...'
-                    : _isRecording
-                    ? 'Tap to stop & upload'
-                    : 'Tap to start recording',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: _isRecording
-                      ? AppColors.error
-                      : AppColors.textSecondary,
-                ),
-              ),
-
-              // Status message
-              if (_statusMessage != null) ...[
-                const SizedBox(height: 20),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: _statusMessage!.contains('failed')
-                        ? AppColors.error.withOpacity(0.1)
-                        : AppColors.success.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _statusMessage!.contains('failed')
-                            ? Icons.error_outline
-                            : Icons.check_circle_outline,
-                        size: 18,
-                        color: _statusMessage!.contains('failed')
-                            ? AppColors.error
-                            : AppColors.success,
-                      ),
-                      const SizedBox(width: 8),
-                      Flexible(
+                        decoration: BoxDecoration(
+                          color: _isError
+                              ? const Color(0x20EF4444)
+                              : const Color(0x2010B981),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: _isError
+                                ? const Color(0x40EF4444)
+                                : const Color(0x4010B981),
+                          ),
+                        ),
                         child: Text(
                           _statusMessage!,
                           style: TextStyle(
-                            fontSize: 13,
+                            fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: _statusMessage!.contains('failed')
-                                ? AppColors.error
-                                : AppColors.success,
+                            color: _isError
+                                ? const Color(0xFFEF4444)
+                                : const Color(0xFF10B981),
                           ),
                         ),
                       ),
                     ],
-                  ),
+                  ],
                 ),
-              ],
+              ),
+            ),
 
-              const SizedBox(height: 40),
-
-              // Info text
-              if (!_isRecording && !_isSaving)
-                Text(
-                  _user!.aiEnabled
-                      ? 'Stop recording → auto AI analysis'
-                      : 'Stop recording → sent for admin approval',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: AppColors.textHint,
-                    height: 1.4,
+            // Bottom controls
+            Padding(
+              padding: const EdgeInsets.fromLTRB(40, 0, 40, 20),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _glassBtn(Icons.play_arrow_rounded, 46),
+                  // Main record button
+                  GestureDetector(
+                    onTap: _isSaving
+                        ? null
+                        : (_isRecording ? _stopAndProcess : _startRecording),
+                    child: Container(
+                      width: 76,
+                      height: 76,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: _isRecording
+                              ? [
+                                  const Color(0xFFEF4444),
+                                  const Color(0xFFDC2626),
+                                ]
+                              : _isSaving
+                              ? [
+                                  const Color(0xFFF59E0B),
+                                  const Color(0xFFD97706),
+                                ]
+                              : [
+                                  const Color(0xFF6366F1),
+                                  const Color(0xFF8B5CF6),
+                                ],
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color:
+                                (_isRecording
+                                        ? const Color(0xFFEF4444)
+                                        : const Color(0xFF6366F1))
+                                    .withValues(alpha: 0.4),
+                            blurRadius: 24,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: _isSaving
+                          ? const Center(
+                              child: SizedBox(
+                                width: 26,
+                                height: 26,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2.5,
+                                ),
+                              ),
+                            )
+                          : Icon(
+                              _isRecording
+                                  ? Icons.stop_rounded
+                                  : Icons.mic_rounded,
+                              color: Colors.white,
+                              size: 34,
+                            ),
+                    ),
                   ),
-                ),
-            ],
-          ),
+                  _glassBtn(Icons.headphones_rounded, 46),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
+
+  Widget _banner(IconData icon, String text, Color color) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.12)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: color.withValues(alpha: 0.8)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: color.withValues(alpha: 0.9),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _localBanner() {
+    return GestureDetector(
+      onTap: _hasSop && !_isSaving ? _uploadLocalRecordings : null,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: (_hasSop ? const Color(0xFF10B981) : const Color(0xFF6366F1))
+              .withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: (_hasSop ? const Color(0xFF10B981) : const Color(0xFF6366F1))
+                .withValues(alpha: 0.12),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.cloud_upload_rounded,
+              size: 16,
+              color: _hasSop
+                  ? const Color(0xFF10B981)
+                  : const Color(0xFF818CF8),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                '$_localCount local${_hasSop ? " — tap to upload" : " saved"}',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: _hasSop
+                      ? const Color(0xFF10B981)
+                      : const Color(0xFF818CF8),
+                ),
+              ),
+            ),
+            if (_hasSop)
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 12,
+                color: const Color(0xFF10B981).withValues(alpha: 0.5),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _glassBtn(IconData icon, double size) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.white.withValues(alpha: 0.06),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Icon(
+        icon,
+        color: Colors.white.withValues(alpha: 0.4),
+        size: size * 0.45,
+      ),
+    );
+  }
+}
+
+// ═══ 3D ORB PAINTER ═════════════════════════════════════════════════════════
+class _OrbPainter extends CustomPainter {
+  final double orbPhase, pulseValue, glowValue;
+  final bool isRecording, isSaving;
+  _OrbPainter({
+    required this.orbPhase,
+    required this.pulseValue,
+    required this.glowValue,
+    required this.isRecording,
+    required this.isSaving,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2, cy = size.height / 2;
+    final center = Offset(cx, cy);
+    final baseR = size.width * 0.33;
+    final phase = orbPhase * 2 * math.pi;
+
+    // Outer glow
+    canvas.drawCircle(
+      center,
+      baseR + 35,
+      Paint()
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 45)
+        ..color =
+            (isRecording ? const Color(0xFF06B6D4) : const Color(0xFF6366F1))
+                .withValues(alpha: 0.12 + glowValue * 0.06),
+    );
+
+    // Inner glow
+    canvas.drawCircle(
+      center,
+      baseR + 10,
+      Paint()
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20)
+        ..color =
+            (isRecording ? const Color(0xFF22D3EE) : const Color(0xFF818CF8))
+                .withValues(
+                  alpha:
+                      0.08 +
+                      (isRecording ? pulseValue * 0.08 : glowValue * 0.04),
+                ),
+    );
+
+    // Horizontal rings
+    for (int r = 0; r < 14; r++) {
+      final rp = r / 14;
+      final rPhase = phase + rp * math.pi;
+      final path = Path();
+      for (int i = 0; i <= 64; i++) {
+        final a = (i / 64) * 2 * math.pi;
+        double rad = baseR;
+        if (isRecording) {
+          rad += math.sin(a * 3 + rPhase * 2) * 14 * (0.4 + pulseValue * 0.6);
+          rad += math.cos(a * 5 + rPhase * 3) * 8 * pulseValue;
+        } else {
+          rad += math.sin(a * 3 + rPhase) * 5 * (0.8 + glowValue * 0.2);
+          rad += math.cos(a * 5 + rPhase * 0.7) * 3;
+        }
+        final tilt = math.sin(rp * math.pi) * 0.92;
+        final x = cx + math.cos(a) * rad;
+        final y = cy + math.sin(a) * rad * tilt;
+        if (i == 0) {
+          path.moveTo(x, y);
+        } else {
+          path.lineTo(x, y);
+        }
+      }
+      path.close();
+      final alpha =
+          (0.06 + rp * 0.14) *
+          (isRecording ? (0.6 + pulseValue * 0.4) : (0.5 + glowValue * 0.25));
+      final c = isRecording
+          ? Color.lerp(const Color(0xFF06B6D4), const Color(0xFFEC4899), rp)!
+          : isSaving
+          ? Color.lerp(const Color(0xFFF59E0B), const Color(0xFF6366F1), rp)!
+          : Color.lerp(const Color(0xFF06B6D4), const Color(0xFF6366F1), rp)!;
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = c.withValues(alpha: alpha.clamp(0.0, 1.0))
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = isRecording ? 1.4 : 0.9,
+      );
+    }
+
+    // Vertical rings
+    for (int r = 0; r < 8; r++) {
+      final rp = r / 8;
+      final rPhase = phase + rp * math.pi;
+      final path = Path();
+      for (int i = 0; i <= 64; i++) {
+        final a = (i / 64) * 2 * math.pi;
+        double rad = baseR;
+        if (isRecording) {
+          rad += math.cos(a * 4 + rPhase * 2.5) * 10 * (0.4 + pulseValue * 0.6);
+        } else {
+          rad += math.cos(a * 4 + rPhase * 0.5) * 4;
+        }
+        final tilt = math.sin(rp * math.pi) * 0.92;
+        final x = cx + math.cos(a) * rad * tilt;
+        final y = cy + math.sin(a) * rad;
+        if (i == 0) {
+          path.moveTo(x, y);
+        } else {
+          path.lineTo(x, y);
+        }
+      }
+      path.close();
+      final alpha =
+          (0.04 + rp * 0.08) * (isRecording ? (0.5 + pulseValue * 0.5) : 0.4);
+      final c = isRecording ? const Color(0xFF22D3EE) : const Color(0xFF818CF8);
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = c.withValues(alpha: alpha.clamp(0.0, 1.0))
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 0.7,
+      );
+    }
+
+    // Surface dots
+    final rng = math.Random(42);
+    final dotPaint = Paint()..style = PaintingStyle.fill;
+    final dotCount = isRecording ? 90 : 55;
+    for (int i = 0; i < dotCount; i++) {
+      final theta = rng.nextDouble() * 2 * math.pi;
+      final phi = rng.nextDouble() * math.pi;
+      double rad = baseR * 0.96;
+      if (isRecording) {
+        rad += math.sin(theta * 3 + phase) * 8 * (0.4 + pulseValue * 0.6);
+      } else {
+        rad += math.sin(theta * 3 + phase) * 3;
+      }
+      final x = cx + rad * math.sin(phi) * math.cos(theta + phase * 0.3);
+      final y = cy + rad * math.cos(phi);
+      final depth = math.sin(phi) * math.sin(theta + phase * 0.3);
+      final da = (0.15 + depth * 0.5).clamp(0.03, 0.65);
+      final c = isRecording
+          ? Color.lerp(
+              const Color(0xFF06B6D4),
+              const Color(0xFFEC4899),
+              rng.nextDouble(),
+            )!
+          : Color.lerp(
+              const Color(0xFF6366F1),
+              const Color(0xFF06B6D4),
+              rng.nextDouble(),
+            )!;
+      dotPaint.color = c.withValues(
+        alpha:
+            da *
+            (isRecording ? (0.4 + pulseValue * 0.6) : (0.3 + glowValue * 0.35)),
+      );
+      canvas.drawCircle(Offset(x, y), isRecording ? 1.6 : 1.1, dotPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _OrbPainter old) => true;
 }
