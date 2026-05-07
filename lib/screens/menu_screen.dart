@@ -318,14 +318,13 @@ class MenuScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           // Feature chips
-          Row(
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
             children: [
               _featureChip(Icons.mic_rounded, 'Record'),
-              const SizedBox(width: 8),
-              _featureChip(Icons.auto_awesome_rounded, 'AI Analysis'),
-              const SizedBox(width: 8),
+              _featureChip(Icons.auto_awesome_rounded, 'AI'),
               _featureChip(Icons.insights_rounded, 'Insights'),
-              const SizedBox(width: 8),
               _featureChip(Icons.groups_rounded, 'CRM'),
             ],
           ),

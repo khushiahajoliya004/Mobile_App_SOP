@@ -4,8 +4,8 @@ import 'auth_service.dart';
 class ApiService {
   // Backend runs on port 3000, no /api prefix
   // For Android emulator use 10.0.2.2, for real device use your machine IP
-  // static const String baseUrl = 'https://api.mysterymentor.in';
-  static const String baseUrl = 'http://192.168.1.24:3000';
+  static const String baseUrl = 'https://api.mysterymentor.in';
+  // static const String baseUrl = 'http://192.168.2.101:3000';
 
   late final Dio _dio;
   final AuthService _auth = AuthService();
@@ -606,6 +606,15 @@ class ApiService {
   Future<Response> getAssignableUsers() async =>
       _dio.get('/crm-dashboard/assignable-users');
 
+  Future<Response> getMyCrmPermissions() async =>
+      _dio.get('/crm/my-permissions');
+
+  Future<Response> getCrmUsersByBranch(String branchId) async =>
+      _dio.get('/crm/users/by-branch/$branchId');
+
+  Future<Response> getCrmUsersByRole(String roleName) async =>
+      _dio.get('/crm/users/by-role/$roleName');
+
   Future<Response> getBranches() async => _dio.get('/branches');
 
   Future<Response> getLeadPipelines() async => _dio.get('/lead-pipelines');
@@ -630,6 +639,10 @@ class ApiService {
     String? branchId,
     String? pipelineId,
     String? leadStageId,
+    String? interestedModel,
+    String? buyerType,
+    String? priority,
+    String? assignedToUserId,
   }) async {
     return _dio.post(
       '/leads',
@@ -642,6 +655,12 @@ class ApiService {
           'pipelineId': pipelineId,
         if (leadStageId != null && leadStageId.isNotEmpty)
           'leadStageId': leadStageId,
+        if (interestedModel != null && interestedModel.isNotEmpty)
+          'interestedModel': interestedModel,
+        if (buyerType != null && buyerType.isNotEmpty) 'buyerType': buyerType,
+        if (priority != null && priority.isNotEmpty) 'priority': priority,
+        if (assignedToUserId != null && assignedToUserId.isNotEmpty)
+          'assignedToUserId': assignedToUserId,
       },
     );
   }
@@ -657,6 +676,79 @@ class ApiService {
     return _dio.patch(
       '/leads/$leadId/assign',
       data: {'assignedToUserId': assignedToUserId},
+    );
+  }
+
+  Future<Response> createEnquiry(Map<String, dynamic> data) async {
+    return _dio.post('/leads/enquiry', data: data);
+  }
+
+  Future<Response> checkDuplicateLead(String phone) async {
+    return _dio.post('/leads/check-duplicate', data: {'phone': phone});
+  }
+
+  Future<Response> getLeadBoard({
+    String? search,
+    String? branchId,
+    String? dseId,
+    String? status,
+    String? priority,
+    int? page,
+    int? limit,
+  }) async {
+    return _dio.get(
+      '/leads/board',
+      queryParameters: {
+        if (search != null && search.isNotEmpty) 'search': search,
+        if (branchId != null) 'branchId': branchId,
+        if (dseId != null) 'dseId': dseId,
+        if (status != null) 'status': status,
+        if (priority != null) 'priority': priority,
+        if (page != null) 'page': page.toString(),
+        if (limit != null) 'limit': limit.toString(),
+      },
+    );
+  }
+
+  Future<Response> getLeadDetails(String leadId) async =>
+      _dio.get('/leads/$leadId/details');
+
+  Future<Response> getLeadTimeline(String leadId) async =>
+      _dio.get('/leads/$leadId/timeline');
+
+  Future<Response> getLeadRequirement(String leadId) async =>
+      _dio.get('/leads/$leadId/requirement');
+
+  Future<Response> saveLeadRequirement(
+    String leadId,
+    Map<String, dynamic> data,
+  ) async => _dio.post('/leads/$leadId/requirement', data: data);
+
+  Future<Response> updateLeadRequirement(
+    String leadId,
+    Map<String, dynamic> data,
+  ) async => _dio.patch('/leads/$leadId/requirement', data: data);
+
+  Future<Response> markLeadLost(String leadId, {String? reason}) async =>
+      _dio.post(
+        '/leads/$leadId/mark-lost',
+        data: {if (reason != null) 'lostReason': reason},
+      );
+
+  Future<Response> reopenLead(String leadId) async =>
+      _dio.patch('/leads/$leadId/reopen');
+
+  Future<Response> reassignDse(
+    String leadId,
+    String newDseId, {
+    String? reason,
+  }) async {
+    return _dio.post(
+      '/leads/$leadId/reassign-dse',
+      data: {
+        'assignedToUserId': newDseId,
+        if (reason != null) 'reason': reason,
+      },
     );
   }
 
@@ -696,13 +788,594 @@ class ApiService {
     );
   }
 
-  Future<Response> getFollowUps() async {
-    return _dio.get('/follow-ups');
+  Future<Response> getFollowUps({
+    String? status,
+    String? branchId,
+    bool? overdue,
+  }) async {
+    return _dio.get(
+      '/follow-ups',
+      queryParameters: {
+        if (status != null) 'status': status,
+        if (branchId != null) 'branchId': branchId,
+        if (overdue == true) 'overdue': 'true',
+      },
+    );
   }
 
-  Future<Response> getVisits() async {
-    return _dio.get('/visits');
+  Future<Response> completeFollowUpWithWorkflow(
+    String id, {
+    required String outcome,
+    String? notes,
+    String? nextFollowUpDateTime,
+    String? nextAction,
+  }) async {
+    return _dio.post(
+      '/follow-ups/$id/complete',
+      data: {
+        'outcome': outcome,
+        if (notes != null) 'notes': notes,
+        if (nextFollowUpDateTime != null)
+          'nextFollowUpDateTime': nextFollowUpDateTime,
+        if (nextAction != null) 'nextAction': nextAction,
+      },
+    );
   }
+
+  Future<Response> rescheduleFollowUp(String id, String scheduledAt) async {
+    return _dio.post(
+      '/follow-ups/$id/reschedule',
+      data: {'scheduledAt': scheduledAt},
+    );
+  }
+
+  Future<Response> getVisits({String? status, String? branchId}) async {
+    return _dio.get(
+      '/visits',
+      queryParameters: {
+        if (status != null) 'status': status,
+        if (branchId != null) 'branchId': branchId,
+      },
+    );
+  }
+
+  Future<Response> completeVisit(
+    String id, {
+    String? customerFeedback,
+    String? nextStep,
+    String? notes,
+  }) async {
+    return _dio.post(
+      '/visits/$id/complete',
+      data: {
+        if (customerFeedback != null) 'customerFeedback': customerFeedback,
+        if (nextStep != null) 'nextStep': nextStep,
+        if (notes != null) 'notes': notes,
+      },
+    );
+  }
+
+  // ─── CRM Extension (Car Showroom) ───
+
+  Future<Response> getTestDrives({String? leadId}) async {
+    return _dio.get(
+      '/test-drives',
+      queryParameters: {if (leadId != null) 'leadId': leadId},
+    );
+  }
+
+  Future<Response> createTestDrive({
+    required String leadId,
+    required DateTime scheduledAt,
+    String? vehicleModel,
+    String? variant,
+  }) async {
+    return _dio.post(
+      '/test-drives',
+      data: {
+        'leadId': leadId,
+        'scheduledAt': scheduledAt.toUtc().toIso8601String(),
+        if (vehicleModel != null) 'vehicleModel': vehicleModel,
+        if (variant != null) 'variant': variant,
+      },
+    );
+  }
+
+  Future<Response> completeTestDrive(
+    String id, {
+    String? feedback,
+    int? rating,
+    String? nextAction,
+  }) async {
+    return _dio.post(
+      '/test-drives/$id/complete',
+      data: {
+        if (feedback != null) 'customerFeedback': feedback,
+        if (rating != null) 'rating': rating,
+        if (nextAction != null) 'nextAction': nextAction,
+      },
+    );
+  }
+
+  Future<Response> rescheduleTestDrive(
+    String id,
+    String scheduledAt, {
+    String? reason,
+  }) async {
+    return _dio.post(
+      '/test-drives/$id/reschedule',
+      data: {'scheduledAt': scheduledAt, if (reason != null) 'reason': reason},
+    );
+  }
+
+  Future<Response> cancelTestDrive(String id, {String? reason}) async {
+    return _dio.post(
+      '/test-drives/$id/cancel',
+      data: {if (reason != null) 'reason': reason},
+    );
+  }
+
+  Future<Response> getQuotations({String? leadId}) async {
+    return _dio.get(
+      '/quotations',
+      queryParameters: {if (leadId != null) 'leadId': leadId},
+    );
+  }
+
+  Future<Response> createQuotation(Map<String, dynamic> data) async =>
+      _dio.post('/quotations', data: data);
+
+  Future<Response> updateQuotationStatus(String id, String status) async =>
+      _dio.patch('/quotations/$id/status/$status');
+
+  Future<Response> sendQuotation(String id) async =>
+      _dio.post('/quotations/$id/send');
+
+  Future<Response> quotationCustomerResponse(
+    String id,
+    String response, {
+    String? remarks,
+  }) async => _dio.post(
+    '/quotations/$id/customer-response',
+    data: {'response': response, if (remarks != null) 'remarks': remarks},
+  );
+
+  // ─── Negotiations ───
+
+  Future<Response> getNegotiations() async => _dio.get('/crm-negotiations');
+
+  Future<Response> getNegotiationsByLead(String leadId) async =>
+      _dio.get('/crm-negotiations/lead/$leadId');
+
+  Future<Response> createNegotiation(Map<String, dynamic> data) async =>
+      _dio.post('/crm-negotiations', data: data);
+
+  Future<Response> approveNegotiation(
+    String id, {
+    double? approvedDiscount,
+    String? remarks,
+  }) async => _dio.post(
+    '/crm-negotiations/$id/approve',
+    data: {
+      if (approvedDiscount != null) 'approvedDiscount': approvedDiscount,
+      if (remarks != null) 'remarks': remarks,
+    },
+  );
+
+  Future<Response> rejectNegotiation(String id, {String? reason}) async =>
+      _dio.post(
+        '/crm-negotiations/$id/reject',
+        data: {if (reason != null) 'reason': reason},
+      );
+
+  Future<Response> getBookings({String? leadId}) async {
+    return _dio.get(
+      '/bookings',
+      queryParameters: {if (leadId != null) 'leadId': leadId},
+    );
+  }
+
+  Future<Response> createBooking(Map<String, dynamic> data) async =>
+      _dio.post('/bookings', data: data);
+
+  Future<Response> confirmBooking(String id) async =>
+      _dio.patch('/bookings/$id/confirm');
+
+  Future<Response> confirmBookingWithWorkflow(
+    String id, {
+    bool? financeRequired,
+    bool? exchangeRequired,
+  }) async => _dio.post(
+    '/bookings/$id/confirm',
+    data: {
+      if (financeRequired != null) 'financeRequired': financeRequired,
+      if (exchangeRequired != null) 'exchangeRequired': exchangeRequired,
+    },
+  );
+
+  Future<Response> cancelBooking(String id, String reason) async =>
+      _dio.post('/bookings/$id/cancel', data: {'reason': reason});
+
+  Future<Response> getBookingsByLead(String leadId) async =>
+      _dio.get('/bookings/by-lead/$leadId');
+
+  Future<Response> getFinance(String leadId) async =>
+      _dio.get('/crm-finance/lead/$leadId');
+
+  Future<Response> getAllFinance() async => _dio.get('/crm-finance');
+
+  Future<Response> getFinanceByBooking(String bookingId) async =>
+      _dio.get('/crm-finance/by-booking/$bookingId');
+
+  Future<Response> saveFinance(Map<String, dynamic> data) async =>
+      _dio.post('/crm-finance', data: data);
+
+  Future<Response> updateFinanceById(
+    String id,
+    Map<String, dynamic> data,
+  ) async => _dio.patch('/crm-finance/$id', data: data);
+
+  Future<Response> updateFinanceStatusWithWorkflow(
+    String id,
+    String status, {
+    String? remarks,
+  }) async => _dio.post(
+    '/crm-finance/$id/status',
+    data: {'status': status, if (remarks != null) 'remarks': remarks},
+  );
+
+  Future<Response> getDocuments(String leadId) async =>
+      _dio.get('/crm-documents/lead/$leadId');
+
+  Future<Response> getDocumentsByBooking(String bookingId) async =>
+      _dio.get('/crm-documents/by-booking/$bookingId');
+
+  Future<Response> createDocument({
+    required String leadId,
+    required String documentType,
+    bool? isRequired,
+    String? fileUrl,
+  }) async {
+    return _dio.post(
+      '/crm-documents',
+      data: {
+        'leadId': leadId,
+        'documentType': documentType,
+        if (isRequired != null) 'isRequired': isRequired,
+        if (fileUrl != null) 'fileUrl': fileUrl,
+      },
+    );
+  }
+
+  Future<Response> verifyDocument(String id) async =>
+      _dio.post('/crm-documents/$id/verify');
+
+  Future<Response> rejectDocument(String id, {String? reason}) async =>
+      _dio.post(
+        '/crm-documents/$id/reject',
+        data: {if (reason != null) 'reason': reason},
+      );
+
+  // ─── Exchange Vehicle ───
+
+  Future<Response> getExchangeByBooking(String bookingId) async =>
+      _dio.get('/exchange-vehicles/by-booking/$bookingId');
+
+  Future<Response> approveExchange(
+    String id, {
+    double? finalApprovedValue,
+    String? remarks,
+  }) async => _dio.post(
+    '/exchange-vehicles/$id/approve',
+    data: {
+      if (finalApprovedValue != null) 'finalApprovedValue': finalApprovedValue,
+      if (remarks != null) 'remarks': remarks,
+    },
+  );
+
+  Future<Response> rejectExchange(String id, {String? reason}) async =>
+      _dio.post(
+        '/exchange-vehicles/$id/reject',
+        data: {if (reason != null) 'reason': reason},
+      );
+
+  Future<Response> getDeliveries() async => _dio.get('/deliveries');
+
+  Future<Response> createDelivery({
+    required String bookingId,
+    String? chassisNumber,
+    String? engineNumber,
+  }) async {
+    return _dio.post(
+      '/deliveries',
+      data: {
+        'bookingId': bookingId,
+        if (chassisNumber != null) 'chassisNumber': chassisNumber,
+        if (engineNumber != null) 'engineNumber': engineNumber,
+      },
+    );
+  }
+
+  Future<Response> markDeliveryReady(String id) async =>
+      _dio.post('/deliveries/$id/mark-ready');
+
+  Future<Response> markDelivered(
+    String id, {
+    String? deliveryNotes,
+    String? deliveryPhotoUrl,
+    String? customerSignatureUrl,
+  }) async => _dio.post(
+    '/deliveries/$id/mark-delivered',
+    data: {
+      if (deliveryNotes != null) 'deliveryNotes': deliveryNotes,
+      if (deliveryPhotoUrl != null) 'deliveryPhotoUrl': deliveryPhotoUrl,
+      if (customerSignatureUrl != null)
+        'customerSignatureUrl': customerSignatureUrl,
+    },
+  );
+
+  Future<Response> checkDeliveryReadiness(
+    String leadId,
+    String bookingId,
+  ) async => _dio.post(
+    '/deliveries/check-readiness',
+    data: {'leadId': leadId, 'bookingId': bookingId},
+  );
+
+  Future<Response> scheduleDelivery({
+    required String bookingId,
+    required String deliveryDateTime,
+    String? notes,
+  }) async => _dio.post(
+    '/deliveries/schedule',
+    data: {
+      'bookingId': bookingId,
+      'deliveryDateTime': deliveryDateTime,
+      if (notes != null) 'deliveryNotes': notes,
+    },
+  );
+
+  // ─── Feedback ───
+
+  Future<Response> submitFeedback(Map<String, dynamic> data) async =>
+      _dio.post('/crm-feedback', data: data);
+
+  Future<Response> getFeedbackByDelivery(String deliveryId) async =>
+      _dio.get('/crm-feedback/by-delivery/$deliveryId');
+
+  // ─── Vehicle Inventory ───
+
+  Future<Response> getVehicleInventory({String? status}) async {
+    return _dio.get(
+      '/vehicle-inventory',
+      queryParameters: {if (status != null) 'status': status},
+    );
+  }
+
+  Future<Response> createVehicleInventory(Map<String, dynamic> data) async =>
+      _dio.post('/vehicle-inventory', data: data);
+
+  Future<Response> getAvailableVehicles({
+    String? branchId,
+    String? model,
+  }) async => _dio.get(
+    '/vehicle-inventory/available',
+    queryParameters: {
+      if (branchId != null) 'branchId': branchId,
+      if (model != null) 'model': model,
+    },
+  );
+
+  // ─── Vehicle Allocation ───
+
+  Future<Response> allocateVehicle({
+    required String bookingId,
+    required String vehicleInventoryId,
+    bool? hasAccessories,
+    String? remarks,
+  }) async {
+    return _dio.post(
+      '/vehicle-allocations',
+      data: {
+        'bookingId': bookingId,
+        'vehicleInventoryId': vehicleInventoryId,
+        if (hasAccessories != null) 'hasAccessories': hasAccessories,
+        if (remarks != null) 'remarks': remarks,
+      },
+    );
+  }
+
+  Future<Response> getVehicleAllocations() async =>
+      _dio.get('/vehicle-allocations');
+
+  Future<Response> getAllocationByBooking(String bookingId) async =>
+      _dio.get('/vehicle-allocations/booking/$bookingId');
+
+  Future<Response> getAllocationHistory(String bookingId) async =>
+      _dio.get('/vehicle-allocations/history/$bookingId');
+
+  Future<Response> releaseVehicle(String id) async =>
+      _dio.post('/vehicle-allocations/$id/release');
+
+  // ─── Exchange Vehicle ───
+
+  Future<Response> getExchangeVehicle(String leadId) async =>
+      _dio.get('/exchange-vehicles/lead/$leadId');
+
+  Future<Response> saveExchangeVehicle(Map<String, dynamic> data) async =>
+      _dio.post('/exchange-vehicles', data: data);
+
+  // ─── Insurance ───
+
+  Future<Response> getInsurance(String leadId) async =>
+      _dio.get('/crm-insurance/lead/$leadId');
+
+  Future<Response> saveInsurance(Map<String, dynamic> data) async =>
+      _dio.post('/crm-insurance', data: data);
+
+  // ─── RTO ───
+
+  Future<Response> getRto(String leadId) async =>
+      _dio.get('/crm-rto/lead/$leadId');
+
+  Future<Response> saveRto(Map<String, dynamic> data) async =>
+      _dio.post('/crm-rto', data: data);
+
+  // ─── Accessories ───
+
+  Future<Response> getAccessories(String leadId) async =>
+      _dio.get('/crm-accessories/lead/$leadId');
+
+  Future<Response> addAccessory(Map<String, dynamic> data) async =>
+      _dio.post('/crm-accessories', data: data);
+
+  // ─── PDI ───
+
+  Future<Response> getPdi(String leadId) async =>
+      _dio.get('/crm-pdi/lead/$leadId');
+
+  Future<Response> savePdi(Map<String, dynamic> data) async =>
+      _dio.post('/crm-pdi', data: data);
+
+  // ─── Payments ───
+
+  Future<Response> getPayments(String leadId) async =>
+      _dio.get('/crm-payments/lead/$leadId');
+
+  Future<Response> addPayment(Map<String, dynamic> data) async =>
+      _dio.post('/crm-payments', data: data);
+
+  // ─── Feedback ───
+
+  Future<Response> getFeedback(String leadId) async =>
+      _dio.get('/crm-feedback/lead/$leadId');
+
+  Future<Response> saveFeedback(Map<String, dynamic> data) async =>
+      _dio.post('/crm-feedback', data: data);
+
+  // ─── CRM Workflow Engine ───
+
+  Future<Response> processWorkflow({
+    required String leadId,
+    String? bookingId,
+    String? taskId,
+    required String actionType,
+    String? outcome,
+    Map<String, dynamic>? payload,
+  }) async {
+    return _dio.post(
+      '/crm/workflow/process',
+      data: {
+        'leadId': leadId,
+        'actionType': actionType,
+        if (bookingId != null) 'bookingId': bookingId,
+        if (taskId != null) 'taskId': taskId,
+        if (outcome != null) 'outcome': outcome,
+        if (payload != null) 'payload': payload,
+      },
+    );
+  }
+
+  // ─── Reports & Escalations ───
+
+  Future<Response> getReport(
+    String reportType, {
+    Map<String, dynamic>? filters,
+  }) async => _dio.get('/crm/reports/$reportType', queryParameters: filters);
+
+  Future<Response> getEscalations({String? branchId}) async => _dio.get(
+    '/crm/escalations',
+    queryParameters: {if (branchId != null) 'branchId': branchId},
+  );
+
+  Future<Response> getMyTasks({String? status, String? taskType}) async {
+    return _dio.get(
+      '/crm/tasks/my-tasks',
+      queryParameters: {
+        if (status != null) 'status': status,
+        if (taskType != null) 'taskType': taskType,
+      },
+    );
+  }
+
+  Future<Response> getTeamTasks({String? branchId, String? status}) async {
+    return _dio.get(
+      '/crm/tasks/team-tasks',
+      queryParameters: {
+        if (branchId != null) 'branchId': branchId,
+        if (status != null) 'status': status,
+      },
+    );
+  }
+
+  Future<Response> completeTask(
+    String taskId, {
+    required String actionType,
+    String? outcome,
+    Map<String, dynamic>? payload,
+  }) async {
+    return _dio.post(
+      '/crm/tasks/$taskId/complete',
+      data: {
+        'actionType': actionType,
+        if (outcome != null) 'outcome': outcome,
+        if (payload != null) 'payload': payload,
+      },
+    );
+  }
+
+  Future<Response> getCrmNotifications() async =>
+      _dio.get('/crm/notifications');
+
+  Future<Response> markNotificationRead(String id) async =>
+      _dio.post('/crm/notifications/$id/read');
+
+  Future<Response> startTask(String taskId) async =>
+      _dio.post('/crm/tasks/$taskId/start');
+
+  Future<Response> rescheduleTask(
+    String taskId,
+    String dueDateTime, {
+    String? reason,
+  }) async => _dio.post(
+    '/crm/tasks/$taskId/reschedule',
+    data: {'dueDateTime': dueDateTime, if (reason != null) 'reason': reason},
+  );
+
+  Future<Response> cancelTask(String taskId, {String? reason}) async =>
+      _dio.post(
+        '/crm/tasks/$taskId/cancel',
+        data: {if (reason != null) 'reason': reason},
+      );
+
+  Future<Response> getTaskById(String taskId) async =>
+      _dio.get('/crm/tasks/$taskId');
+
+  Future<Response> getTimeline(String leadId) async =>
+      _dio.get('/crm/timeline/$leadId');
+
+  Future<Response> getOverdueTasks({String? branchId}) async => _dio.get(
+    '/crm/tasks/overdue',
+    queryParameters: {if (branchId != null) 'branchId': branchId},
+  );
+
+  // ─── CRM Master Data ───
+
+  Future<Response> getMasterActiveList(
+    String masterType, {
+    String? parentId,
+  }) async => _dio.get(
+    '/crm/masters/$masterType/active',
+    queryParameters: {if (parentId != null) 'parentId': parentId},
+  );
+
+  Future<Response> getMasters(String masterType, {String? search}) async =>
+      _dio.get(
+        '/crm/masters/$masterType',
+        queryParameters: {
+          if (search != null && search.isNotEmpty) 'search': search,
+        },
+      );
 
   // ─── Generic CRUD ───
 

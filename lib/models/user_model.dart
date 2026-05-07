@@ -82,6 +82,14 @@ class UserModel {
   bool hasPermission(String permission) => permissions.contains(permission);
   bool hasModule(String moduleCode) => allowedModules.contains(moduleCode);
 
+  /// Check if user can access a CRM module (checks MENU_VIEW, VIEW, or LIST)
+  bool canAccessCrmModule(String moduleCode) {
+    if (isSuperAdmin || isCompanyAdmin) return true;
+    return hasPermission('${moduleCode}_MENU_VIEW') ||
+        hasPermission('${moduleCode}_VIEW') ||
+        hasPermission('${moduleCode}_LIST');
+  }
+
   bool get isSuperAdmin => userType == 'SUPER_ADMIN';
   bool get isCompanyAdmin => userType == 'COMPANY';
   bool get isUser => userType == 'USER';

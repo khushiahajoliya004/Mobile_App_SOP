@@ -1,0 +1,544 @@
+import 'package:flutter/material.dart';
+import '../../main.dart';
+import '../../services/api_service.dart';
+
+class CrmLeadsScreen extends StatefulWidget {
+  const CrmLeadsScreen({super.key});
+
+  @override
+  State<CrmLeadsScreen> createState() => _CrmLeadsScreenState();
+}
+
+class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
+  final _api = ApiService();
+  bool _loading = true;
+  List<Map<String, dynamic>> _leads = [];
+  List<Map<String, dynamic>> _assignableUsers = [];
+  final _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    try {
+      final res = await _api.getLeads(
+        search: _searchController.text.isEmpty ? null : _searchController.text,
+      );
+      final raw = res.data;
+      final list = raw is List
+          ? raw
+          : (raw is Map ? (raw['data'] ?? []) as List : []);
+      setState(() {
+        _leads = list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadAssignableUsers() async {
+    try {
+      final res = await _api.getAssignableUsers();
+      final raw = res.data;
+      final list = raw is List
+          ? raw
+          : (raw is Map ? (raw['data'] ?? []) as List : []);
+      _assignableUsers = list
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+    } catch (_) {}
+  }
+
+  void _showCreateSheet() {
+    final nameCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    final modelCtrl = TextEditingController();
+    String source = 'Walk-in';
+    String buyerType = '';
+    String priority = 'MEDIUM';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Padding(
+          padding: EdgeInsets.fromLTRB(
+            20,
+            20,
+            20,
+            MediaQuery.of(ctx).viewInsets.bottom + 20,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            AppColors.primary.withValues(alpha: 0.15),
+                            AppColors.accent.withValues(alpha: 0.1),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.person_add,
+                        color: AppColors.primary,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Text(
+                      'Create New Lead',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                TextField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Customer Name *',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: phoneCtrl,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(labelText: 'Phone'),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: source,
+                  decoration: const InputDecoration(labelText: 'Source'),
+                  items:
+                      [
+                            'Walk-in',
+                            'Call',
+                            'Website',
+                            'Facebook',
+                            'Instagram',
+                            'Google Ads',
+                            'Reference',
+                            'Event',
+                            'Other',
+                          ]
+                          .map(
+                            (s) => DropdownMenuItem(value: s, child: Text(s)),
+                          )
+                          .toList(),
+                  onChanged: (v) => setSheetState(() => source = v!),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: modelCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Interested Model',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: priority,
+                  decoration: const InputDecoration(labelText: 'Priority'),
+                  items: [
+                    const DropdownMenuItem(value: 'HOT', child: Text('Hot')),
+                    const DropdownMenuItem(value: 'WARM', child: Text('Warm')),
+                    const DropdownMenuItem(
+                      value: 'MEDIUM',
+                      child: Text('Medium'),
+                    ),
+                    const DropdownMenuItem(value: 'COLD', child: Text('Cold')),
+                  ],
+                  onChanged: (v) => setSheetState(() => priority = v!),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: buyerType.isEmpty ? null : buyerType,
+                  decoration: const InputDecoration(labelText: 'Buyer Type'),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'FIRST_TIME',
+                      child: Text('First Time'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'ADDITIONAL',
+                      child: Text('Additional'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'REPLACEMENT',
+                      child: Text('Replacement'),
+                    ),
+                  ],
+                  onChanged: (v) => setSheetState(() => buyerType = v ?? ''),
+                ),
+                const SizedBox(height: 20),
+                FilledButton(
+                  onPressed: () async {
+                    if (nameCtrl.text.trim().isEmpty) return;
+                    try {
+                      await _api.createLead(
+                        customerName: nameCtrl.text.trim(),
+                        phone: phoneCtrl.text.trim(),
+                        source: source,
+                        interestedModel: modelCtrl.text.trim(),
+                        buyerType: buyerType,
+                        priority: priority,
+                      );
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      _load();
+                    } catch (e) {
+                      if (ctx.mounted) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          SnackBar(content: Text('Failed to create lead: $e')),
+                        );
+                      }
+                    }
+                  },
+                  child: const Text('Create Lead'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showAssignDialog(Map<String, dynamic> lead) async {
+    await _loadAssignableUsers();
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Assign Lead'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: _assignableUsers.length,
+            itemBuilder: (_, i) {
+              final user = _assignableUsers[i];
+              return ListTile(
+                title: Text(
+                  '${user['firstName'] ?? ''} ${user['lastName'] ?? ''}'.trim(),
+                ),
+                onTap: () async {
+                  try {
+                    await _api.assignLead(lead['id'], user['id']);
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    _load();
+                  } catch (_) {}
+                },
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _markLost(Map<String, dynamic> lead) async {
+    try {
+      await _api.updateLeadStatus(lead['id'], {'status': 'LOST'});
+      _load();
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Center(
+        child: CircularProgressIndicator(
+          color: AppColors.primary,
+          strokeWidth: 3,
+        ),
+      );
+    }
+    return Container(
+      color: AppColors.scaffoldBg,
+      child: Stack(
+        children: [
+          Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Search leads...',
+                    prefixIcon: const Icon(
+                      Icons.search,
+                      color: AppColors.textHint,
+                    ),
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.clear, color: AppColors.textHint),
+                      onPressed: () {
+                        _searchController.clear();
+                        _load();
+                      },
+                    ),
+                  ),
+                  onSubmitted: (_) => _load(),
+                ),
+              ),
+              Expanded(
+                child: _leads.isEmpty
+                    ? _buildEmptyState()
+                    : RefreshIndicator(
+                        color: AppColors.primary,
+                        onRefresh: _load,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: _leads.length,
+                          itemBuilder: (_, i) => _buildLeadCard(_leads[i]),
+                        ),
+                      ),
+              ),
+            ],
+          ),
+          Positioned(
+            right: 16,
+            bottom: 16,
+            child: FloatingActionButton(
+              backgroundColor: AppColors.primary,
+              onPressed: _showCreateSheet,
+              child: const Icon(Icons.add, color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLeadCard(Map<String, dynamic> lead) {
+    final status = (lead['status'] ?? 'OPEN').toString();
+    final stageName = lead['stage'] is Map
+        ? lead['stage']['name']
+        : (lead['stageName'] ?? '');
+    final assignedTo = lead['assignedTo'] is Map
+        ? '${lead['assignedTo']['firstName'] ?? ''} ${lead['assignedTo']['lastName'] ?? ''}'
+              .trim()
+        : (lead['assignedToName'] ?? 'Unassigned');
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  lead['customerName'] ?? 'Unknown',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+              _buildStatusBadge(status),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Icon(Icons.phone, size: 14, color: AppColors.textSecondary),
+              const SizedBox(width: 4),
+              Text(
+                lead['phone'] ?? 'N/A',
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(width: 16),
+              const Icon(
+                Icons.person_outline,
+                size: 14,
+                color: AppColors.textSecondary,
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  assignedTo,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          if (stageName.toString().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                const Icon(
+                  Icons.flag_outlined,
+                  size: 14,
+                  color: AppColors.textSecondary,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  stageName.toString(),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textHint,
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _buildActionButton(
+                'Assign',
+                Icons.person_add_alt,
+                AppColors.primary,
+                () => _showAssignDialog(lead),
+              ),
+              const SizedBox(width: 8),
+              if (status != 'LOST')
+                _buildActionButton(
+                  'Mark Lost',
+                  Icons.cancel_outlined,
+                  AppColors.error,
+                  () => _markLost(lead),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButton(
+    String label,
+    IconData icon,
+    Color color,
+    VoidCallback onTap,
+  ) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusBadge(String status) {
+    Color bgColor;
+    Color textColor;
+    switch (status.toUpperCase()) {
+      case 'OPEN':
+        bgColor = AppColors.primary.withValues(alpha: 0.1);
+        textColor = AppColors.primary;
+        break;
+      case 'CONVERTED':
+        bgColor = AppColors.success.withValues(alpha: 0.1);
+        textColor = AppColors.success;
+        break;
+      case 'LOST':
+        bgColor = AppColors.error.withValues(alpha: 0.1);
+        textColor = AppColors.error;
+        break;
+      default:
+        bgColor = AppColors.warning.withValues(alpha: 0.1);
+        textColor = AppColors.warning;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        status,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: textColor,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.people_outline, size: 56, color: AppColors.textHint),
+          const SizedBox(height: 12),
+          const Text(
+            'No leads found',
+            style: TextStyle(fontSize: 16, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Tap + to create a new lead',
+            style: TextStyle(fontSize: 13, color: AppColors.textHint),
+          ),
+        ],
+      ),
+    );
+  }
+}
