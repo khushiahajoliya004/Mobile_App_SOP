@@ -17,6 +17,7 @@ import 'users/user_list_screen.dart';
 import 'credits/credits_screen.dart';
 import 'assign_sop/assign_sop_screen.dart';
 import 'roles/role_list_screen.dart';
+import 'team/team_screen.dart';
 
 class MenuScreen extends StatelessWidget {
   final UserModel? user;
@@ -186,6 +187,15 @@ class MenuScreen extends StatelessWidget {
               const Color(0xFFA78BFA),
               'Link SOP to users',
               const AssignSopScreen(),
+            ),
+          if (_can('USER'))
+            _M(
+              'Team Mapping',
+              Icons.account_tree_rounded,
+              const Color(0xFF0EA5E9),
+              const Color(0xFF38BDF8),
+              'View team analysis',
+              const TeamScreen(),
             ),
         ],
       ),

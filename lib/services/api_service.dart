@@ -1377,6 +1377,27 @@ class ApiService {
         },
       );
 
+  // ─── Team Mapping ───
+
+  /// GET /users/seniors  — users who have at least one team member
+  Future<Response> getSeniors() async => _dio.get('/users/seniors');
+
+  /// GET /users/:id/team  — get all users under a senior
+  Future<Response> getTeamUnderSenior(String seniorId) async =>
+      _dio.get('/users/$seniorId/team');
+
+  /// GET /ai-insights?userId=:id  — get calls/analysis for a specific user
+  Future<Response> getTeamMemberCalls(
+    String userId, {
+    int page = 1,
+    int limit = 20,
+  }) async {
+    return _dio.get(
+      '/ai-insights',
+      queryParameters: {'userId': userId, 'page': page, 'limit': limit},
+    );
+  }
+
   // ─── Generic CRUD ───
 
   Future<Response> genericGet(
