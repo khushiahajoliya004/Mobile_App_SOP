@@ -42,6 +42,17 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
     }
   }
 
+  void _showCallDetail(Map<String, dynamic> call) {
+    final callId = call['id'];
+    if (callId == null) return;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _CallQuickSummarySheet(callId: callId),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -179,113 +190,119 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
                     .trim()
               : '';
 
-          return Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      // Avatar
-                      Container(
-                        width: 46,
-                        height: 46,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [AppColors.primary, AppColors.primaryLight],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Center(
-                          child: Text(
-                            customerName.isNotEmpty
-                                ? customerName[0].toUpperCase()
-                                : '?',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 18,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      // Name + user
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              customerName,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 14,
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
-                            if (userName.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 2),
-                                child: Text(
-                                  'by $userName',
-                                  style: const TextStyle(
-                                    color: AppColors.textHint,
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      // Status badge
-                      _buildStatusBadge(analysisStatus),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  // Tags row
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      if (sopScore != null) _buildScoreBadge(sopScore),
-                      if (categoryName.isNotEmpty)
-                        _buildTag(
-                          Icons.label_rounded,
-                          categoryName,
-                          AppColors.primary,
-                        ),
-                      if (stageName.isNotEmpty)
-                        _buildTag(
-                          Icons.flag_rounded,
-                          stageName,
-                          AppColors.accent,
-                        ),
-                      _buildTag(
-                        Icons.calendar_today_rounded,
-                        _formatDate(date),
-                        AppColors.textSecondary,
-                      ),
-                    ],
+          return GestureDetector(
+            onTap: () => _showCallDetail(Map<String, dynamic>.from(call)),
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
                   ),
                 ],
               ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        // Avatar
+                        Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [
+                                AppColors.primary,
+                                AppColors.primaryLight,
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Center(
+                            child: Text(
+                              customerName.isNotEmpty
+                                  ? customerName[0].toUpperCase()
+                                  : '?',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 18,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        // Name + user
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                customerName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              if (userName.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Text(
+                                    'by $userName',
+                                    style: const TextStyle(
+                                      color: AppColors.textHint,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        // Status badge
+                        _buildStatusBadge(analysisStatus),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    // Tags row
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        if (sopScore != null) _buildScoreBadge(sopScore),
+                        if (categoryName.isNotEmpty)
+                          _buildTag(
+                            Icons.label_rounded,
+                            categoryName,
+                            AppColors.primary,
+                          ),
+                        if (stageName.isNotEmpty)
+                          _buildTag(
+                            Icons.flag_rounded,
+                            stageName,
+                            AppColors.accent,
+                          ),
+                        _buildTag(
+                          Icons.calendar_today_rounded,
+                          _formatDate(date),
+                          AppColors.textSecondary,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             ),
-          );
+          ); // close GestureDetector
         },
       ),
     );
@@ -402,5 +419,374 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
     } catch (_) {
       return dateStr;
     }
+  }
+}
+
+// ═══ CALL QUICK SUMMARY BOTTOM SHEET ════════════════════════════════════════
+class _CallQuickSummarySheet extends StatefulWidget {
+  final String callId;
+  const _CallQuickSummarySheet({required this.callId});
+  @override
+  State<_CallQuickSummarySheet> createState() => _CallQuickSummarySheetState();
+}
+
+class _CallQuickSummarySheetState extends State<_CallQuickSummarySheet> {
+  final _api = ApiService();
+  bool _loading = true;
+  Map<String, dynamic> _detail = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final res = await _api.getAiInsightDetail(widget.callId);
+      final raw = res.data;
+      _detail = raw is Map ? Map<String, dynamic>.from(raw['data'] ?? raw) : {};
+    } catch (_) {}
+    if (mounted) setState(() => _loading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.65,
+      maxChildSize: 0.92,
+      minChildSize: 0.35,
+      builder: (_, scrollCtrl) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: _loading
+              ? const Center(
+                  child: CircularProgressIndicator(color: AppColors.primary),
+                )
+              : ListView(
+                  controller: scrollCtrl,
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceLight,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildHeader(),
+                    const SizedBox(height: 16),
+                    _buildSectionScores(),
+                    const SizedBox(height: 16),
+                    _buildSummary(),
+                    const SizedBox(height: 16),
+                    _buildKeyPoints(),
+                  ],
+                ),
+        );
+      },
+    );
+  }
+
+  Widget _buildHeader() {
+    final score = _detail['sopScore'];
+    final name = _detail['customerName'] ?? 'Unknown';
+    final status = _detail['analysisStatus'] ?? '';
+    final category = _detail['category']?['name'] ?? '';
+    final duration = _detail['durationSeconds'] != null
+        ? '${((_detail['durationSeconds'] as num) / 60).floor()}:${((_detail['durationSeconds'] as num).toInt() % 60).toString().padLeft(2, '0')}'
+        : '';
+
+    final scoreColor = score != null
+        ? (score >= 70
+              ? AppColors.success
+              : score >= 40
+              ? AppColors.warning
+              : AppColors.error)
+        : AppColors.textHint;
+
+    return Row(
+      children: [
+        Container(
+          width: 60,
+          height: 60,
+          decoration: BoxDecoration(
+            color: score != null
+                ? scoreColor.withValues(alpha: 0.1)
+                : AppColors.surfaceLight,
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: score != null
+                ? Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '$score',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: scoreColor,
+                        ),
+                      ),
+                      Text(
+                        '%',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: scoreColor.withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ],
+                  )
+                : Icon(
+                    status == 'PROCESSING'
+                        ? Icons.hourglass_top
+                        : Icons.schedule,
+                    size: 24,
+                    color: AppColors.textHint,
+                  ),
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 8,
+                children: [
+                  if (category.isNotEmpty)
+                    Text(
+                      category,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  if (duration.isNotEmpty)
+                    Text(
+                      '⏱ $duration',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textHint,
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSectionScores() {
+    final sections = (_detail['sectionScores'] ?? []) as List;
+    if (sections.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Section Scores',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 10),
+        ...sections.map((s) {
+          final sec = Map<String, dynamic>.from(s);
+          final secScore = (sec['score'] ?? 0) as num;
+          final secName = sec['title'] ?? sec['sectionName'] ?? '';
+          final color = secScore >= 70
+              ? AppColors.success
+              : secScore >= 40
+              ? AppColors.warning
+              : AppColors.error;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        secName,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(3),
+                        child: LinearProgressIndicator(
+                          value: secScore / 100,
+                          minHeight: 6,
+                          backgroundColor: color.withValues(alpha: 0.1),
+                          valueColor: AlwaysStoppedAnimation(color),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  '${secScore.toInt()}%',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: color,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildSummary() {
+    final ai = _detail['aiAnalysis'] as Map<String, dynamic>? ?? {};
+    final summary = ai['summary'] ?? ai['callSummary'] ?? '';
+    if (summary.toString().isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(
+              Icons.summarize_rounded,
+              size: 14,
+              color: AppColors.primary,
+            ),
+            const SizedBox(width: 6),
+            const Text(
+              'Quick Summary',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppColors.primarySurface,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            summary.toString(),
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+              height: 1.5,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildKeyPoints() {
+    final ai = _detail['aiAnalysis'] as Map<String, dynamic>? ?? {};
+    final raw = ai['keyDiscussionPoints'] ?? ai['keyPoints'] ?? [];
+
+    List<String> points = [];
+    if (raw is List) {
+      points = raw.map((e) => e.toString()).toList();
+    } else if (raw is Map) {
+      raw.forEach((key, value) {
+        if (value is List) {
+          points.addAll(value.map((e) => e.toString()));
+        } else if (value is String &&
+            value.isNotEmpty &&
+            value != 'N/A' &&
+            value != 'Not Discussed') {
+          points.add('$key: $value');
+        }
+      });
+    }
+    if (points.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(
+              Icons.list_alt_rounded,
+              size: 14,
+              color: AppColors.success,
+            ),
+            const SizedBox(width: 6),
+            const Text(
+              'Key Points',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ...points
+            .take(5)
+            .map(
+              (p) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.only(top: 4),
+                      child: Icon(
+                        Icons.check_circle_outline,
+                        size: 14,
+                        color: AppColors.success,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        p,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+      ],
+    );
   }
 }

@@ -570,6 +570,11 @@ class ApiService {
     return _dio.get('/dashboard/company');
   }
 
+  /// GET /dashboard/my — personal dashboard for logged-in user
+  Future<Response> getMyDashboard({String period = '30d'}) async {
+    return _dio.get('/dashboard/my', queryParameters: {'period': period});
+  }
+
   // ─── Users ───
 
   Future<Response> getUsers() async => _dio.get('/users');
@@ -1399,6 +1404,19 @@ class ApiService {
   }
 
   // ─── Generic CRUD ───
+
+  /// POST /notifications/register-token — register FCM token
+  Future<Response> registerFcmToken(String token) async {
+    return _dio.post(
+      '/notifications/register-token',
+      data: {'token': token, 'platform': 'android'},
+    );
+  }
+
+  /// POST /notifications/unregister-token — unregister FCM token
+  Future<Response> unregisterFcmToken(String token) async {
+    return _dio.post('/notifications/unregister-token', data: {'token': token});
+  }
 
   Future<Response> genericGet(
     String endpoint, {
