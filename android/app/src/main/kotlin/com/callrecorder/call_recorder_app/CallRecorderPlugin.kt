@@ -73,7 +73,24 @@ class CallRecorderPlugin : FlutterPlugin, ActivityAware {
             }
         }
 
+        // Auto-start CallMonitorService when app engine attaches
+        startCallMonitorService(binding.applicationContext)
+
         Log.i(TAG, "Plugin attached to engine, all channels registered")
+    }
+
+    private fun startCallMonitorService(ctx: Context) {
+        try {
+            val intent = Intent(ctx, CallMonitorService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                ctx.startForegroundService(intent)
+            } else {
+                ctx.startService(intent)
+            }
+            Log.i(TAG, "CallMonitorService started")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start CallMonitorService: ${e.message}")
+        }
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {

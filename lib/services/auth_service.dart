@@ -21,6 +21,9 @@ class AuthService {
   Future<void> saveUser(UserModel user) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_userKey, jsonEncode(user.toJson()));
+    // Also save flat values so native Kotlin (CallUploadWorker) can read them
+    await prefs.setString('native_user_id', user.id);
+    await prefs.setString('native_company_id', user.companyId ?? '');
   }
 
   Future<UserModel?> getUser() async {
