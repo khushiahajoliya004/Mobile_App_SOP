@@ -581,8 +581,8 @@ class ApiService {
   // ─── Dashboard ───
 
   /// GET /dashboard/company
-  Future<Response> getCompanyDashboard() async {
-    return _dio.get('/dashboard/company');
+  Future<Response> getCompanyDashboard({String period = 'all'}) async {
+    return _dio.get('/dashboard/company', queryParameters: {'period': period});
   }
 
   // ─── Users ───
