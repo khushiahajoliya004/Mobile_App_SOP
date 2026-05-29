@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../main.dart';
 import '../services/api_service.dart';
 
@@ -85,6 +86,16 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
     setState(() => _downloading = true);
 
     try {
+      // Request storage permission on Android
+      if (Platform.isAndroid) {
+        final status = await Permission.storage.request();
+        if (!status.isGranted) {
+          _showSnack('Storage permission is required to save files', isError: true);
+          setState(() => _downloading = false);
+          return;
+        }
+      }
+
       final response = await _api.bulkDownloadCalls(_selectedIds.toList());
       final bytes = response.data;
 
@@ -94,9 +105,21 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
         return;
       }
 
-      final dir = await getApplicationDocumentsDirectory();
+      // Save to public Downloads (Android) or Files app (iOS)
+      Directory? dir;
+      String locationLabel;
+      if (Platform.isAndroid) {
+        dir = await getDownloadsDirectory();
+        dir ??= Directory('/storage/emulated/0/Download');
+        if (!await dir.exists()) await dir.create(recursive: true);
+        locationLabel = 'Downloads folder';
+      } else {
+        dir = await getApplicationDocumentsDirectory();
+        locationLabel = 'Files app → On My iPhone → MysteryMentor';
+      }
+
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final fileName = bytes.length < 1000000
+      final fileName = _selectedIds.length == 1
           ? 'recording_$timestamp.mp3'
           : 'recordings_$timestamp.zip';
       final file = File('${dir.path}/$fileName');
@@ -108,7 +131,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
         _selectedIds.clear();
       });
 
-      _showSnack('Downloaded: $fileName\nSaved to app Documents folder');
+      _showSnack('Saved to $locationLabel\nFile: $fileName');
     } catch (e) {
       setState(() => _downloading = false);
       _showSnack('Download failed. Please try again.', isError: true);
