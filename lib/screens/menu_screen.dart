@@ -524,9 +524,9 @@ class _ModuleWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.scaffoldBg,
-      body: Column(
+    return Material(
+      color: AppColors.scaffoldBg,
+      child: Column(
         children: [
           Container(
             padding: EdgeInsets.only(

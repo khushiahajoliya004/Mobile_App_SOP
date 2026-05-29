@@ -63,13 +63,13 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
     final scored = _calls.where((c) => c['sopScore'] != null).toList();
     _avgScore = scored.isNotEmpty
         ? (scored
-                      .map((c) => (c['sopScore'] as num).toDouble())
+                      .map((c) => num.tryParse(c['sopScore'].toString())?.toDouble() ?? 0.0)
                       .reduce((a, b) => a + b) /
                   scored.length)
               .round()
         : 0;
     _successRate = scored.isNotEmpty
-        ? ((scored.where((c) => (c['sopScore'] as num) >= 70).length /
+        ? ((scored.where((c) => (num.tryParse(c['sopScore'].toString()) ?? 0) >= 70).length /
                       scored.length) *
                   100)
               .round()
@@ -376,7 +376,7 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
   }
 
   Widget _callTile(Map<String, dynamic> call) {
-    final score = call['sopScore'];
+    final score = call['sopScore'] != null ? num.tryParse(call['sopScore'].toString()) : null;
     final status = call['analysisStatus'] ?? '';
     final name =
         call['aiAnalysis']?['customerName'] ??
@@ -524,7 +524,7 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
 
   Widget _detailScreen() {
     final c = _selected!;
-    final score = c['sopScore'];
+    final score = c['sopScore'] != null ? num.tryParse(c['sopScore'].toString()) : null;
     final status = c['analysisStatus'] ?? '';
     final name =
         c['aiAnalysis']?['customerName'] ?? c['customerName'] ?? 'Unknown';

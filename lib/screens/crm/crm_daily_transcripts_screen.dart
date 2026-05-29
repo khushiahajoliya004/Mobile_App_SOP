@@ -271,7 +271,7 @@ class _CrmDailyTranscriptsScreenState extends State<CrmDailyTranscriptsScreen> {
     final summary = call['callSummary'];
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(12, 0, 12, isLast ? 12 : 0),
+      margin: EdgeInsets.fromLTRB(12, 0, 12, isLast ? 12 : 0),
       child: Column(
         children: [
           Container(
