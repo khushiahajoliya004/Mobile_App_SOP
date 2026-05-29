@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
 import '../main.dart';
 import '../services/api_service.dart';
 
@@ -86,16 +85,6 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
     setState(() => _downloading = true);
 
     try {
-      // Request storage permission on Android
-      if (Platform.isAndroid) {
-        final status = await Permission.storage.request();
-        if (!status.isGranted) {
-          _showSnack('Storage permission is required to save files', isError: true);
-          setState(() => _downloading = false);
-          return;
-        }
-      }
-
       final response = await _api.bulkDownloadCalls(_selectedIds.toList());
       final bytes = response.data;
 
@@ -109,9 +98,12 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
       Directory? dir;
       String locationLabel;
       if (Platform.isAndroid) {
+        // Android 10+: no permission needed for app's external downloads dir
         dir = await getDownloadsDirectory();
-        dir ??= Directory('/storage/emulated/0/Download');
-        if (!await dir.exists()) await dir.create(recursive: true);
+        if (dir == null || !await dir.exists()) {
+          dir = await getExternalStorageDirectory();
+        }
+        dir ??= await getApplicationDocumentsDirectory();
         locationLabel = 'Downloads folder';
       } else {
         dir = await getApplicationDocumentsDirectory();
