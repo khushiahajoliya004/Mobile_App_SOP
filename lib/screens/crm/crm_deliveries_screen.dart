@@ -42,14 +42,26 @@ class _CrmDeliveriesScreenState extends State<CrmDeliveriesScreen> {
     try {
       await _api.markDeliveryReady(delivery['id']);
       _load();
-    } catch (_) {}
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to mark ready: $e')),
+        );
+      }
+    }
   }
 
   void _markDelivered(Map<String, dynamic> delivery) async {
     try {
       await _api.markDelivered(delivery['id']);
       _load();
-    } catch (_) {}
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to mark delivered: $e')),
+        );
+      }
+    }
   }
 
   @override

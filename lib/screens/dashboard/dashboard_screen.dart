@@ -48,7 +48,15 @@ class _DashboardScreenState extends State<DashboardScreen>
     try {
       final res = await _api.getCompanyDashboard();
       final raw = res.data;
-      _data = raw is Map ? Map<String, dynamic>.from(raw['data'] ?? raw) : {};
+      final dataMap = raw is Map ? Map<String, dynamic>.from(raw['data'] ?? raw) : <String, dynamic>{};
+      final stats = Map<String, dynamic>.from(dataMap['stats'] as Map? ?? {});
+      _data = {
+        ...stats,
+        // fix key name differences between backend and UI
+        'activeSops': stats['totalSops'],
+        'credits': stats['creditsRemaining'],
+        'recentCalls': dataMap['recentCalls'],
+      };
     } catch (_) {
       _data = {};
     }

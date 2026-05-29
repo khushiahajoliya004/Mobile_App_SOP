@@ -236,7 +236,13 @@ class _CrmTestDrivesScreenState extends State<CrmTestDrivesScreen> {
                 );
                 if (ctx.mounted) Navigator.pop(ctx);
                 _load();
-              } catch (_) {}
+              } catch (e) {
+                if (ctx.mounted) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    SnackBar(content: Text('Failed to complete: $e')),
+                  );
+                }
+              }
             },
             child: const Text('Complete'),
           ),

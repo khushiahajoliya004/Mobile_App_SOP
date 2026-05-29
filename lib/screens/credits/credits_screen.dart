@@ -42,7 +42,7 @@ class _CreditsScreenState extends State<CreditsScreen> {
     try {
       final res = await _api.getCreditBalance(_companyId);
       final raw = res.data is Map ? res.data : {};
-      _balance = (raw['data']?['balance'] ?? raw['balance'] ?? 0) as int;
+      _balance = ((raw['data']?['balance'] ?? raw['balance'] ?? 0) as num).toInt();
     } catch (_) {}
   }
 
