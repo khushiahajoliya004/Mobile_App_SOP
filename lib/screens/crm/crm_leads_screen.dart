@@ -291,7 +291,13 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                     await _api.assignLead(lead['id'], user['id']);
                     if (ctx.mounted) Navigator.pop(ctx);
                     _load();
-                  } catch (_) {}
+                  } catch (e) {
+                    if (ctx.mounted) {
+                      ScaffoldMessenger.of(ctx).showSnackBar(
+                        SnackBar(content: Text('Failed to assign: $e')),
+                      );
+                    }
+                  }
                 },
               );
             },
@@ -305,7 +311,13 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
     try {
       await _api.updateLeadStatus(lead['id'], {'status': 'LOST'});
       _load();
-    } catch (_) {}
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to mark lost: $e')),
+        );
+      }
+    }
   }
 
   @override

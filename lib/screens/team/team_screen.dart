@@ -91,7 +91,7 @@ class _TeamScreenState extends State<TeamScreen> {
     final scored = _memberCalls.where((c) => c['sopScore'] != null).toList();
     _avgScore = scored.isNotEmpty
         ? (scored
-                      .map((c) => (c['sopScore'] as num).toDouble())
+                      .map((c) => double.tryParse(c['sopScore'].toString()) ?? 0.0)
                       .reduce((a, b) => a + b) /
                   scored.length)
               .round()
@@ -878,7 +878,7 @@ class _TeamScreenState extends State<TeamScreen> {
           ),
           ...sections.map((s) {
             final sec = Map<String, dynamic>.from(s);
-            final secScore = (sec['score'] ?? 0) as num;
+            final secScore = double.tryParse((sec['score'] ?? 0).toString()) ?? 0.0;
             final secName = sec['sectionName'] ?? sec['name'] ?? '';
             return Container(
               margin: const EdgeInsets.only(bottom: 8),

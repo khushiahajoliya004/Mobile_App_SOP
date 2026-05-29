@@ -217,11 +217,109 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
     );
   }
 
-  void _completeFollowUp(Map<String, dynamic> followUp) async {
-    try {
-      await _api.genericPatch('/follow-ups/${followUp['id']}/complete', {});
-      _load();
-    } catch (_) {}
+  void _completeFollowUp(Map<String, dynamic> followUp) {
+    String? selectedOutcome;
+    final notesCtrl = TextEditingController();
+    const outcomes = [
+      'CALL_LATER',
+      'VISIT_PLANNED',
+      'TEST_DRIVE_PLANNED',
+      'QUOTATION_REQUIRED',
+      'BOOKING_EXPECTED',
+      'NOT_INTERESTED',
+      'LOST',
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Padding(
+          padding: EdgeInsets.fromLTRB(
+            20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Complete Follow-Up',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Select Outcome *',
+                  style: TextStyle(fontSize: 12, color: AppColors.textHint, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: outcomes.map((o) => GestureDetector(
+                    onTap: () => setSheetState(() => selectedOutcome = o),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: selectedOutcome == o ? AppColors.primary : AppColors.scaffoldBg,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: selectedOutcome == o ? AppColors.primary : AppColors.textHint.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Text(
+                        o.replaceAll('_', ' '),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: selectedOutcome == o ? Colors.white : AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                  )).toList(),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: notesCtrl,
+                  maxLines: 2,
+                  decoration: const InputDecoration(labelText: 'Notes (optional)'),
+                ),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: () async {
+                    if (selectedOutcome == null) {
+                      ScaffoldMessenger.of(ctx).showSnackBar(
+                        const SnackBar(content: Text('Please select an outcome')),
+                      );
+                      return;
+                    }
+                    try {
+                      await _api.completeFollowUpWithWorkflow(
+                        followUp['id'].toString(),
+                        outcome: selectedOutcome!,
+                        notes: notesCtrl.text.trim().isEmpty ? null : notesCtrl.text.trim(),
+                      );
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      _load();
+                    } catch (e) {
+                      if (ctx.mounted) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          SnackBar(content: Text('Failed: $e')),
+                        );
+                      }
+                    }
+                  },
+                  child: const Text('Complete Follow-Up'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
