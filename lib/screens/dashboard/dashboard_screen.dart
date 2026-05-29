@@ -18,6 +18,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   bool _loading = true;
   Map<String, dynamic> _data = {};
   UserModel? _user;
+  String _selectedPeriod = '30d';
   late AnimationController _fadeCtrl;
   late AnimationController _ringCtrl;
 
@@ -46,7 +47,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     setState(() => _loading = true);
     _user = await _auth.getUser();
     try {
-      final res = await _api.getCompanyDashboard();
+      final res = await _api.getCompanyDashboard(period: _selectedPeriod);
       final raw = res.data;
       final dataMap = raw is Map ? Map<String, dynamic>.from(raw['data'] ?? raw) : <String, dynamic>{};
       final stats = Map<String, dynamic>.from(dataMap['stats'] as Map? ?? {});
@@ -62,8 +63,12 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
     if (mounted) {
       setState(() => _loading = false);
-      _fadeCtrl.forward();
-      _ringCtrl.forward();
+      _fadeCtrl
+        ..reset()
+        ..forward();
+      _ringCtrl
+        ..reset()
+        ..forward();
     }
   }
 
@@ -205,7 +210,10 @@ class _DashboardScreenState extends State<DashboardScreen>
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
+          // Period selector
+          _buildPeriodSelector(),
+          const SizedBox(height: 12),
           // Stats row inside header
           Container(
             padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
@@ -280,6 +288,51 @@ class _DashboardScreenState extends State<DashboardScreen>
     height: 36,
     color: Colors.white.withValues(alpha: 0.1),
   );
+
+  Widget _buildPeriodSelector() {
+    const periods = ['3d', '7d', '30d', '90d'];
+    const labels = ['3 Days', '7 Days', '30 Days', '90 Days'];
+    return SizedBox(
+      height: 32,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: periods.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (_, i) {
+          final isSelected = _selectedPeriod == periods[i];
+          return GestureDetector(
+            onTap: () {
+              setState(() => _selectedPeriod = periods[i]);
+              _loadAll();
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? Colors.white
+                    : Colors.white.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isSelected
+                      ? Colors.transparent
+                      : Colors.white.withValues(alpha: 0.2),
+                ),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                labels[i],
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: isSelected ? AppColors.primary : Colors.white,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
 
   // ═══ SCORE SECTION ════════════════════════════════════════════════════════
   Widget _buildScoreSection() {
