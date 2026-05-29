@@ -94,28 +94,24 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
         return;
       }
 
-      // Save to public Downloads (Android) or Files app (iOS)
-      Directory? dir;
-      String locationLabel;
-      if (Platform.isAndroid) {
-        // Android 10+: no permission needed for app's external downloads dir
-        dir = await getDownloadsDirectory();
-        if (dir == null || !await dir.exists()) {
-          dir = await getExternalStorageDirectory();
-        }
-        dir ??= await getApplicationDocumentsDirectory();
-        locationLabel = 'Downloads folder';
-      } else {
-        dir = await getApplicationDocumentsDirectory();
-        locationLabel = 'Files app → On My iPhone → MysteryMentor';
-      }
-
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final fileName = _selectedIds.length == 1
           ? 'recording_$timestamp.mp3'
           : 'recordings_$timestamp.zip';
-      final file = File('${dir.path}/$fileName');
-      await file.writeAsBytes(bytes);
+
+      if (Platform.isAndroid) {
+        // Use the real public Downloads folder visible in Files app
+        final publicDownloads = Directory('/storage/emulated/0/Download');
+        if (!await publicDownloads.exists()) {
+          await publicDownloads.create(recursive: true);
+        }
+        final file = File('${publicDownloads.path}/$fileName');
+        await file.writeAsBytes(bytes);
+      } else {
+        final dir = await getApplicationDocumentsDirectory();
+        final file = File('${dir.path}/$fileName');
+        await file.writeAsBytes(bytes);
+      }
 
       setState(() {
         _downloading = false;
@@ -123,7 +119,10 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
         _selectedIds.clear();
       });
 
-      _showSnack('Saved to $locationLabel\nFile: $fileName');
+      final location = Platform.isAndroid
+          ? 'Files app → Downloads → $fileName'
+          : 'Files app → On My iPhone → MysteryMentor → $fileName';
+      _showSnack('Saved! Open your Files app\n$location');
     } catch (e) {
       setState(() => _downloading = false);
       _showSnack('Download failed. Please try again.', isError: true);
