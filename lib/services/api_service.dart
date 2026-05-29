@@ -118,6 +118,8 @@ class ApiService {
     String? notes,
     String? audioFilePath,
     String? audioFileName,
+    String? leadId,
+    String? phoneNumber,
   }) async {
     final map = <String, dynamic>{
       'customerName': customerName,
@@ -127,6 +129,8 @@ class ApiService {
       if (salesStageId != null && salesStageId.isNotEmpty)
         'salesStageId': salesStageId,
       if (notes != null) 'notes': notes,
+      if (leadId != null && leadId.isNotEmpty) 'leadId': leadId,
+      if (phoneNumber != null && phoneNumber.isNotEmpty) 'phoneNumber': phoneNumber,
     };
 
     if (audioFilePath != null) {

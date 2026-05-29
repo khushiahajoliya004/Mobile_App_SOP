@@ -20,6 +20,7 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
   final _api = ApiService();
   final _auth = AuthService();
   final _customerNameController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _notesController = TextEditingController();
 
   UserModel? _user;
@@ -27,6 +28,11 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
   bool _loadingData = true;
   String? _statusMessage;
   bool _isError = false;
+
+  // Phone lookup state
+  bool _lookingUp = false;
+  String? _linkedLeadId;
+  String? _linkedLeadName;
 
   // SOP-resolved fields (fetched automatically from user's assigned SOP)
   String? _sopCategoryId;
@@ -171,6 +177,10 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
             : null,
         audioFilePath: _audioFilePath,
         audioFileName: _audioFileName,
+        leadId: _linkedLeadId,
+        phoneNumber: _phoneController.text.trim().isNotEmpty
+            ? _phoneController.text.trim()
+            : null,
       );
 
       if (mounted) {
@@ -180,7 +190,10 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
           _selectedDeviceFile = null;
           _selectedLocalRecording = null;
           _customerNameController.clear();
+          _phoneController.clear();
           _notesController.clear();
+          _linkedLeadId = null;
+          _linkedLeadName = null;
         });
         _showSnack('Call submitted for approval', success: true);
       }
@@ -213,9 +226,44 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
+  Future<void> _lookupPhone() async {
+    final phone = _phoneController.text.trim();
+    if (phone.isEmpty) return;
+    setState(() {
+      _lookingUp = true;
+      _linkedLeadId = null;
+      _linkedLeadName = null;
+    });
+    try {
+      final res = await _api.checkDuplicateLead(phone);
+      final raw = res.data;
+      final data = raw is Map ? (raw['data'] ?? raw) : {};
+      final isDuplicate = data['isDuplicate'] == true || data['exists'] == true;
+      final lead = data['lead'] ?? data['existingLead'];
+      if (isDuplicate && lead != null && lead is Map) {
+        final name = lead['customerName']?.toString() ?? '';
+        setState(() {
+          _linkedLeadId = lead['id']?.toString();
+          _linkedLeadName = name;
+          if (name.isNotEmpty && _customerNameController.text.trim().isEmpty) {
+            _customerNameController.text = name;
+          }
+        });
+        _showSnack('Lead found: $name', success: true);
+      } else {
+        _showSnack('No existing lead found for this number');
+      }
+    } catch (_) {
+      _showSnack('Lookup failed. Continue without linking.');
+    } finally {
+      if (mounted) setState(() => _lookingUp = false);
+    }
+  }
+
   @override
   void dispose() {
     _customerNameController.dispose();
+    _phoneController.dispose();
     _notesController.dispose();
     super.dispose();
   }
@@ -437,7 +485,89 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 14),
+              // Phone lookup row
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _phoneController,
+                      keyboardType: TextInputType.phone,
+                      style: const TextStyle(color: AppColors.textPrimary),
+                      decoration: InputDecoration(
+                        labelText: 'Phone (optional)',
+                        hintText: 'Lookup existing lead',
+                        prefixIcon: Icon(
+                          Icons.phone_outlined,
+                          color: AppColors.primary.withValues(alpha: 0.6),
+                        ),
+                        suffixIcon: _linkedLeadId != null
+                            ? const Icon(Icons.link_rounded, color: AppColors.success, size: 20)
+                            : null,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    height: 52,
+                    child: OutlinedButton(
+                      onPressed: _lookingUp ? null : _lookupPhone,
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: AppColors.primary),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                      ),
+                      child: _lookingUp
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColors.primary,
+                              ),
+                            )
+                          : const Icon(Icons.search_rounded, color: AppColors.primary, size: 20),
+                    ),
+                  ),
+                ],
+              ),
+              if (_linkedLeadName != null) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.success.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.success.withValues(alpha: 0.2)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check_circle_rounded, size: 14, color: AppColors.success),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Linked to lead: $_linkedLeadName',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.success,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => setState(() {
+                          _linkedLeadId = null;
+                          _linkedLeadName = null;
+                        }),
+                        child: const Icon(Icons.close_rounded, size: 14, color: AppColors.success),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 4),
               TextField(
                 controller: _notesController,
                 maxLines: 3,
