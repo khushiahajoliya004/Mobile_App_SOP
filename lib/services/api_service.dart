@@ -192,6 +192,17 @@ class ApiService {
     return _dio.patch('/calls/$id/reject');
   }
 
+  /// POST /calls/bulk-download
+  /// Downloads multiple call recordings as a ZIP file (max 50)
+  /// Returns raw bytes response
+  Future<Response<List<int>>> bulkDownloadCalls(List<String> callIds) async {
+    return _dio.post<List<int>>(
+      '/calls/bulk-download',
+      data: {'callIds': callIds},
+      options: Options(responseType: ResponseType.bytes),
+    );
+  }
+
   // ─── Categories ───
 
   Future<Response> getCategories() async => _dio.get('/categories');
