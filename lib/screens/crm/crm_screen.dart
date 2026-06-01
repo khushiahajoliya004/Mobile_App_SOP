@@ -377,8 +377,7 @@ class _CrmScreenState extends State<CrmScreen> {
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) =>
-              _CrmSubWrapper(title: module.label, child: module.screen),
+          builder: (_) => _CrmSubWrapper(title: module.label, child: module.screen),
         ),
       ),
       child: Container(
@@ -483,20 +482,13 @@ class _CrmSubWrapper extends StatelessWidget {
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF1E1B4B),
-                  Color(0xFF312E81),
-                  AppColors.primary,
-                ],
+                colors: [Color(0xFF1E1B4B), Color(0xFF312E81), AppColors.primary],
               ),
             ),
             child: Row(
               children: [
                 IconButton(
-                  icon: const Icon(
-                    Icons.arrow_back_rounded,
-                    color: Colors.white,
-                  ),
+                  icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
                   onPressed: () => Navigator.pop(context),
                 ),
                 Text(

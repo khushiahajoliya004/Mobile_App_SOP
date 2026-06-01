@@ -496,7 +496,7 @@ class _CallQuickSummarySheetState extends State<_CallQuickSummarySheet> {
   }
 
   Widget _buildHeader() {
-    final score = _detail['sopScore'];
+    final score = _detail['sopScore'] != null ? num.tryParse(_detail['sopScore'].toString()) : null;
     final name = _detail['customerName'] ?? 'Unknown';
     final status = _detail['analysisStatus'] ?? '';
     final category = _detail['category']?['name'] ?? '';
@@ -529,7 +529,7 @@ class _CallQuickSummarySheetState extends State<_CallQuickSummarySheet> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        '$score',
+                        '${score!.round()}',
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w800,

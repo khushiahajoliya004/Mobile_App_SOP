@@ -39,10 +39,14 @@ class _HomeScreenState extends State<HomeScreen> {
       ProfileScreen(user: _user, onLogout: _logout),
     ];
 
-    return Scaffold(
-      backgroundColor: AppColors.scaffoldBg,
-      body: IndexedStack(index: _currentTab, children: screens),
-      bottomNavigationBar: _buildBottomNav(),
+    return Material(
+      color: AppColors.scaffoldBg,
+      child: Column(
+        children: [
+          Expanded(child: IndexedStack(index: _currentTab, children: screens)),
+          _buildBottomNav(),
+        ],
+      ),
     );
   }
 

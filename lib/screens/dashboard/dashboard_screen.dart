@@ -50,8 +50,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     setState(() => _loading = true);
     _user = await _auth.getUser();
     try {
-      // Use personal dashboard (user's own data)
-      final res = await _api.getMyDashboard();
+      final res = await _api.getCompanyDashboard(period: '30d');
       final raw = res.data;
       // Handle: raw, raw['data'], or raw['data']['stats'] nesting
       final dataMap = raw is Map
@@ -1203,7 +1202,7 @@ class _CallDetailSheetState extends State<_CallDetailSheet> {
   }
 
   Widget _buildSheetHeader() {
-    final score = _detail['sopScore'];
+    final score = _detail['sopScore'] != null ? num.tryParse(_detail['sopScore'].toString()) : null;
     final name = _detail['customerName'] ?? 'Unknown';
     final status = _detail['analysisStatus'] ?? '';
     final category = _detail['category']?['name'] ?? '';
@@ -1237,7 +1236,7 @@ class _CallDetailSheetState extends State<_CallDetailSheet> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        '$score',
+                        '${score!.round()}',
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w800,
@@ -1515,9 +1514,9 @@ class _ModuleWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.scaffoldBg,
-      body: Column(
+    return Material(
+      color: AppColors.scaffoldBg,
+      child: Column(
         children: [
           Container(
             padding: EdgeInsets.only(

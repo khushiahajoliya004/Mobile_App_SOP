@@ -5,7 +5,7 @@ class ApiService {
   // Backend runs on port 3000, no /api prefix
   // For Android emulator use 10.0.2.2, for real device use your machine IP
   // static const String baseUrl = 'https://api.mysterymentor.in';
-  static const String baseUrl = 'http://192.168.1.8:3000';
+  static const String baseUrl = 'http://192.168.1.14:3000';
 
   late final Dio _dio;
   final AuthService _auth = AuthService();
@@ -118,6 +118,8 @@ class ApiService {
     String? notes,
     String? audioFilePath,
     String? audioFileName,
+    String? leadId,
+    String? phoneNumber,
   }) async {
     final map = <String, dynamic>{
       'customerName': customerName,
@@ -127,6 +129,8 @@ class ApiService {
       if (salesStageId != null && salesStageId.isNotEmpty)
         'salesStageId': salesStageId,
       if (notes != null) 'notes': notes,
+      if (leadId != null && leadId.isNotEmpty) 'leadId': leadId,
+      if (phoneNumber != null && phoneNumber.isNotEmpty) 'phoneNumber': phoneNumber,
     };
 
     if (audioFilePath != null) {
@@ -566,8 +570,8 @@ class ApiService {
   // ─── Dashboard ───
 
   /// GET /dashboard/company
-  Future<Response> getCompanyDashboard() async {
-    return _dio.get('/dashboard/company');
+  Future<Response> getCompanyDashboard({String period = '30d'}) async {
+    return _dio.get('/dashboard/company', queryParameters: {'period': period});
   }
 
   /// GET /dashboard/my — personal dashboard for logged-in user

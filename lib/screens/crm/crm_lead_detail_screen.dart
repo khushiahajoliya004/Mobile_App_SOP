@@ -229,9 +229,10 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.scaffoldBg,
-      body: Column(
+    return Material(
+      color: AppColors.scaffoldBg,
+      child: SizedBox.expand(
+        child: Column(
         children: [
           _buildHeader(),
           Expanded(
@@ -265,6 +266,7 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen> {
                       ),
           ),
         ],
+        ),
       ),
     );
   }

@@ -400,11 +400,14 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
     return GestureDetector(
       onTap: () => Navigator.push(
         context,
-        MaterialPageRoute(
-          builder: (_) => CrmLeadDetailScreen(
+        PageRouteBuilder(
+          opaque: true,
+          pageBuilder: (_, __, ___) => CrmLeadDetailScreen(
             leadId: lead['id'].toString(),
             leadName: lead['customerName'] ?? 'Lead',
           ),
+          transitionsBuilder: (_, animation, __, child) =>
+              FadeTransition(opacity: animation, child: child),
         ),
       ).then((_) => _load()),
       child: Container(
