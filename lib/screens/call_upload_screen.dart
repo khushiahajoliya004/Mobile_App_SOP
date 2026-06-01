@@ -497,8 +497,12 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
       final res = await _api.checkDuplicateLead(phone);
       final raw = res.data;
       final data = raw is Map ? (raw['data'] ?? raw) : {};
-      final isDuplicate = data['isDuplicate'] == true || data['exists'] == true;
-      final lead = data['lead'] ?? data['existingLead'];
+      final isDuplicate = data['exists'] == true || data['isDuplicate'] == true;
+      // Backend returns 'leads' array — take the first one
+      final leadsList = data['leads'];
+      final lead = (leadsList is List && leadsList.isNotEmpty)
+          ? leadsList.first
+          : (data['lead'] ?? data['existingLead']);
       if (isDuplicate && lead != null && lead is Map) {
         final name = lead['customerName']?.toString() ?? '';
         setState(() {
