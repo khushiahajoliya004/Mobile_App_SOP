@@ -31,7 +31,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
 
   Future<void> _load() async {
     try {
-      final res = await _api.getLeads(
+      final res = await _api.getCrmDeals(
         search: _searchController.text.isEmpty ? null : _searchController.text,
       );
       final raw = res.data;
@@ -39,7 +39,24 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
           ? raw
           : (raw is Map ? (raw['data'] ?? []) as List : []);
       setState(() {
-        _leads = list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        // Normalize v2 deal fields to a common shape the list can render
+        _leads = list.map((e) {
+          final d = Map<String, dynamic>.from(e as Map);
+          final contact = d['contact'] is Map ? d['contact'] as Map : {};
+          // Map deal fields → lead-like shape for display
+          d['customerName'] = contact['name']?.toString() ?? d['name']?.toString() ?? '';
+          d['phone'] = contact['phone']?.toString() ?? '';
+          d['source'] = contact['source']?.toString() ?? '';
+          // Normalize owner to assignedTo shape (firstName/lastName or name)
+          final owner = d['owner'];
+          if (owner is Map && owner['name'] != null && owner['firstName'] == null) {
+            final parts = owner['name'].toString().split(' ');
+            d['assignedTo'] = { ...owner, 'firstName': parts.first, 'lastName': parts.length > 1 ? parts.sublist(1).join(' ') : '' };
+          } else {
+            d['assignedTo'] = owner;
+          }
+          return d;
+        }).toList();
         _loading = false;
       });
     } catch (e) {
@@ -404,7 +421,8 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
           opaque: true,
           pageBuilder: (_, __, ___) => CrmLeadDetailScreen(
             leadId: lead['id'].toString(),
-            leadName: lead['customerName'] ?? 'Lead',
+            leadName: lead['customerName'] ?? lead['name'] ?? 'Deal',
+            isDeal: true,
           ),
           transitionsBuilder: (_, animation, __, child) =>
               FadeTransition(opacity: animation, child: child),

@@ -638,6 +638,27 @@ class ApiService {
     );
   }
 
+  Future<Response> getCrmDeals({String? search, String? status, String? pipelineId, String? branchId, String? ownerUserId}) async {
+    return _dio.get(
+      '/crm/deals',
+      queryParameters: {
+        if (search != null && search.isNotEmpty) 'search': search,
+        if (status != null) 'status': status,
+        if (pipelineId != null) 'pipelineId': pipelineId,
+        if (branchId != null) 'branchId': branchId,
+        if (ownerUserId != null) 'ownerUserId': ownerUserId,
+      },
+    );
+  }
+
+  Future<Response> getCrmDeal(String id) async => _dio.get('/crm/deals/$id');
+
+  Future<Response> getCrmContacts({String? search}) async {
+    return _dio.get('/crm/contacts', queryParameters: {
+      if (search != null && search.isNotEmpty) 'search': search,
+    });
+  }
+
   Future<Response> getAssignedLeads() async =>
       _dio.get('/leads', queryParameters: {'status': 'OPEN'});
 

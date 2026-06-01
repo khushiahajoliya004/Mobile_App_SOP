@@ -5,8 +5,9 @@ import '../../services/api_service.dart';
 class CrmLeadDetailScreen extends StatefulWidget {
   final String leadId;
   final String leadName;
+  final bool isDeal; // true = CRM v2 deal, false = v1 lead
 
-  const CrmLeadDetailScreen({super.key, required this.leadId, required this.leadName});
+  const CrmLeadDetailScreen({super.key, required this.leadId, required this.leadName, this.isDeal = false});
 
   @override
   State<CrmLeadDetailScreen> createState() => _CrmLeadDetailScreenState();
@@ -67,9 +68,46 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen>
   Future<void> _loadDetails() async {
     setState(() { _loading = true; _error = null; });
     try {
-      final res = await _api.getLeadDetails(widget.leadId);
-      final raw = res.data;
-      final data = raw is Map ? (raw['data'] ?? raw) : {};
+      Map<String, dynamic> data;
+      if (widget.isDeal) {
+        // CRM v2 deal
+        final res = await _api.getCrmDeal(widget.leadId);
+        final raw = res.data;
+        final deal = raw is Map ? Map<String, dynamic>.from((raw['data'] ?? raw) as Map) : {};
+        final contact = deal['contact'] is Map ? deal['contact'] as Map : {};
+        // Normalize deal → lead shape so the existing UI still works
+        data = {
+          'lead': {
+            'id': deal['id'],
+            'customerName': contact['name'] ?? deal['name'] ?? '',
+            'phone': contact['phone'] ?? '',
+            'email': contact['email'] ?? '',
+            'status': deal['status'] ?? 'OPEN',
+            'priority': deal['priority'] ?? 'MEDIUM',
+            'source': contact['source'] ?? '',
+            'branchId': deal['branchId'],
+            'branch': deal['branch'],
+            'assignedToUserId': deal['ownerUserId'],
+            'assignedTo': deal['owner'],
+            'notes': deal['notes'] ?? '',
+            'createdAt': deal['createdAt'],
+          },
+          'activities': deal['activities'] ?? [],
+          'followUps': [],
+          'visits': [],
+          'testDrives': [],
+          'quotations': [],
+          'bookings': [],
+          'deliveries': [],
+          'tasks': [],
+          'stats': { 'daysOld': 0, 'followUps': 0, 'completed': 0, 'pending': 0 },
+        };
+      } else {
+        // CRM v1 lead
+        final res = await _api.getLeadDetails(widget.leadId);
+        final raw = res.data;
+        data = raw is Map ? Map<String, dynamic>.from((raw['data'] ?? raw) as Map) : {};
+      }
       if (mounted) {
         setState(() {
           _lead = Map<String, dynamic>.from((data['lead'] ?? data) as Map);
