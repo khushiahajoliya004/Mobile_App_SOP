@@ -274,6 +274,7 @@ class _CrmTestDrivesScreenState extends State<CrmTestDrivesScreen> {
             right: 16,
             bottom: 16,
             child: FloatingActionButton(
+              heroTag: null,
               backgroundColor: AppColors.primary,
               onPressed: _showCreateSheet,
               child: const Icon(Icons.add, color: Colors.white),
