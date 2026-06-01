@@ -204,7 +204,7 @@ class _CrmReceptionScreenState extends State<CrmReceptionScreen> {
     }
   }
 
-  Future<void> _confirmAssign(VoidCallback setDialogState, BuildContext dialogCtx) async {
+  Future<void> _confirmAssign(StateSetter setDialogState, BuildContext dialogCtx) async {
     if (_selectedDseId == null || _assigningLead == null) return;
     setDialogState(() => _assignLoading = true);
     try {
