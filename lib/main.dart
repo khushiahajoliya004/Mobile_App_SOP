@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'firebase_options.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/permission_onboarding_screen.dart';
 import 'screens/overlay_button.dart';
 import 'services/auth_service.dart';
 import 'services/foreground_service.dart';
+import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,6 +20,17 @@ void main() async {
       statusBarIconBrightness: Brightness.light,
     ),
   );
+
+  // Initialize Firebase with generated options
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    // Set background message handler
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  } catch (e) {
+    debugPrint('Failed to initialize Firebase: $e');
+  }
 
   // Initialize foreground service with error handling
   try {
@@ -240,6 +255,15 @@ class _AuthGateState extends State<AuthGate> {
     final prefs = await SharedPreferences.getInstance();
     final onboardingComplete =
         prefs.getBool('permissions_onboarding_complete') ?? false;
+
+    // Initialize notifications if logged in
+    if (token != null) {
+      try {
+        await NotificationService().initialize();
+      } catch (e) {
+        debugPrint('Failed to initialize notifications: $e');
+      }
+    }
 
     setState(() {
       _loggedIn = token != null;

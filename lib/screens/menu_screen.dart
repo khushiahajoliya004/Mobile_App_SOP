@@ -23,7 +23,7 @@ class MenuScreen extends StatelessWidget {
   final UserModel? user;
   const MenuScreen({super.key, this.user});
 
-  bool _can(String code) {
+    bool _can(String code) {
     if (user == null) return false;
     if (user!.isSuperAdmin || user!.isCompanyAdmin) return true;
     return user!.hasModule(code) || user!.hasPermission('${code}_VIEW');

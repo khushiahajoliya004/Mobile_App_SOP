@@ -1,6 +1,4 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
 import '../main.dart';
 import '../services/api_service.dart';
 
@@ -16,10 +14,6 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
   List<dynamic> _calls = [];
   bool _loading = true;
   String? _error;
-
-  bool _selectMode = false;
-  final Set<String> _selectedIds = {};
-  bool _downloading = false;
 
   @override
   void initState() {
@@ -48,148 +42,25 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
     }
   }
 
-  void _toggleSelectMode() {
-    setState(() {
-      _selectMode = !_selectMode;
-      _selectedIds.clear();
-    });
-  }
-
-  void _toggleSelect(String id) {
-    setState(() {
-      if (_selectedIds.contains(id)) {
-        _selectedIds.remove(id);
-      } else {
-        _selectedIds.add(id);
-      }
-    });
-  }
-
-  void _selectAll() {
-    setState(() {
-      for (final c in _calls) {
-        final id = c['id']?.toString();
-        if (id != null && c['audioUrl'] != null) _selectedIds.add(id);
-      }
-    });
-  }
-
-  Future<void> _downloadSelected() async {
-    if (_selectedIds.isEmpty) return;
-
-    if (_selectedIds.length > 50) {
-      _showSnack('Maximum 50 recordings can be downloaded at once', isError: true);
-      return;
-    }
-
-    setState(() => _downloading = true);
-
-    try {
-      final response = await _api.bulkDownloadCalls(_selectedIds.toList());
-      final bytes = response.data;
-
-      if (bytes == null || bytes.isEmpty) {
-        _showSnack('No audio files found for selected calls', isError: true);
-        setState(() => _downloading = false);
-        return;
-      }
-
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final fileName = _selectedIds.length == 1
-          ? 'recording_$timestamp.mp3'
-          : 'recordings_$timestamp.zip';
-
-      if (Platform.isAndroid) {
-        // Use the real public Downloads folder visible in Files app
-        final publicDownloads = Directory('/storage/emulated/0/Download');
-        if (!await publicDownloads.exists()) {
-          await publicDownloads.create(recursive: true);
-        }
-        final file = File('${publicDownloads.path}/$fileName');
-        await file.writeAsBytes(bytes);
-      } else {
-        final dir = await getApplicationDocumentsDirectory();
-        final file = File('${dir.path}/$fileName');
-        await file.writeAsBytes(bytes);
-      }
-
-      setState(() {
-        _downloading = false;
-        _selectMode = false;
-        _selectedIds.clear();
-      });
-
-      final location = Platform.isAndroid
-          ? 'Files app → Downloads → $fileName'
-          : 'Files app → On My iPhone → MysteryMentor → $fileName';
-      _showSnack('Saved! Open your Files app\n$location');
-    } catch (e) {
-      setState(() => _downloading = false);
-      _showSnack('Download failed. Please try again.', isError: true);
-    }
-  }
-
-  void _showSnack(String msg, {bool isError = false}) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        backgroundColor: isError ? AppColors.error : AppColors.success,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 4),
-      ),
+  void _showCallDetail(Map<String, dynamic> call) {
+    final callId = call['id'];
+    if (callId == null) return;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _CallQuickSummarySheet(callId: callId),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.scaffoldBg,
-      appBar: _buildAppBar(),
-      body: _buildBody(),
-      bottomNavigationBar: _selectMode ? _buildDownloadBar() : null,
-    );
-  }
-
-  PreferredSizeWidget _buildAppBar() {
-    return AppBar(
-      flexibleSpace: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [AppColors.gradientStart, AppColors.gradientEnd],
-          ),
-        ),
-      ),
-      title: _selectMode
-          ? Text('${_selectedIds.length} selected',
-              style: const TextStyle(color: Colors.white))
-          : const Text('Call History'),
-      actions: [
-        if (_selectMode) ...[
-          TextButton(
-            onPressed: _selectAll,
-            child: const Text('All', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-          ),
-          TextButton(
-            onPressed: _toggleSelectMode,
-            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
-          ),
-        ] else
-          IconButton(
-            onPressed: _calls.isEmpty ? null : _toggleSelectMode,
-            icon: const Icon(Icons.download_rounded, color: Colors.white),
-            tooltip: 'Select to download',
-          ),
-      ],
-    );
-  }
-
-  Widget _buildBody() {
     if (_loading) {
       return const Center(
-        child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 3),
+        child: CircularProgressIndicator(
+          color: AppColors.primary,
+          strokeWidth: 3,
+        ),
       );
     }
 
@@ -205,19 +76,34 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
                 color: AppColors.error.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.error_outline_rounded, size: 28, color: AppColors.error),
+              child: const Icon(
+                Icons.error_outline_rounded,
+                size: 28,
+                color: AppColors.error,
+              ),
             ),
             const SizedBox(height: 16),
-            Text(_error!,
-                style: const TextStyle(color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w600)),
+            Text(
+              _error!,
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             const SizedBox(height: 4),
-            const Text('Please check your connection and try again',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+            const Text(
+              'Please check your connection and try again',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            ),
             const SizedBox(height: 20),
             GestureDetector(
               onTap: _loadCalls,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
@@ -225,10 +111,20 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.refresh_rounded, size: 16, color: AppColors.primary),
+                    Icon(
+                      Icons.refresh_rounded,
+                      size: 16,
+                      color: AppColors.primary,
+                    ),
                     SizedBox(width: 8),
-                    Text('Retry',
-                        style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 14)),
+                    Text(
+                      'Retry',
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -246,15 +142,30 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
             Container(
               width: 56,
               height: 56,
-              decoration: const BoxDecoration(color: AppColors.primarySurface, shape: BoxShape.circle),
-              child: const Icon(Icons.history_rounded, size: 28, color: AppColors.primary),
+              decoration: const BoxDecoration(
+                color: AppColors.primarySurface,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.history_rounded,
+                size: 28,
+                color: AppColors.primary,
+              ),
             ),
             const SizedBox(height: 16),
-            const Text('No calls found',
-                style: TextStyle(color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w600)),
+            const Text(
+              'No calls found',
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             const SizedBox(height: 4),
-            const Text('Your call history will appear here',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+            const Text(
+              'Your call history will appear here',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            ),
           ],
         ),
       );
@@ -264,196 +175,135 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
       onRefresh: _loadCalls,
       color: AppColors.primary,
       child: ListView.builder(
-        padding: EdgeInsets.only(
-          left: 16, right: 16, top: 16,
-          bottom: _selectMode ? 100 : 16,
-        ),
+        padding: const EdgeInsets.all(16),
         itemCount: _calls.length,
-        itemBuilder: (context, index) => _buildCallCard(_calls[index]),
-      ),
-    );
-  }
+        itemBuilder: (context, index) {
+          final call = _calls[index];
+          final customerName = call['customerName'] ?? 'Unknown';
+          final categoryName = call['category']?['name'] ?? '';
+          final stageName = call['salesStage']?['name'] ?? '';
+          final analysisStatus = call['analysisStatus'] ?? 'PENDING';
+          final sopScore = call['sopScore'];
+          final date = call['createdAt'] ?? '';
+          final userName = call['user'] != null
+              ? '${call['user']['firstName'] ?? ''} ${call['user']['lastName'] ?? ''}'
+                    .trim()
+              : '';
 
-  Widget _buildCallCard(dynamic call) {
-    final id = call['id']?.toString() ?? '';
-    final customerName = call['customerName'] ?? 'Unknown';
-    final categoryName = call['category']?['name'] ?? '';
-    final stageName = call['salesStage']?['name'] ?? '';
-    final analysisStatus = call['analysisStatus'] ?? 'PENDING';
-    final sopScore = call['sopScore'];
-    final date = call['createdAt'] ?? '';
-    final hasAudio = call['audioUrl'] != null;
-    final userName = call['user'] != null
-        ? '${call['user']['firstName'] ?? ''} ${call['user']['lastName'] ?? ''}'.trim()
-        : '';
-    final isSelected = _selectedIds.contains(id);
-
-    return GestureDetector(
-      onTap: _selectMode && hasAudio ? () => _toggleSelect(id) : null,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: _selectMode && isSelected
-              ? Border.all(color: AppColors.primary, width: 2)
-              : Border.all(color: Colors.transparent),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              // Checkbox or avatar
-              if (_selectMode) ...[
-                Checkbox(
-                  value: isSelected,
-                  onChanged: hasAudio ? (_) => _toggleSelect(id) : null,
-                  activeColor: AppColors.primary,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                ),
-                const SizedBox(width: 8),
-              ],
-              // Avatar
-              if (!_selectMode)
-                Container(
-                  width: 46,
-                  height: 46,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [AppColors.primary, AppColors.primaryLight],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(14),
+          return GestureDetector(
+            onTap: () => _showCallDetail(Map<String, dynamic>.from(call)),
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
                   ),
-                  child: Center(
-                    child: Text(
-                      customerName.isNotEmpty ? customerName[0].toUpperCase() : '?',
-                      style: const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.w700, fontSize: 18),
-                    ),
-                  ),
-                ),
-              if (!_selectMode) const SizedBox(width: 14),
-              // Content
-              Expanded(
+                ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
+                        // Avatar
+                        Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [
+                                AppColors.primary,
+                                AppColors.primaryLight,
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Center(
+                            child: Text(
+                              customerName.isNotEmpty
+                                  ? customerName[0].toUpperCase()
+                                  : '?',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 18,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        // Name + user
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(customerName,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 14,
-                                    color: AppColors.textPrimary,
-                                  )),
+                              Text(
+                                customerName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
                               if (userName.isNotEmpty)
                                 Padding(
                                   padding: const EdgeInsets.only(top: 2),
-                                  child: Text('by $userName',
-                                      style: const TextStyle(color: AppColors.textHint, fontSize: 11)),
+                                  child: Text(
+                                    'by $userName',
+                                    style: const TextStyle(
+                                      color: AppColors.textHint,
+                                      fontSize: 11,
+                                    ),
+                                  ),
                                 ),
                             ],
                           ),
                         ),
+                        // Status badge
                         _buildStatusBadge(analysisStatus),
                       ],
                     ),
                     const SizedBox(height: 12),
+                    // Tags row
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
                       children: [
                         if (sopScore != null) _buildScoreBadge(sopScore),
                         if (categoryName.isNotEmpty)
-                          _buildTag(Icons.label_rounded, categoryName, AppColors.primary),
+                          _buildTag(
+                            Icons.label_rounded,
+                            categoryName,
+                            AppColors.primary,
+                          ),
                         if (stageName.isNotEmpty)
-                          _buildTag(Icons.flag_rounded, stageName, AppColors.accent),
-                        _buildTag(Icons.calendar_today_rounded, _formatDate(date), AppColors.textSecondary),
-                        if (!hasAudio && _selectMode)
-                          _buildTag(Icons.no_photography_rounded, 'No audio', AppColors.error),
+                          _buildTag(
+                            Icons.flag_rounded,
+                            stageName,
+                            AppColors.accent,
+                          ),
+                        _buildTag(
+                          Icons.calendar_today_rounded,
+                          _formatDate(date),
+                          AppColors.textSecondary,
+                        ),
                       ],
                     ),
                   ],
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDownloadBar() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.1),
-            blurRadius: 20,
-            offset: const Offset(0, -4),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          width: double.infinity,
-          height: 52,
-          child: ElevatedButton(
-            onPressed: _selectedIds.isEmpty || _downloading ? null : _downloadSelected,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              disabledBackgroundColor: AppColors.textHint.withValues(alpha: 0.3),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              elevation: 0,
             ),
-            child: _downloading
-                ? const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                      ),
-                      SizedBox(width: 10),
-                      Text('Downloading...', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-                    ],
-                  )
-                : Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.download_rounded, color: Colors.white, size: 20),
-                      const SizedBox(width: 8),
-                      Text(
-                        _selectedIds.isEmpty
-                            ? 'Select recordings to download'
-                            : 'Download ${_selectedIds.length} Recording${_selectedIds.length == 1 ? '' : 's'}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
-        ),
+          ); // close GestureDetector
+        },
       ),
     );
   }
@@ -480,8 +330,14 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
         children: [
           Icon(Icons.score_rounded, size: 12, color: color),
           const SizedBox(width: 4),
-          Text('$numScore%',
-              style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700)),
+          Text(
+            '$numScore%',
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ],
       ),
     );
@@ -518,8 +374,14 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
         children: [
           Icon(icon, size: 12, color: color),
           const SizedBox(width: 4),
-          Text(status,
-              style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w700)),
+          Text(
+            status,
+            style: TextStyle(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ],
       ),
     );
@@ -537,8 +399,14 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
         children: [
           Icon(icon, size: 12, color: color.withValues(alpha: 0.8)),
           const SizedBox(width: 5),
-          Text(text,
-              style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
+          Text(
+            text,
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
@@ -551,5 +419,374 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
     } catch (_) {
       return dateStr;
     }
+  }
+}
+
+// ═══ CALL QUICK SUMMARY BOTTOM SHEET ════════════════════════════════════════
+class _CallQuickSummarySheet extends StatefulWidget {
+  final String callId;
+  const _CallQuickSummarySheet({required this.callId});
+  @override
+  State<_CallQuickSummarySheet> createState() => _CallQuickSummarySheetState();
+}
+
+class _CallQuickSummarySheetState extends State<_CallQuickSummarySheet> {
+  final _api = ApiService();
+  bool _loading = true;
+  Map<String, dynamic> _detail = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final res = await _api.getAiInsightDetail(widget.callId);
+      final raw = res.data;
+      _detail = raw is Map ? Map<String, dynamic>.from(raw['data'] ?? raw) : {};
+    } catch (_) {}
+    if (mounted) setState(() => _loading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.65,
+      maxChildSize: 0.92,
+      minChildSize: 0.35,
+      builder: (_, scrollCtrl) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: _loading
+              ? const Center(
+                  child: CircularProgressIndicator(color: AppColors.primary),
+                )
+              : ListView(
+                  controller: scrollCtrl,
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceLight,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildHeader(),
+                    const SizedBox(height: 16),
+                    _buildSectionScores(),
+                    const SizedBox(height: 16),
+                    _buildSummary(),
+                    const SizedBox(height: 16),
+                    _buildKeyPoints(),
+                  ],
+                ),
+        );
+      },
+    );
+  }
+
+  Widget _buildHeader() {
+    final score = _detail['sopScore'] != null ? num.tryParse(_detail['sopScore'].toString()) : null;
+    final name = _detail['customerName'] ?? 'Unknown';
+    final status = _detail['analysisStatus'] ?? '';
+    final category = _detail['category']?['name'] ?? '';
+    final duration = _detail['durationSeconds'] != null
+        ? '${((_detail['durationSeconds'] as num) / 60).floor()}:${((_detail['durationSeconds'] as num).toInt() % 60).toString().padLeft(2, '0')}'
+        : '';
+
+    final scoreColor = score != null
+        ? (score >= 70
+              ? AppColors.success
+              : score >= 40
+              ? AppColors.warning
+              : AppColors.error)
+        : AppColors.textHint;
+
+    return Row(
+      children: [
+        Container(
+          width: 60,
+          height: 60,
+          decoration: BoxDecoration(
+            color: score != null
+                ? scoreColor.withValues(alpha: 0.1)
+                : AppColors.surfaceLight,
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: score != null
+                ? Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '${score!.round()}',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: scoreColor,
+                        ),
+                      ),
+                      Text(
+                        '%',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: scoreColor.withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ],
+                  )
+                : Icon(
+                    status == 'PROCESSING'
+                        ? Icons.hourglass_top
+                        : Icons.schedule,
+                    size: 24,
+                    color: AppColors.textHint,
+                  ),
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 8,
+                children: [
+                  if (category.isNotEmpty)
+                    Text(
+                      category,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  if (duration.isNotEmpty)
+                    Text(
+                      '⏱ $duration',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textHint,
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSectionScores() {
+    final sections = (_detail['sectionScores'] ?? []) as List;
+    if (sections.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Section Scores',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 10),
+        ...sections.map((s) {
+          final sec = Map<String, dynamic>.from(s);
+          final secScore = (sec['score'] ?? 0) as num;
+          final secName = sec['title'] ?? sec['sectionName'] ?? '';
+          final color = secScore >= 70
+              ? AppColors.success
+              : secScore >= 40
+              ? AppColors.warning
+              : AppColors.error;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        secName,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(3),
+                        child: LinearProgressIndicator(
+                          value: secScore / 100,
+                          minHeight: 6,
+                          backgroundColor: color.withValues(alpha: 0.1),
+                          valueColor: AlwaysStoppedAnimation(color),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  '${secScore.toInt()}%',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: color,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildSummary() {
+    final ai = _detail['aiAnalysis'] as Map<String, dynamic>? ?? {};
+    final summary = ai['summary'] ?? ai['callSummary'] ?? '';
+    if (summary.toString().isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(
+              Icons.summarize_rounded,
+              size: 14,
+              color: AppColors.primary,
+            ),
+            const SizedBox(width: 6),
+            const Text(
+              'Quick Summary',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppColors.primarySurface,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            summary.toString(),
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+              height: 1.5,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildKeyPoints() {
+    final ai = _detail['aiAnalysis'] as Map<String, dynamic>? ?? {};
+    final raw = ai['keyDiscussionPoints'] ?? ai['keyPoints'] ?? [];
+
+    List<String> points = [];
+    if (raw is List) {
+      points = raw.map((e) => e.toString()).toList();
+    } else if (raw is Map) {
+      raw.forEach((key, value) {
+        if (value is List) {
+          points.addAll(value.map((e) => e.toString()));
+        } else if (value is String &&
+            value.isNotEmpty &&
+            value != 'N/A' &&
+            value != 'Not Discussed') {
+          points.add('$key: $value');
+        }
+      });
+    }
+    if (points.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(
+              Icons.list_alt_rounded,
+              size: 14,
+              color: AppColors.success,
+            ),
+            const SizedBox(width: 6),
+            const Text(
+              'Key Points',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ...points
+            .take(5)
+            .map(
+              (p) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.only(top: 4),
+                      child: Icon(
+                        Icons.check_circle_outline,
+                        size: 14,
+                        color: AppColors.success,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        p,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+      ],
+    );
   }
 }

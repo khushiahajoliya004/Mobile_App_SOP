@@ -5,7 +5,7 @@ class ApiService {
   // Backend runs on port 3000, no /api prefix
   // For Android emulator use 10.0.2.2, for real device use your machine IP
   // static const String baseUrl = 'https://api.mysterymentor.in';
-  static const String baseUrl = 'http://192.168.1.8:3000';
+  static const String baseUrl = 'http://192.168.1.14:3000';
 
   late final Dio _dio;
   final AuthService _auth = AuthService();
@@ -190,17 +190,6 @@ class ApiService {
   /// PATCH /calls/:id/reject
   Future<Response> rejectCall(String id) async {
     return _dio.patch('/calls/$id/reject');
-  }
-
-  /// POST /calls/bulk-download
-  /// Downloads multiple call recordings as a ZIP file (max 50)
-  /// Returns raw bytes response
-  Future<Response<List<int>>> bulkDownloadCalls(List<String> callIds) async {
-    return _dio.post<List<int>>(
-      '/calls/bulk-download',
-      data: {'callIds': callIds},
-      options: Options(responseType: ResponseType.bytes),
-    );
   }
 
   // ─── Categories ───
@@ -581,8 +570,13 @@ class ApiService {
   // ─── Dashboard ───
 
   /// GET /dashboard/company
-  Future<Response> getCompanyDashboard({String period = 'all'}) async {
+  Future<Response> getCompanyDashboard({String period = '30d'}) async {
     return _dio.get('/dashboard/company', queryParameters: {'period': period});
+  }
+
+  /// GET /dashboard/my — personal dashboard for logged-in user
+  Future<Response> getMyDashboard({String period = '30d'}) async {
+    return _dio.get('/dashboard/my', queryParameters: {'period': period});
   }
 
   // ─── Users ───
@@ -1414,6 +1408,19 @@ class ApiService {
   }
 
   // ─── Generic CRUD ───
+
+  /// POST /notifications/register-token — register FCM token
+  Future<Response> registerFcmToken(String token) async {
+    return _dio.post(
+      '/notifications/register-token',
+      data: {'token': token, 'platform': 'android'},
+    );
+  }
+
+  /// POST /notifications/unregister-token — unregister FCM token
+  Future<Response> unregisterFcmToken(String token) async {
+    return _dio.post('/notifications/unregister-token', data: {'token': token});
+  }
 
   Future<Response> genericGet(
     String endpoint, {

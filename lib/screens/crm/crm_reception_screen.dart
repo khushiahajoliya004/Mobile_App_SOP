@@ -100,13 +100,16 @@ class _CrmReceptionScreenState extends State<CrmReceptionScreen> {
         if (newLead['id'] != null) {
           Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (_) => CrmLeadDetailScreen(
+            PageRouteBuilder(
+              opaque: true,
+              pageBuilder: (_, __, ___) => CrmLeadDetailScreen(
                 leadId: newLead['id'].toString(),
                 leadName: _nameCtrl.text.trim().isEmpty
                     ? newLead['customerName']?.toString() ?? 'New Lead'
                     : _nameCtrl.text.trim(),
               ),
+              transitionsBuilder: (_, animation, __, child) =>
+                  FadeTransition(opacity: animation, child: child),
             ),
           );
         }
@@ -481,11 +484,14 @@ class _CrmReceptionScreenState extends State<CrmReceptionScreen> {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) => CrmLeadDetailScreen(
+                  PageRouteBuilder(
+                    opaque: true,
+                    pageBuilder: (_, __, ___) => CrmLeadDetailScreen(
                       leadId: lead['id'].toString(),
                       leadName: lead['customerName']?.toString() ?? 'Lead',
                     ),
+                    transitionsBuilder: (_, animation, __, child) =>
+                        FadeTransition(opacity: animation, child: child),
                   ),
                 );
               },
