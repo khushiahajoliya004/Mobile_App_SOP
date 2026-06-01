@@ -848,6 +848,10 @@ class ApiService {
     );
   }
 
+  Future<Response> getVisitsByLead(String leadId) async {
+    return _dio.get('/visits', queryParameters: {'leadId': leadId});
+  }
+
   Future<Response> completeVisit(
     String id, {
     String? customerFeedback,
