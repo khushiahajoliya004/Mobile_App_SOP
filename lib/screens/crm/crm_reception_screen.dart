@@ -40,8 +40,7 @@ class _CrmReceptionScreenState extends State<CrmReceptionScreen> {
   bool _submitting = false;
   Map<String, dynamic>? _createdLead;
 
-  // Assign popup
-  bool _showAssignPopup = false;
+  // Assign
   Map<String, dynamic>? _assigningLead;
   List<Map<String, dynamic>> _branchTeam = [];
   String? _selectedDseId;
@@ -153,14 +152,30 @@ class _CrmReceptionScreenState extends State<CrmReceptionScreen> {
   }
 
   Future<void> _openAssignPopup(Map<String, dynamic> lead) async {
-    setState(() {
-      _assigningLead = lead;
-      _selectedDseId = lead['assignedToUserId']?.toString();
-      _assignSuccess = false;
-      _branchTeam = [];
-      _showAssignPopup = true;
-      _teamLoading = true;
-    });
+    _assigningLead = lead;
+    _selectedDseId = lead['assignedToUserId']?.toString();
+    _assignSuccess = false;
+    _assignLoading = false;
+    _branchTeam = [];
+    _teamLoading = true;
+
+    // Show dialog immediately, then load team in background
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return Dialog(
+            backgroundColor: Colors.transparent,
+            insetPadding: const EdgeInsets.all(24),
+            child: _buildAssignDialogContent(setDialogState, ctx),
+          );
+        },
+      ),
+    );
+
+    // Load team
     try {
       final branchId = lead['branchId']?.toString() ?? (lead['branch'] is Map ? lead['branch']['id']?.toString() : null);
       List<Map<String, dynamic>> team = [];
@@ -179,24 +194,28 @@ class _CrmReceptionScreenState extends State<CrmReceptionScreen> {
         final list = raw is List ? raw : (raw is Map ? (raw['data'] ?? []) as List : []);
         team = list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
       }
-      if (mounted) setState(() { _branchTeam = team; _teamLoading = false; });
+      if (mounted) {
+        _branchTeam = team;
+        _teamLoading = false;
+        setState(() {}); // triggers StatefulBuilder in dialog to rebuild
+      }
     } catch (_) {
-      if (mounted) setState(() => _teamLoading = false);
+      if (mounted) { _teamLoading = false; setState(() {}); }
     }
   }
 
-  Future<void> _confirmAssign() async {
+  Future<void> _confirmAssign(VoidCallback setDialogState, BuildContext dialogCtx) async {
     if (_selectedDseId == null || _assigningLead == null) return;
-    setState(() => _assignLoading = true);
+    setDialogState(() => _assignLoading = true);
     try {
       await _api.assignLead(_assigningLead!['id'].toString(), _selectedDseId!);
       if (mounted) {
-        setState(() { _assignLoading = false; _assignSuccess = true; });
+        setDialogState(() { _assignLoading = false; _assignSuccess = true; });
         await Future.delayed(const Duration(milliseconds: 1500));
-        if (mounted) setState(() => _showAssignPopup = false);
+        if (mounted && Navigator.canPop(dialogCtx)) Navigator.pop(dialogCtx);
       }
     } catch (e) {
-      if (mounted) { setState(() => _assignLoading = false); _showSnack('Failed: $e'); }
+      if (mounted) { setDialogState(() => _assignLoading = false); _showSnack('Failed: $e'); }
     }
   }
 
@@ -207,7 +226,7 @@ class _CrmReceptionScreenState extends State<CrmReceptionScreen> {
       _altMobileCtrl.clear(); _modelCtrl.clear(); _budgetCtrl.clear(); _notesCtrl.clear();
       _source = 'Walk-in'; _priority = 'MEDIUM'; _showMore = false;
       _dupClean = null; _dupLeads = []; _createdLead = null;
-      _showAssignPopup = false; _assigningLead = null; _branchTeam = [];
+      _assigningLead = null; _branchTeam = [];
     });
   }
 
@@ -220,24 +239,18 @@ class _CrmReceptionScreenState extends State<CrmReceptionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildHeader(),
-              const SizedBox(height: 20),
-              if (_step == 'duplicate') _buildDuplicateStep(),
-              if (_step == 'success') _buildSuccessStep(),
-              if (_step == 'form') _buildFormStep(),
-            ],
-          ),
-        ),
-        if (_showAssignPopup) _buildAssignOverlay(),
-      ],
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildHeader(),
+          const SizedBox(height: 20),
+          if (_step == 'duplicate') _buildDuplicateStep(),
+          if (_step == 'success') _buildSuccessStep(),
+          if (_step == 'form') _buildFormStep(),
+        ],
+      ),
     );
   }
 
@@ -782,169 +795,140 @@ class _CrmReceptionScreenState extends State<CrmReceptionScreen> {
     );
   }
 
-  // ─── Assign Popup Overlay ───
+  // ─── Assign Dialog ───
 
-  Widget _buildAssignOverlay() {
-    return GestureDetector(
-      onTap: () => setState(() => _showAssignPopup = false),
-      child: Container(
-        color: Colors.black54,
-        child: Center(
-          child: GestureDetector(
-            onTap: () {},
-            child: Container(
-              margin: const EdgeInsets.all(24),
-              padding: const EdgeInsets.all(0),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+  Widget _buildAssignDialogContent(StateSetter setDialogState, BuildContext dialogCtx) {
+    return Container(
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.fromLTRB(20, 18, 16, 16),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(colors: [Color(0xFF312E81), AppColors.primary]),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.person_add_alt_1_rounded, color: Colors.white, size: 20),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text('Assign Salesman',
+                      style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white70),
+                  onPressed: () => Navigator.pop(dialogCtx),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+          ),
+          if (_assigningLead != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: Row(
                 children: [
-                  // Header
-                  Container(
-                    padding: const EdgeInsets.fromLTRB(20, 18, 16, 16),
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(colors: [Color(0xFF312E81), AppColors.primary]),
-                      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.person_add_alt_1_rounded, color: Colors.white, size: 20),
-                        const SizedBox(width: 10),
-                        const Expanded(
-                          child: Text('Assign Salesman',
-                              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close, color: Colors.white70),
-                          onPressed: () => setState(() => _showAssignPopup = false),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  if (_assigningLead != null)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                      child: Row(
-                        children: [
-                          _chip(_assigningLead!['customerName']?.toString() ?? '', AppColors.primary),
-                          const SizedBox(width: 8),
-                          _chip(_assigningLead!['phone']?.toString() ?? '', AppColors.textSecondary),
-                        ],
-                      ),
-                    ),
-
-                  if (_assignSuccess)
-                    Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        children: [
-                          const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 48),
-                          const SizedBox(height: 10),
-                          const Text('Salesman assigned successfully!',
-                              style: TextStyle(color: AppColors.success, fontWeight: FontWeight.w700)),
-                        ],
-                      ),
-                    )
-                  else ...[
-                    if (_teamLoading)
-                      const Padding(
-                        padding: EdgeInsets.all(32),
-                        child: Column(
-                          children: [
-                            CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2),
-                            SizedBox(height: 10),
-                            Text('Loading team...', style: TextStyle(color: AppColors.textHint)),
-                          ],
-                        ),
-                      )
-                    else if (_branchTeam.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.all(24),
-                        child: Text('No salesmen found.', style: TextStyle(color: AppColors.textHint)),
-                      )
-                    else
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxHeight: 280),
-                        child: ListView.separated(
-                          shrinkWrap: true,
-                          padding: const EdgeInsets.fromLTRB(0, 12, 0, 0),
-                          itemCount: _branchTeam.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1, indent: 16, endIndent: 16),
-                          itemBuilder: (_, i) {
-                            final m = _branchTeam[i];
-                            final id = m['userId']?.toString() ?? m['id']?.toString();
-                            final user = m['user'] is Map ? m['user'] as Map : m;
-                            final name = '${user['firstName'] ?? ''} ${user['lastName'] ?? ''}'.trim();
-                            final role = m['branchRole']?.toString() ?? user['email']?.toString() ?? '';
-                            final isSelected = _selectedDseId == id;
-                            return ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: isSelected
-                                    ? AppColors.primary
-                                    : AppColors.primary.withValues(alpha: 0.1),
-                                child: Text(
-                                  (name.isNotEmpty ? name[0] : '?').toUpperCase(),
-                                  style: TextStyle(
-                                    color: isSelected ? Colors.white : AppColors.primary,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                              title: Text(name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                              subtitle: Text(role, style: const TextStyle(fontSize: 12, color: AppColors.textHint)),
-                              trailing: isSelected
-                                  ? const Icon(Icons.check_circle_rounded, color: AppColors.primary)
-                                  : null,
-                              onTap: () => setState(() => _selectedDseId = id),
-                            );
-                          },
-                        ),
-                      ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () => setState(() => _showAssignPopup = false),
-                              style: OutlinedButton.styleFrom(
-                                side: BorderSide(color: AppColors.textHint.withValues(alpha: 0.5)),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                padding: const EdgeInsets.symmetric(vertical: 13),
-                              ),
-                              child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: FilledButton(
-                              onPressed: (_selectedDseId == null || _assignLoading) ? null : _confirmAssign,
-                              style: FilledButton.styleFrom(
-                                backgroundColor: AppColors.primary,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                padding: const EdgeInsets.symmetric(vertical: 13),
-                              ),
-                              child: _assignLoading
-                                  ? const SizedBox(width: 18, height: 18,
-                                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                                  : const Text('Assign', style: TextStyle(fontWeight: FontWeight.w700)),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                  _chip(_assigningLead!['customerName']?.toString() ?? '', AppColors.primary),
+                  const SizedBox(width: 8),
+                  _chip(_assigningLead!['phone']?.toString() ?? '', AppColors.textSecondary),
                 ],
               ),
             ),
-          ),
-        ),
+          if (_assignSuccess)
+            const Padding(
+              padding: EdgeInsets.all(24),
+              child: Column(
+                children: [
+                  Icon(Icons.check_circle_rounded, color: AppColors.success, size: 48),
+                  SizedBox(height: 10),
+                  Text('Salesman assigned successfully!',
+                      style: TextStyle(color: AppColors.success, fontWeight: FontWeight.w700)),
+                ],
+              ),
+            )
+          else ...[
+            if (_teamLoading)
+              const Padding(
+                padding: EdgeInsets.all(32),
+                child: Column(children: [
+                  CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2),
+                  SizedBox(height: 10),
+                  Text('Loading team...', style: TextStyle(color: AppColors.textHint)),
+                ]),
+              )
+            else if (_branchTeam.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(24),
+                child: Text('No salesmen found.', style: TextStyle(color: AppColors.textHint)),
+              )
+            else
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 280),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.fromLTRB(0, 12, 0, 0),
+                  itemCount: _branchTeam.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1, indent: 16, endIndent: 16),
+                  itemBuilder: (_, i) {
+                    final m = _branchTeam[i];
+                    final id = m['userId']?.toString() ?? m['id']?.toString();
+                    final user = m['user'] is Map ? m['user'] as Map : m;
+                    final name = '${user['firstName'] ?? ''} ${user['lastName'] ?? ''}'.trim();
+                    final role = m['branchRole']?.toString() ?? user['email']?.toString() ?? '';
+                    final isSelected = _selectedDseId == id;
+                    return ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: isSelected ? AppColors.primary : AppColors.primary.withValues(alpha: 0.1),
+                        child: Text((name.isNotEmpty ? name[0] : '?').toUpperCase(),
+                            style: TextStyle(color: isSelected ? Colors.white : AppColors.primary, fontWeight: FontWeight.w700)),
+                      ),
+                      title: Text(name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                      subtitle: Text(role, style: const TextStyle(fontSize: 12, color: AppColors.textHint)),
+                      trailing: isSelected ? const Icon(Icons.check_circle_rounded, color: AppColors.primary) : null,
+                      onTap: () { setState(() => _selectedDseId = id); setDialogState(() {}); },
+                    );
+                  },
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(dialogCtx),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: AppColors.textHint.withValues(alpha: 0.5)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                      ),
+                      child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: (_selectedDseId == null || _assignLoading)
+                          ? null
+                          : () => _confirmAssign(setDialogState, dialogCtx),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                      ),
+                      child: _assignLoading
+                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                          : const Text('Assign', style: TextStyle(fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
