@@ -753,6 +753,13 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
                       controller: _phoneController,
                       keyboardType: TextInputType.phone,
                       style: const TextStyle(color: AppColors.textPrimary),
+                      onChanged: (v) {
+                        // Auto-lookup when 10 digits entered
+                        if (v.trim().length >= 10 && !_lookingUp) {
+                          _lookupPhone();
+                        }
+                      },
+                      onSubmitted: (_) => _lookupPhone(),
                       decoration: InputDecoration(
                         labelText: 'Phone (optional)',
                         hintText: 'Lookup existing lead',

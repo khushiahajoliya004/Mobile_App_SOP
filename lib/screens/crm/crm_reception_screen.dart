@@ -221,20 +221,19 @@ class _CrmReceptionScreenState extends State<CrmReceptionScreen> {
   @override
   Widget build(BuildContext context) {
     return Stack(
+      fit: StackFit.expand,
       children: [
-        SizedBox.expand(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _buildHeader(),
-                const SizedBox(height: 20),
-                if (_step == 'duplicate') _buildDuplicateStep(),
-                if (_step == 'success') _buildSuccessStep(),
-                if (_step == 'form') _buildFormStep(),
-              ],
-            ),
+        SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildHeader(),
+              const SizedBox(height: 20),
+              if (_step == 'duplicate') _buildDuplicateStep(),
+              if (_step == 'success') _buildSuccessStep(),
+              if (_step == 'form') _buildFormStep(),
+            ],
           ),
         ),
         if (_showAssignPopup) _buildAssignOverlay(),
