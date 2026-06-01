@@ -5,7 +5,7 @@ class ApiService {
   // Backend runs on port 3000, no /api prefix
   // For Android emulator use 10.0.2.2, for real device use your machine IP
   // static const String baseUrl = 'https://api.mysterymentor.in';
-  static const String baseUrl = 'http://192.168.1.9:3000';
+  static const String baseUrl = 'http://192.168.1.8:3000';
 
   late final Dio _dio;
   final AuthService _auth = AuthService();

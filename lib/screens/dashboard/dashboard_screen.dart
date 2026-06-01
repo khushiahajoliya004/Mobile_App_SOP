@@ -16,6 +16,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   final _api = ApiService();
   final _auth = AuthService();
   bool _loading = true;
+  String? _error;
   Map<String, dynamic> _data = {};
   UserModel? _user;
   String _selectedPeriod = '30d';
@@ -49,17 +50,23 @@ class _DashboardScreenState extends State<DashboardScreen>
     try {
       final res = await _api.getCompanyDashboard(period: _selectedPeriod);
       final raw = res.data;
-      final dataMap = raw is Map ? Map<String, dynamic>.from(raw['data'] ?? raw) : <String, dynamic>{};
-      final stats = Map<String, dynamic>.from(dataMap['stats'] as Map? ?? {});
+      // Handle: raw, raw['data'], or raw['data']['stats'] nesting
+      final dataMap = raw is Map
+          ? Map<String, dynamic>.from(raw['data'] ?? raw)
+          : <String, dynamic>{};
+      // If backend wraps stats under a 'stats' key, unwrap it; otherwise use dataMap directly
+      final stats = dataMap['stats'] is Map
+          ? Map<String, dynamic>.from(dataMap['stats'] as Map)
+          : dataMap;
       _data = {
         ...stats,
-        // fix key name differences between backend and UI
-        'activeSops': stats['totalSops'],
-        'credits': stats['creditsRemaining'],
-        'recentCalls': dataMap['recentCalls'],
+        'activeSops': stats['activeSops'] ?? stats['totalSops'],
+        'credits': stats['credits'] ?? stats['creditsRemaining'],
+        'recentCalls': dataMap['recentCalls'] ?? stats['recentCalls'],
       };
-    } catch (_) {
+    } catch (e) {
       _data = {};
+      _error = e.toString();
     }
     if (mounted) {
       setState(() => _loading = false);
@@ -81,6 +88,49 @@ class _DashboardScreenState extends State<DashboardScreen>
               child: CircularProgressIndicator(
                 color: AppColors.primary,
                 strokeWidth: 3,
+              ),
+            )
+          : _error != null
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.cloud_off_rounded,
+                      size: 56,
+                      color: AppColors.textHint,
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Failed to load dashboard',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _error!,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textHint,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    FilledButton.icon(
+                      onPressed: () {
+                        setState(() { _error = null; });
+                        _loadAll();
+                      },
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Retry'),
+                    ),
+                  ],
+                ),
               ),
             )
           : FadeTransition(
