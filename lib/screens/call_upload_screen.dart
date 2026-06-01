@@ -1,13 +1,42 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../main.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../models/user_model.dart';
 
 enum AudioSource { local, device }
+
+class _MediaStoreFile {
+  final String name;
+  final String path;
+  final int size;
+  final int durationMs;
+  final int dateModifiedSec;
+
+  const _MediaStoreFile({
+    required this.name,
+    required this.path,
+    required this.size,
+    required this.durationMs,
+    required this.dateModifiedSec,
+  });
+
+  factory _MediaStoreFile.fromMap(Map map) => _MediaStoreFile(
+        name: map['name'] as String? ?? 'Unknown',
+        path: map['path'] as String? ?? '',
+        size: (map['size'] as num?)?.toInt() ?? 0,
+        durationMs: (map['duration'] as num?)?.toInt() ?? 0,
+        dateModifiedSec: (map['dateModified'] as num?)?.toInt() ?? 0,
+      );
+
+  DateTime get dateTime =>
+      DateTime.fromMillisecondsSinceEpoch(dateModifiedSec * 1000);
+}
 
 class CallUploadScreen extends StatefulWidget {
   const CallUploadScreen({super.key});
@@ -17,9 +46,13 @@ class CallUploadScreen extends StatefulWidget {
 }
 
 class _CallUploadScreenState extends State<CallUploadScreen> {
+  static const _recorderChannel =
+      MethodChannel('com.callrecorder/native_recorder');
+
   final _api = ApiService();
   final _auth = AuthService();
   final _customerNameController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _notesController = TextEditingController();
 
   UserModel? _user;
@@ -27,6 +60,11 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
   bool _loadingData = true;
   String? _statusMessage;
   bool _isError = false;
+
+  // Phone lookup state
+  bool _lookingUp = false;
+  String? _linkedLeadId;
+  String? _linkedLeadName;
 
   // SOP-resolved fields (fetched automatically from user's assigned SOP)
   String? _sopCategoryId;
@@ -39,7 +77,8 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
   AudioSource _audioSource = AudioSource.local;
   List<File> _localRecordings = [];
   File? _selectedLocalRecording;
-  PlatformFile? _selectedDeviceFile;
+  _MediaStoreFile? _selectedDeviceFile;
+  bool _isLoadingMediaStore = false;
 
   @override
   void initState() {
@@ -111,17 +150,243 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
     return '$sizeKb KB  •  ${d.day}/${d.month}/${d.year} ${d.hour}:${d.minute.toString().padLeft(2, '0')}';
   }
 
-  Future<void> _pickDeviceFile() async {
+  Future<List<_MediaStoreFile>> _queryMediaStoreAudio() async {
+    try {
+      if (Platform.isAndroid) {
+        await [Permission.audio, Permission.storage].request();
+      }
+      final List? result =
+          await _recorderChannel.invokeMethod('queryAudioFiles');
+      if (result == null) return [];
+      return result.map((e) => _MediaStoreFile.fromMap(e as Map)).toList();
+    } catch (e) {
+      debugPrint('[MediaStore] $e');
+      return [];
+    }
+  }
+
+  Future<void> _showAudioFilePicker() async {
+    setState(() => _isLoadingMediaStore = true);
+    final files = await _queryMediaStoreAudio();
+    if (mounted) setState(() => _isLoadingMediaStore = false);
+    if (!mounted) return;
+
+    if (files.isEmpty) {
+      await _pickDeviceFileFallback();
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _buildAudioPickerSheet(files),
+    );
+  }
+
+  Future<void> _pickDeviceFileFallback() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'wma'],
     );
     if (result != null && result.files.isNotEmpty) {
-      setState(() {
-        _selectedDeviceFile = result.files.first;
-        _statusMessage = null;
-      });
+      final pf = result.files.first;
+      if (mounted) {
+        setState(() {
+          _selectedDeviceFile = _MediaStoreFile(
+            name: pf.name,
+            path: pf.path ?? '',
+            size: pf.size,
+            durationMs: 0,
+            dateModifiedSec: 0,
+          );
+          _statusMessage = null;
+        });
+      }
     }
+  }
+
+  Widget _buildAudioPickerSheet(List<_MediaStoreFile> files) {
+    String query = '';
+    return StatefulBuilder(
+      builder: (ctx, setSheetState) {
+        final filtered = query.isEmpty
+            ? files
+            : files
+                .where((f) =>
+                    f.name.toLowerCase().contains(query.toLowerCase()))
+                .toList();
+        return DraggableScrollableSheet(
+          initialChildSize: 0.75,
+          maxChildSize: 0.95,
+          minChildSize: 0.4,
+          builder: (_, scrollController) => Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Column(
+              children: [
+                Center(
+                  child: Container(
+                    margin: const EdgeInsets.only(top: 12, bottom: 8),
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: Row(
+                    children: [
+                      const Text(
+                        'Select Audio File',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '${filtered.length} files',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textHint,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: TextField(
+                    onChanged: (v) => setSheetState(() => query = v),
+                    decoration: InputDecoration(
+                      hintText: 'Search audio files...',
+                      prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                      contentPadding:
+                          const EdgeInsets.symmetric(vertical: 10),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide:
+                            BorderSide(color: Colors.grey.shade200),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide:
+                            BorderSide(color: Colors.grey.shade200),
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: filtered.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'No files found',
+                            style:
+                                TextStyle(color: AppColors.textHint),
+                          ),
+                        )
+                      : ListView.separated(
+                          controller: scrollController,
+                          padding: const EdgeInsets.only(bottom: 20),
+                          itemCount: filtered.length + 1,
+                          separatorBuilder: (_, __) => Divider(
+                            color: Colors.grey.shade100,
+                            height: 1,
+                          ),
+                          itemBuilder: (_, i) {
+                            if (i == filtered.length) {
+                              return _buildFallbackButton(ctx);
+                            }
+                            return _buildAudioFileItem(
+                                filtered[i], ctx);
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildAudioFileItem(
+      _MediaStoreFile file, BuildContext sheetCtx) {
+    final d = file.dateTime;
+    final dateStr =
+        '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+    final sizeStr = _formatFileSize(file.size);
+    final dur = Duration(milliseconds: file.durationMs);
+    final durationStr = file.durationMs > 0
+        ? '  •  ${dur.inMinutes}:${(dur.inSeconds % 60).toString().padLeft(2, '0')}'
+        : '';
+    return ListTile(
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      leading: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: AppColors.primarySurface,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: const Icon(Icons.audio_file_rounded,
+            color: AppColors.primary, size: 22),
+      ),
+      title: Text(
+        file.name,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textPrimary,
+        ),
+      ),
+      subtitle: Text(
+        '$sizeStr$durationStr  •  $dateStr',
+        style:
+            const TextStyle(fontSize: 11, color: AppColors.textHint),
+      ),
+      onTap: () {
+        setState(() {
+          _selectedDeviceFile = file;
+          _statusMessage = null;
+        });
+        Navigator.pop(sheetCtx);
+      },
+    );
+  }
+
+  Widget _buildFallbackButton(BuildContext sheetCtx) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: OutlinedButton.icon(
+        onPressed: () async {
+          Navigator.pop(sheetCtx);
+          await _pickDeviceFileFallback();
+        },
+        icon: const Icon(Icons.folder_open_rounded, size: 18),
+        label: const Text('Browse Files Manually'),
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          side: BorderSide(color: Colors.grey.shade300),
+          foregroundColor: AppColors.textSecondary,
+        ),
+      ),
+    );
   }
 
   String? get _audioFilePath => _audioSource == AudioSource.local
@@ -171,6 +436,10 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
             : null,
         audioFilePath: _audioFilePath,
         audioFileName: _audioFileName,
+        leadId: _linkedLeadId,
+        phoneNumber: _phoneController.text.trim().isNotEmpty
+            ? _phoneController.text.trim()
+            : null,
       );
 
       if (mounted) {
@@ -180,7 +449,10 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
           _selectedDeviceFile = null;
           _selectedLocalRecording = null;
           _customerNameController.clear();
+          _phoneController.clear();
           _notesController.clear();
+          _linkedLeadId = null;
+          _linkedLeadName = null;
         });
         _showSnack('Call submitted for approval', success: true);
       }
@@ -213,9 +485,44 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
+  Future<void> _lookupPhone() async {
+    final phone = _phoneController.text.trim();
+    if (phone.isEmpty) return;
+    setState(() {
+      _lookingUp = true;
+      _linkedLeadId = null;
+      _linkedLeadName = null;
+    });
+    try {
+      final res = await _api.checkDuplicateLead(phone);
+      final raw = res.data;
+      final data = raw is Map ? (raw['data'] ?? raw) : {};
+      final isDuplicate = data['isDuplicate'] == true || data['exists'] == true;
+      final lead = data['lead'] ?? data['existingLead'];
+      if (isDuplicate && lead != null && lead is Map) {
+        final name = lead['customerName']?.toString() ?? '';
+        setState(() {
+          _linkedLeadId = lead['id']?.toString();
+          _linkedLeadName = name;
+          if (name.isNotEmpty && _customerNameController.text.trim().isEmpty) {
+            _customerNameController.text = name;
+          }
+        });
+        _showSnack('Lead found: $name', success: true);
+      } else {
+        _showSnack('No existing lead found for this number');
+      }
+    } catch (_) {
+      _showSnack('Lookup failed. Continue without linking.');
+    } finally {
+      if (mounted) setState(() => _lookingUp = false);
+    }
+  }
+
   @override
   void dispose() {
     _customerNameController.dispose();
+    _phoneController.dispose();
     _notesController.dispose();
     super.dispose();
   }
@@ -437,7 +744,89 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 14),
+              // Phone lookup row
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _phoneController,
+                      keyboardType: TextInputType.phone,
+                      style: const TextStyle(color: AppColors.textPrimary),
+                      decoration: InputDecoration(
+                        labelText: 'Phone (optional)',
+                        hintText: 'Lookup existing lead',
+                        prefixIcon: Icon(
+                          Icons.phone_outlined,
+                          color: AppColors.primary.withValues(alpha: 0.6),
+                        ),
+                        suffixIcon: _linkedLeadId != null
+                            ? const Icon(Icons.link_rounded, color: AppColors.success, size: 20)
+                            : null,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    height: 52,
+                    child: OutlinedButton(
+                      onPressed: _lookingUp ? null : _lookupPhone,
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: AppColors.primary),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                      ),
+                      child: _lookingUp
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColors.primary,
+                              ),
+                            )
+                          : const Icon(Icons.search_rounded, color: AppColors.primary, size: 20),
+                    ),
+                  ),
+                ],
+              ),
+              if (_linkedLeadName != null) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.success.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.success.withValues(alpha: 0.2)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check_circle_rounded, size: 14, color: AppColors.success),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Linked to lead: $_linkedLeadName',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.success,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => setState(() {
+                          _linkedLeadId = null;
+                          _linkedLeadName = null;
+                        }),
+                        child: const Icon(Icons.close_rounded, size: 14, color: AppColors.success),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 4),
               TextField(
                 controller: _notesController,
                 maxLines: 3,
@@ -852,7 +1241,7 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
 
   Widget _deviceFilePicker() {
     return GestureDetector(
-      onTap: _uploading ? null : _pickDeviceFile,
+      onTap: (_uploading || _isLoadingMediaStore) ? null : _showAudioFilePicker,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         height: 110,
@@ -868,7 +1257,27 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
             width: 1.5,
           ),
         ),
-        child: _selectedDeviceFile != null
+        child: _isLoadingMediaStore
+            ? const Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      color: AppColors.primary,
+                      strokeWidth: 2,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Loading audio files...',
+                    style:
+                        TextStyle(color: AppColors.textHint, fontSize: 12),
+                  ),
+                ],
+              )
+            : _selectedDeviceFile != null
             ? Row(
                 children: [
                   const SizedBox(width: 16),

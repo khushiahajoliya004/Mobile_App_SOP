@@ -62,8 +62,10 @@ class CallRecorderService {
         return false;
       }
 
-      // Request notification permission for Android 13+ (optional)
       if (Platform.isAndroid) {
+        // Required for call state detection (incoming/outgoing calls)
+        await Permission.phone.request();
+        // Required for Android 13+ notifications
         await Permission.notification.request();
       }
 

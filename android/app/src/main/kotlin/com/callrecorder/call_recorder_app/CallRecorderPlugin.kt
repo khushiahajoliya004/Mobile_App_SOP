@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.provider.MediaStore
 import android.provider.Settings
 import android.net.Uri
 import android.util.Log
@@ -73,7 +74,24 @@ class CallRecorderPlugin : FlutterPlugin, ActivityAware {
             }
         }
 
+        // Auto-start CallMonitorService when app engine attaches
+        startCallMonitorService(binding.applicationContext)
+
         Log.i(TAG, "Plugin attached to engine, all channels registered")
+    }
+
+    private fun startCallMonitorService(ctx: Context) {
+        try {
+            val intent = Intent(ctx, CallMonitorService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                ctx.startForegroundService(intent)
+            } else {
+                ctx.startService(intent)
+            }
+            Log.i(TAG, "CallMonitorService started")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start CallMonitorService: ${e.message}")
+        }
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -158,8 +176,48 @@ class CallRecorderPlugin : FlutterPlugin, ActivityAware {
                     "model" to Build.MODEL
                 ))
             }
+            "queryAudioFiles" -> {
+                try {
+                    result.success(queryAudioFiles(ctx))
+                } catch (e: Exception) {
+                    Log.e(TAG, "queryAudioFiles error: ${e.message}")
+                    result.error("QUERY_ERROR", e.message, null)
+                }
+            }
             else -> result.notImplemented()
         }
+    }
+
+    private fun queryAudioFiles(ctx: Context): List<Map<String, Any?>> {
+        val files = mutableListOf<Map<String, Any?>>()
+        val uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+        val projection = arrayOf(
+            MediaStore.Audio.Media.DISPLAY_NAME,
+            MediaStore.Audio.Media.DATA,
+            MediaStore.Audio.Media.SIZE,
+            MediaStore.Audio.Media.DURATION,
+            MediaStore.Audio.Media.DATE_MODIFIED
+        )
+        val sortOrder = "${MediaStore.Audio.Media.DATE_MODIFIED} DESC"
+        ctx.contentResolver.query(uri, projection, null, null, sortOrder)?.use { cursor ->
+            val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
+            val dataCol = cursor.getColumnIndex(MediaStore.Audio.Media.DATA)
+            val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
+            val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+            val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
+            while (cursor.moveToNext()) {
+                val path = if (dataCol >= 0) cursor.getString(dataCol) else null
+                if (path.isNullOrEmpty()) continue
+                files.add(mapOf(
+                    "name" to (cursor.getString(nameCol) ?: "Unknown"),
+                    "path" to path,
+                    "size" to cursor.getLong(sizeCol),
+                    "duration" to cursor.getLong(durationCol),
+                    "dateModified" to cursor.getLong(dateCol)
+                ))
+            }
+        }
+        return files
     }
 
     // ── Overlay Method Handler ──

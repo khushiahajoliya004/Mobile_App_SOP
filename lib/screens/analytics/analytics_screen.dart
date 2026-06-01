@@ -23,12 +23,17 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final res = await _api.getAnalyticsOverview();
+      final res = await _api.getAnalyticsOverview(period: _selectedPeriod);
       _data = res.data is Map
           ? Map<String, dynamic>.from(res.data['data'] ?? res.data)
           : {};
-    } catch (_) {
+    } catch (e) {
       _data = {};
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load analytics: $e')),
+        );
+      }
     }
     if (mounted) setState(() => _loading = false);
   }
@@ -199,7 +204,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           final isSelected = _selectedPeriod == periods[i];
           return Expanded(
             child: GestureDetector(
-              onTap: () => setState(() => _selectedPeriod = periods[i]),
+              onTap: () {
+                setState(() => _selectedPeriod = periods[i]);
+                _load();
+              },
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 decoration: BoxDecoration(

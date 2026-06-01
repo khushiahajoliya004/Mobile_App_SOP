@@ -210,7 +210,13 @@ class _CrmBookingsScreenState extends State<CrmBookingsScreen> {
     try {
       await _api.confirmBooking(booking['id']);
       _load();
-    } catch (_) {}
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to confirm booking: $e')),
+        );
+      }
+    }
   }
 
   void _cancelBooking(Map<String, dynamic> booking) {
@@ -240,7 +246,13 @@ class _CrmBookingsScreenState extends State<CrmBookingsScreen> {
                 await _api.cancelBooking(booking['id'], reasonCtrl.text.trim());
                 if (ctx.mounted) Navigator.pop(ctx);
                 _load();
-              } catch (_) {}
+              } catch (e) {
+                if (ctx.mounted) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    SnackBar(content: Text('Failed to cancel: $e')),
+                  );
+                }
+              }
             },
             child: const Text('Cancel Booking'),
           ),
@@ -371,7 +383,7 @@ class _CrmBookingsScreenState extends State<CrmBookingsScreen> {
               ),
               const SizedBox(width: 2),
               Text(
-                amount.toString(),
+                _formatAmount(amount),
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -472,6 +484,14 @@ class _CrmBookingsScreenState extends State<CrmBookingsScreen> {
         ],
       ),
     );
+  }
+
+  String _formatAmount(dynamic amount) {
+    if (amount == null) return '0';
+    final num = double.tryParse(amount.toString()) ?? 0;
+    if (num >= 100000) return '${(num / 100000).toStringAsFixed(2)} L';
+    if (num >= 1000) return '${(num / 1000).toStringAsFixed(1)} K';
+    return num.toStringAsFixed(0);
   }
 
   Widget _buildStatusBadge(String status) {

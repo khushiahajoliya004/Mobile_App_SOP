@@ -93,9 +93,18 @@ class _LoginScreenState extends State<LoginScreen>
           context,
           MaterialPageRoute(builder: (_) => const HomeScreen()),
         );
-    } catch (_) {
+    } catch (e) {
       setState(() {
-        _error = 'Invalid email or password';
+        final msg = e.toString();
+        if (msg.contains('SocketException') || msg.contains('Connection refused') || msg.contains('Network')) {
+          _error = 'Cannot connect to server. Check your WiFi or server IP.';
+        } else if (msg.contains('401') || msg.contains('Invalid credentials')) {
+          _error = 'Invalid email or password';
+        } else if (msg.contains('500')) {
+          _error = 'Server error. Please try again or contact support.';
+        } else {
+          _error = 'Login failed: $msg';
+        }
       });
     } finally {
       if (mounted) setState(() => _loading = false);

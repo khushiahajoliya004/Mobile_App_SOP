@@ -242,7 +242,13 @@ class _CrmQuotationsScreenState extends State<CrmQuotationsScreen> {
     try {
       await _api.updateQuotationStatus(quotation['id'], 'SENT');
       _load();
-    } catch (_) {}
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to send quotation: $e')),
+        );
+      }
+    }
   }
 
   @override

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../main.dart';
 import '../../services/api_service.dart';
+import 'crm_lead_detail_screen.dart';
 
 class CrmLeadsScreen extends StatefulWidget {
   const CrmLeadsScreen({super.key});
@@ -197,10 +198,50 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                 FilledButton(
                   onPressed: () async {
                     if (nameCtrl.text.trim().isEmpty) return;
+
+                    // Phone duplicate check
+                    final phone = phoneCtrl.text.trim();
+                    if (phone.isNotEmpty) {
+                      try {
+                        final dupRes = await _api.checkDuplicateLead(phone);
+                        final raw = dupRes.data;
+                        final data = raw is Map ? (raw['data'] ?? raw) : {};
+                        final isDuplicate = data['isDuplicate'] == true || data['exists'] == true;
+                        if (isDuplicate && ctx.mounted) {
+                          final existingName = (data['lead'] ?? data['existingLead'] ?? {})['customerName'] ?? 'another lead';
+                          final proceed = await showDialog<bool>(
+                            context: ctx,
+                            builder: (dlgCtx) => AlertDialog(
+                              title: const Text('Duplicate Phone'),
+                              content: Text(
+                                'Phone $phone already exists as "$existingName". Create anyway?',
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(dlgCtx, false),
+                                  child: const Text('Cancel'),
+                                ),
+                                FilledButton(
+                                  onPressed: () => Navigator.pop(dlgCtx, true),
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: AppColors.warning,
+                                  ),
+                                  child: const Text('Create Anyway'),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (proceed != true) return;
+                        }
+                      } catch (_) {
+                        // If check fails, proceed anyway
+                      }
+                    }
+
                     try {
                       await _api.createLead(
                         customerName: nameCtrl.text.trim(),
-                        phone: phoneCtrl.text.trim(),
+                        phone: phone,
                         source: source,
                         interestedModel: modelCtrl.text.trim(),
                         buyerType: buyerType,
@@ -250,7 +291,13 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                     await _api.assignLead(lead['id'], user['id']);
                     if (ctx.mounted) Navigator.pop(ctx);
                     _load();
-                  } catch (_) {}
+                  } catch (e) {
+                    if (ctx.mounted) {
+                      ScaffoldMessenger.of(ctx).showSnackBar(
+                        SnackBar(content: Text('Failed to assign: $e')),
+                      );
+                    }
+                  }
                 },
               );
             },
@@ -264,7 +311,13 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
     try {
       await _api.updateLeadStatus(lead['id'], {'status': 'LOST'});
       _load();
-    } catch (_) {}
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to mark lost: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -344,7 +397,17 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
               .trim()
         : (lead['assignedToName'] ?? 'Unassigned');
 
-    return Container(
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => CrmLeadDetailScreen(
+            leadId: lead['id'].toString(),
+            leadName: lead['customerName'] ?? 'Lead',
+          ),
+        ),
+      ).then((_) => _load()),
+      child: Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -448,6 +511,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
           ),
         ],
       ),
+    ),
     );
   }
 

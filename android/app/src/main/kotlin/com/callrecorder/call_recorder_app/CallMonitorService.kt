@@ -16,10 +16,17 @@ import android.os.Looper
 import android.telephony.TelephonyManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.work.BackoffPolicy
+import androidx.work.Constraints
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.workDataOf
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 /**
  * CallMonitorService: Foreground service that monitors phone call state
@@ -183,6 +190,10 @@ class CallMonitorService : Service() {
                         try {
                             val info = CallRecorderEngine.stopRecording()
                             saveCallMetadata(callType, savedNumber, info)
+                            val recordedPath = info["path"] as? String
+                            if (recordedPath != null) {
+                                enqueueUpload(recordedPath, "$recordedPath.meta.json")
+                            }
                         } catch (e: Exception) {
                             Log.e(TAG, "Error stopping recording: ${e.message}")
                         }
@@ -222,6 +233,28 @@ class CallMonitorService : Service() {
         } catch (e: Exception) {
             Log.e(TAG, "Auto-recording error: ${e.message}", e)
             updateNotification("Recording error")
+        }
+    }
+
+    private fun enqueueUpload(filePath: String, metaPath: String) {
+        try {
+            val constraints = Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build()
+
+            val workRequest = OneTimeWorkRequestBuilder<CallUploadWorker>()
+                .setInputData(workDataOf(
+                    CallUploadWorker.KEY_FILE_PATH to filePath,
+                    CallUploadWorker.KEY_META_PATH to metaPath
+                ))
+                .setConstraints(constraints)
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+                .build()
+
+            WorkManager.getInstance(applicationContext).enqueue(workRequest)
+            Log.i(TAG, "Upload job enqueued for: $filePath")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to enqueue upload: ${e.message}")
         }
     }
 
@@ -314,15 +347,12 @@ class CallMonitorService : Service() {
     }
 
     private fun buildNotification(text: String): Notification {
-        val mainActivityClass = try {
-            Class.forName("com.mysterymentor.app.MainActivity")
-        } catch (e: ClassNotFoundException) {
-            Class.forName("com.callrecorder.call_recorder_app.MainActivity")
+        val launchIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         }
-        
         val pendingIntent = PendingIntent.getActivity(
             this, 0,
-            Intent(this, mainActivityClass),
+            launchIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 

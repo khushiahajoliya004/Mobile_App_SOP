@@ -4,6 +4,8 @@ import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../models/user_model.dart';
 import 'crm_leads_screen.dart';
+import 'crm_reception_screen.dart';
+import 'crm_daily_transcripts_screen.dart';
 import 'crm_followups_screen.dart';
 import 'crm_visits_screen.dart';
 import 'crm_test_drives_screen.dart';
@@ -67,6 +69,15 @@ class _CrmScreenState extends State<CrmScreen> {
     }
 
     final modules = <_CrmModule>[
+      // Reception — always visible for CRM users
+      _CrmModule(
+        'Reception',
+        Icons.support_agent_rounded,
+        const Color(0xFF059669),
+        const Color(0xFF34D399),
+        'Phone lookup & new leads',
+        const CrmReceptionScreen(),
+      ),
       // My Tasks — always visible, highest priority
       _CrmModule(
         'My Tasks',
@@ -94,6 +105,14 @@ class _CrmScreenState extends State<CrmScreen> {
           '${_stats['openLeads'] ?? 0} open',
           const CrmLeadsScreen(),
         ),
+      _CrmModule(
+        'Daily Transcripts',
+        Icons.transcribe_rounded,
+        const Color(0xFF7C3AED),
+        const Color(0xFFA78BFA),
+        'Day-wise call transcripts',
+        const CrmDailyTranscriptsScreen(),
+      ),
       if (_can('FOLLOW_UP'))
         _CrmModule(
           'Follow-ups',
@@ -449,9 +468,9 @@ class _CrmSubWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.scaffoldBg,
-      body: Column(
+    return Material(
+      color: AppColors.scaffoldBg,
+      child: Column(
         children: [
           Container(
             padding: EdgeInsets.only(

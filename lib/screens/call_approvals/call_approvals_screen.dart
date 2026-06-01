@@ -113,14 +113,21 @@ class _CallApprovalsScreenState extends State<CallApprovalsScreen> {
         _actionLoading[id] = true;
       }
     });
-    int done = 0;
+    int succeeded = 0;
+    int failed = 0;
     for (final id in ids) {
       try {
         await _api.approveCall(id);
-      } catch (_) {}
-      done++;
+        succeeded++;
+      } catch (_) {
+        failed++;
+      }
     }
-    _msg('$done call(s) approved');
+    if (failed == 0) {
+      _msg('$succeeded call(s) approved');
+    } else {
+      _msg('$succeeded approved, $failed failed', error: failed > 0 && succeeded == 0);
+    }
     _load();
   }
 
