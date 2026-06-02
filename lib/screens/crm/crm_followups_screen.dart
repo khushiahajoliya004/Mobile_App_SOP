@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../main.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
 
 class CrmFollowUpsScreen extends StatefulWidget {
   const CrmFollowUpsScreen({super.key});
@@ -199,6 +200,7 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
                   onPressed: () async {
                     if (selectedLeadId == null) return;
                     try {
+                      final currentUser = await AuthService().getUser();
                       await _api.createCrmFollowUp(
                         dealId: selectedLeadId!,
                         scheduledAt: selectedDate,
@@ -206,6 +208,7 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
                         notes: notesCtrl.text.trim().isEmpty
                             ? null
                             : notesCtrl.text.trim(),
+                        assignedToUserId: currentUser?.id,
                       );
                       if (ctx.mounted) Navigator.pop(ctx);
                       _load();

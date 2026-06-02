@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../main.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
 
 class CrmLeadDetailScreen extends StatefulWidget {
   final String leadId;
@@ -354,11 +355,13 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen>
                     dt = DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
                   }
                   if (widget.isDeal) {
+                    final currentUser = await AuthService().getUser();
                     await _api.createCrmFollowUp(
                       dealId: widget.leadId,
                       scheduledAt: dt,
                       type: type,
                       notes: notesCtrl.text.trim().isEmpty ? null : notesCtrl.text.trim(),
+                      assignedToUserId: currentUser?.id,
                     );
                   } else {
                     await _api.createFollowUp(

@@ -919,6 +919,7 @@ class ApiService {
     String type = 'CALL',
     String? notes,
     String? contactId,
+    String? assignedToUserId,
   }) async {
     return _dio.post('/crm/follow-ups', data: {
       'dealId': dealId,
@@ -926,6 +927,7 @@ class ApiService {
       'type': type,
       if (notes != null && notes.isNotEmpty) 'notes': notes,
       if (contactId != null) 'contactId': contactId,
+      if (assignedToUserId != null) 'assignedToUserId': assignedToUserId,
     });
   }
 
