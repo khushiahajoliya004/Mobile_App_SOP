@@ -683,6 +683,30 @@ class ApiService {
   Future<Response> getAssignedLeads() async =>
       _dio.get('/leads', queryParameters: {'status': 'OPEN'});
 
+  Future<Response> createCrmQuickLead({
+    required String name,
+    String? phone,
+    String? email,
+    String? source,
+    String? pipelineId,
+    String? ownerUserId,
+    String? notes,
+  }) async {
+    return _dio.post(
+      '/crm/contacts/quick-lead',
+      data: {
+        'name': name,
+        'createDeal': true,
+        if (phone != null && phone.isNotEmpty) 'phone': phone,
+        if (email != null && email.isNotEmpty) 'email': email,
+        if (source != null && source.isNotEmpty) 'source': source,
+        if (pipelineId != null && pipelineId.isNotEmpty) 'pipelineId': pipelineId,
+        if (ownerUserId != null && ownerUserId.isNotEmpty) 'ownerUserId': ownerUserId,
+        if (notes != null && notes.isNotEmpty) 'notes': notes,
+      },
+    );
+  }
+
   Future<Response> createLead({
     required String customerName,
     String? phone,
@@ -874,6 +898,13 @@ class ApiService {
   }
 
   // ─── CRM v2 Follow-ups (for deals) ───
+
+  Future<Response> getCrmFollowUps({String? status, bool? overdue}) async {
+    return _dio.get('/crm/follow-ups', queryParameters: {
+      if (status != null && status.isNotEmpty) 'status': status,
+      if (overdue == true) 'overdue': 'true',
+    });
+  }
 
   Future<Response> getCrmFollowUpsByDeal(String dealId) async {
     return _dio.get('/crm/follow-ups', queryParameters: {'dealId': dealId});

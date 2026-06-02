@@ -25,7 +25,7 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
 
   Future<void> _load() async {
     try {
-      final res = await _api.getFollowUps(
+      final res = await _api.getCrmFollowUps(
         status: _filterStatus.isEmpty ? null : _filterStatus,
         overdue: _filterOverdue ? true : null,
       );
@@ -46,7 +46,7 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
 
   Future<void> _loadLeads() async {
     try {
-      final res = await _api.getLeads();
+      final res = await _api.getCrmDeals();
       final raw = res.data;
       final list = raw is List
           ? raw
@@ -125,12 +125,17 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
                 const SizedBox(height: 20),
                 DropdownButtonFormField<String>(
                   value: selectedLeadId,
-                  decoration: const InputDecoration(labelText: 'Select Lead *'),
+                  decoration: const InputDecoration(labelText: 'Select Deal *'),
                   items: _leads
                       .map(
                         (l) => DropdownMenuItem(
                           value: l['id']?.toString(),
-                          child: Text(l['customerName'] ?? 'Unknown'),
+                          child: Text(
+                            (l['contact'] is Map ? l['contact']['name'] : null)
+                                ?? l['name']?.toString()
+                                ?? l['customerName']?.toString()
+                                ?? 'Unknown',
+                          ),
                         ),
                       )
                       .toList(),
@@ -194,8 +199,8 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
                   onPressed: () async {
                     if (selectedLeadId == null) return;
                     try {
-                      await _api.createFollowUp(
-                        leadId: selectedLeadId!,
+                      await _api.createCrmFollowUp(
+                        dealId: selectedLeadId!,
                         scheduledAt: selectedDate,
                         type: type,
                         notes: notesCtrl.text.trim().isEmpty
@@ -303,7 +308,7 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
                       return;
                     }
                     try {
-                      await _api.completeFollowUpWithWorkflow(
+                      await _api.completeCrmFollowUp(
                         followUp['id'].toString(),
                         outcome: selectedOutcome!,
                         notes: notesCtrl.text.trim().isEmpty ? null : notesCtrl.text.trim(),
@@ -535,9 +540,13 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
   Widget _buildFollowUpCard(Map<String, dynamic> followUp) {
     final isOverdue = _isOverdue(followUp);
     final status = (followUp['status'] ?? 'PENDING').toString().toUpperCase();
-    final leadName = followUp['lead'] is Map
-        ? followUp['lead']['customerName'] ?? 'Unknown'
-        : (followUp['leadName'] ?? 'Unknown');
+    final deal = followUp['deal'] is Map ? followUp['deal'] as Map : null;
+    final dealContact = deal?['contact'] is Map ? deal!['contact'] as Map : null;
+    final leadName = dealContact?['name']?.toString()
+        ?? deal?['name']?.toString()
+        ?? (followUp['lead'] is Map ? followUp['lead']['customerName'] : null)
+        ?? followUp['leadName']?.toString()
+        ?? 'Unknown';
     final scheduledAt = followUp['scheduledAt'] != null
         ? DateTime.tryParse(followUp['scheduledAt'].toString())
         : null;

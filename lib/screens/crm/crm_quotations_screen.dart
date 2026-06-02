@@ -41,7 +41,7 @@ class _CrmQuotationsScreenState extends State<CrmQuotationsScreen> {
 
   Future<void> _loadLeads() async {
     try {
-      final res = await _api.getLeads();
+      final res = await _api.getCrmDeals();
       final raw = res.data;
       final list = raw is List
           ? raw
@@ -122,7 +122,7 @@ class _CrmQuotationsScreenState extends State<CrmQuotationsScreen> {
                       .map(
                         (l) => DropdownMenuItem(
                           value: l['id']?.toString(),
-                          child: Text(l['customerName'] ?? 'Unknown'),
+                          child: Text((l['contact'] is Map ? l['contact']['name'] : null) ?? l['name']?.toString() ?? l['customerName']?.toString() ?? 'Unknown'),
                         ),
                       )
                       .toList(),

@@ -396,16 +396,13 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                       }
 
                       try {
-                        await _api.createLead(
-                          customerName: name,
+                        await _api.createCrmQuickLead(
+                          name: name,
                           phone: phone.isEmpty ? null : phone,
                           source: source,
-                          interestedModel: modelCtrl.text.trim().isEmpty ? null : modelCtrl.text.trim(),
-                          buyerType: buyerType.isEmpty ? null : buyerType,
-                          priority: priority,
-                          branchId: branchId,
                           pipelineId: pipelineId,
-                          assignedToUserId: assignedUser?['id']?.toString(),
+                          ownerUserId: assignedUser?['id']?.toString(),
+                          notes: modelCtrl.text.trim().isEmpty ? null : 'Interested Model: ${modelCtrl.text.trim()}',
                         );
                         if (ctx.mounted) Navigator.pop(ctx);
                         _load();
