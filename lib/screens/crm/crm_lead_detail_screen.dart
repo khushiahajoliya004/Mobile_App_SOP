@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../main.dart';
 import '../../services/api_service.dart';
@@ -158,7 +159,17 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen>
         });
       }
     } catch (e) {
-      if (mounted) setState(() { _error = e.toString(); _loading = false; });
+      String msg = e.toString();
+      // Extract readable message from DioException
+      if (e is DioException) {
+        final body = e.response?.data;
+        if (body is Map) {
+          msg = body['message']?.toString() ?? body['error']?.toString() ?? msg;
+        } else {
+          msg = 'HTTP ${e.response?.statusCode}: ${e.message}';
+        }
+      }
+      if (mounted) setState(() { _error = msg; _loading = false; });
     }
   }
 
@@ -1802,6 +1813,17 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen>
       const Icon(Icons.error_outline, size: 48, color: AppColors.error),
       const SizedBox(height: 12),
       const Text('Failed to load lead details', style: TextStyle(color: AppColors.textSecondary)),
+      if (_error != null) ...[
+        const SizedBox(height: 6),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Text(
+            _error!,
+            style: const TextStyle(fontSize: 12, color: AppColors.error),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ],
       const SizedBox(height: 12),
       TextButton(onPressed: _loadDetails, child: const Text('Retry')),
     ]));

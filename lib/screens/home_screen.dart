@@ -34,7 +34,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final screens = [
       const DashboardScreen(),
-      const CallRecorderScreen(),
+      Scaffold(
+        backgroundColor: AppColors.scaffoldBg,
+        body: const CallRecorderScreen(),
+      ),
       MenuScreen(user: _user),
       ProfileScreen(user: _user, onLogout: _logout),
     ];

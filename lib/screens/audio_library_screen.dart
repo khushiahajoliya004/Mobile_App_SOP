@@ -30,6 +30,20 @@ class _AudioLibraryScreenState extends State<AudioLibraryScreen> {
     _setupAudioPlayer();
   }
 
+  static final _audioCtx = AudioContext(
+    android: const AudioContextAndroid(
+      isSpeakerphoneOn: false,
+      audioMode: AndroidAudioMode.normal,
+      contentType: AndroidContentType.music,
+      usageType: AndroidUsageType.media,
+      audioFocus: AndroidAudioFocus.gain,
+    ),
+    iOS: AudioContextIOS(
+      category: AVAudioSessionCategory.playback,
+      options: const {},
+    ),
+  );
+
   void _setupAudioPlayer() {
     _subscriptions.addAll([
       _audioPlayer.onPlayerStateChanged.listen((state) {
@@ -68,16 +82,19 @@ class _AudioLibraryScreenState extends State<AudioLibraryScreen> {
     try {
       if (_playingId == file.id && _isPlaying) {
         await _audioPlayer.pause();
-        if (mounted) {
-          setState(() => _isPlaying = false);
-        }
+        if (mounted) setState(() => _isPlaying = false);
       } else if (_playingId == file.id) {
         await _audioPlayer.resume();
-        if (mounted) {
-          setState(() => _isPlaying = true);
-        }
+        if (mounted) setState(() => _isPlaying = true);
       } else {
-        await _audioPlayer.play(DeviceFileSource(file.path));
+        await _audioPlayer.stop();
+        await _audioPlayer.setReleaseMode(ReleaseMode.stop);
+        await _audioPlayer.setPlaybackRate(1.0);
+        await _audioPlayer.play(
+          DeviceFileSource(file.path),
+          volume: 1.0,
+          ctx: _audioCtx,
+        );
         if (mounted) {
           setState(() {
             _playingId = file.id;
@@ -88,9 +105,9 @@ class _AudioLibraryScreenState extends State<AudioLibraryScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error playing audio: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error playing audio: $e')),
+        );
       }
     }
   }
