@@ -48,10 +48,7 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen>
   bool _reassignLoading = false;
   bool _reassignSuccess = false;
 
-  static const _tabLabels = [
-    'Overview', 'Requirement', 'Timeline', 'Follow-ups',
-    'Visits', 'Test Drives', 'Quotations', 'Bookings', 'Delivery'
-  ];
+  static const _tabLabels = ['Overview', 'Timeline', 'Follow-ups'];
 
   @override
   void initState() {
@@ -227,8 +224,7 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen>
     if (_selectedDseId == null) return;
     setState(() => _reassignLoading = true);
     try {
-      await _api.reassignDse(widget.leadId, _selectedDseId!,
-          reason: _reassignReasonCtrl.text.trim().isEmpty ? null : _reassignReasonCtrl.text.trim());
+      await _api.updateCrmDeal(widget.leadId, {'ownerUserId': _selectedDseId});
       if (mounted) {
         setState(() { _reassignLoading = false; _reassignSuccess = true; });
         await Future.delayed(const Duration(milliseconds: 1500));
@@ -255,8 +251,7 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen>
           FilledButton(
             onPressed: () async {
               try {
-                await _api.markLeadLost(widget.leadId,
-                    reason: ctrl.text.trim().isEmpty ? null : ctrl.text.trim());
+                await _api.updateCrmDeal(widget.leadId, {'status': 'LOST'});
                 if (ctx.mounted) Navigator.pop(ctx);
                 _loadDetails();
                 _showSnack('Lead marked as lost', success: true);
@@ -904,14 +899,8 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen>
                               controller: _tabCtrl,
                               children: [
                                 _buildOverviewTab(),
-                                _buildRequirementTab(),
                                 _buildTimelineTab(),
                                 _buildFollowUpsTab(),
-                                _buildVisitsTab(),
-                                _buildTestDrivesTab(),
-                                _buildQuotationsTab(),
-                                _buildBookingsTab(),
-                                _buildDeliveryTab(),
                               ],
                             ),
                 ),
@@ -994,7 +983,7 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen>
             _headerBtn('Lost', AppColors.error, _markLost)
           else
             _headerBtn('Reopen', AppColors.success, () async {
-              try { await _api.reopenLead(widget.leadId); _loadDetails(); _showSnack('Lead reopened', success: true); }
+              try { await _api.updateCrmDeal(widget.leadId, {'status': 'OPEN'}); _loadDetails(); _showSnack('Lead reopened', success: true); }
               catch (e) { _showSnack('Failed: $e'); }
             }),
         ],

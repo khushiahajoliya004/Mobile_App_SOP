@@ -674,6 +674,9 @@ class ApiService {
 
   Future<Response> getCrmDeal(String id) async => _dio.get('/crm/deals/$id');
 
+  Future<Response> updateCrmDeal(String id, Map<String, dynamic> data) async =>
+      _dio.patch('/crm/deals/$id', data: data);
+
   Future<Response> getCrmContacts({String? search}) async {
     return _dio.get('/crm/contacts', queryParameters: {
       if (search != null && search.isNotEmpty) 'search': search,
