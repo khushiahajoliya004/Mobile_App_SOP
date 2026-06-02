@@ -85,6 +85,9 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
     String? branchId;
     String? pipelineId;
     Map<String, dynamic>? assignedUser;
+    // Reactive user list: all users when no branch, branch users when branch selected
+    List<Map<String, dynamic>> sheetUsers = List.from(_assignableUsers);
+    bool sheetUsersLoading = false;
 
     showModalBottomSheet(
       context: context,
@@ -94,9 +97,35 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
       ),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheetState) {
+          Future<void> onBranchChanged(String? selectedBranchId) async {
+            setSheetState(() {
+              branchId = selectedBranchId;
+              assignedUser = null; // reset selected user when branch changes
+              sheetUsersLoading = selectedBranchId != null;
+              if (selectedBranchId == null) sheetUsers = List.from(_assignableUsers);
+            });
+            if (selectedBranchId == null) return;
+            try {
+              final res = await _api.getCrmUsersByBranch(selectedBranchId);
+              final raw = res.data;
+              final list = raw is List ? raw : (raw is Map ? (raw['data'] ?? []) as List : []);
+              final users = list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+              setSheetState(() {
+                // getCrmUsersByBranch returns userId field, normalize to also have id
+                sheetUsers = users.map((u) => {...u, 'id': u['userId'] ?? u['id']}).toList();
+                sheetUsersLoading = false;
+              });
+            } catch (_) {
+              setSheetState(() {
+                sheetUsers = List.from(_assignableUsers);
+                sheetUsersLoading = false;
+              });
+            }
+          }
+
           Future<void> pickAssignedUser() async {
             final searchCtrl = TextEditingController();
-            List<Map<String, dynamic>> filtered = List.from(_assignableUsers);
+            List<Map<String, dynamic>> filtered = List.from(sheetUsers);
             final picked = await showModalBottomSheet<Map<String, dynamic>>(
               context: ctx,
               isScrollControlled: true,
@@ -119,7 +148,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                         onChanged: (q) {
                           final lower = q.toLowerCase();
                           setSub(() {
-                            filtered = _assignableUsers.where((u) {
+                            filtered = sheetUsers.where((u) {
                               final n = '${u['firstName'] ?? ''} ${u['lastName'] ?? ''}'.toLowerCase();
                               return n.contains(lower) || (u['email'] ?? '').toString().toLowerCase().contains(lower);
                             }).toList();
@@ -249,11 +278,17 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                       initialValue: branchId,
                       decoration: const InputDecoration(labelText: 'Branch', prefixIcon: Icon(Icons.business_outlined)),
                       hint: const Text('Select branch'),
-                      items: _branches.map((b) => DropdownMenuItem<String>(
-                        value: b['id']?.toString(),
-                        child: Text(b['name']?.toString() ?? ''),
-                      )).toList(),
-                      onChanged: (v) => setSheetState(() => branchId = v),
+                      items: [
+                        const DropdownMenuItem<String>(
+                          value: null,
+                          child: Text('All Branches'),
+                        ),
+                        ..._branches.map((b) => DropdownMenuItem<String>(
+                          value: b['id']?.toString(),
+                          child: Text(b['name']?.toString() ?? ''),
+                        )),
+                      ],
+                      onChanged: (v) => onBranchChanged(v),
                     ),
                     const SizedBox(height: 12),
                   ],
@@ -274,10 +309,23 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                   ],
 
                   // ── Assign Salesperson ──
-                  const Text('Assign Salesperson', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+                  Row(children: [
+                    const Text('Assign Salesperson', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+                    if (branchId != null) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(color: AppColors.primarySurface, borderRadius: BorderRadius.circular(6)),
+                        child: Text(
+                          _branches.firstWhere((b) => b['id']?.toString() == branchId, orElse: () => {'name': ''})['name']?.toString() ?? '',
+                          style: const TextStyle(fontSize: 10, color: AppColors.primary, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ]),
                   const SizedBox(height: 6),
                   GestureDetector(
-                    onTap: _assignableUsers.isEmpty ? null : pickAssignedUser,
+                    onTap: (sheetUsersLoading || sheetUsers.isEmpty) ? null : pickAssignedUser,
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
                       decoration: BoxDecoration(
@@ -286,12 +334,17 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                         color: assignedUser != null ? AppColors.primarySurface : Colors.white,
                       ),
                       child: Row(children: [
-                        Icon(Icons.person_search_rounded, size: 18, color: assignedUser != null ? AppColors.primary : AppColors.textHint),
+                        if (sheetUsersLoading)
+                          const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary))
+                        else
+                          Icon(Icons.person_search_rounded, size: 18, color: assignedUser != null ? AppColors.primary : AppColors.textHint),
                         const SizedBox(width: 10),
                         Expanded(child: Text(
-                          assignedUser != null
-                              ? '${assignedUser!['firstName'] ?? ''} ${assignedUser!['lastName'] ?? ''}'.trim()
-                              : (_assignableUsers.isEmpty ? 'Loading...' : 'Select salesperson'),
+                          sheetUsersLoading
+                              ? 'Loading salespersons…'
+                              : (assignedUser != null
+                                  ? '${assignedUser!['firstName'] ?? ''} ${assignedUser!['lastName'] ?? ''}'.trim()
+                                  : (sheetUsers.isEmpty ? 'No salespersons found' : 'Select salesperson')),
                           style: TextStyle(fontSize: 14, color: assignedUser != null ? AppColors.textPrimary : AppColors.textHint),
                         )),
                         if (assignedUser != null)
