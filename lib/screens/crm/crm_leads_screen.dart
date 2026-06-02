@@ -59,11 +59,10 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
 
   Future<void> _load() async {
     try {
-      final res = await _api.getLeadBoard(
+      final res = await _api.getCrmDeals(
         search: _searchController.text.isEmpty ? null : _searchController.text,
       );
       final raw = res.data;
-      // /leads/board returns { data: [...], total: N }
       final list = raw is List
           ? raw
           : (raw is Map ? (raw['data'] ?? []) : []);
@@ -454,7 +453,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                 ),
                 onTap: () async {
                   try {
-                    await _api.assignLead((lead['leadId'] ?? lead['id']).toString(), user['id']);
+                    await _api.assignLead((lead['id'] ?? lead['leadId']).toString(), user['id']);
                     if (ctx.mounted) Navigator.pop(ctx);
                     _load();
                   } catch (e) {
@@ -475,7 +474,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
 
   void _markLost(Map<String, dynamic> lead) async {
     try {
-      await _api.updateLeadStatus((lead['leadId'] ?? lead['id']).toString(), {'status': 'LOST'});
+      await _api.updateLeadStatus((lead['id'] ?? lead['leadId']).toString(), {'status': 'LOST'});
       _load();
     } catch (e) {
       if (mounted) {
@@ -554,17 +553,28 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
   }
 
   Widget _buildLeadCard(Map<String, dynamic> lead) {
-    final leadId = (lead['leadId'] ?? lead['id'] ?? '').toString();
-    final status = (lead['leadStatus'] ?? lead['status'] ?? 'OPEN').toString();
-    final stageName = lead['currentStage']?.toString().isNotEmpty == true
-        ? lead['currentStage'].toString()
-        : (lead['leadStage'] is Map ? lead['leadStage']['name'] : (lead['stageName'] ?? '')).toString();
-    final phone = (lead['mobileNumber'] ?? lead['phone'] ?? '').toString();
-    final assignedTo = lead['assignedDse']?.toString().isNotEmpty == true
-        ? lead['assignedDse'].toString()
-        : (lead['assignedTo'] is Map
-            ? '${lead['assignedTo']['firstName'] ?? ''} ${lead['assignedTo']['lastName'] ?? ''}'.trim()
-            : (lead['assignedToName'] ?? ''));
+    final leadId = (lead['id'] ?? lead['leadId'] ?? '').toString();
+    final status = (lead['status'] ?? lead['leadStatus'] ?? 'OPEN').toString();
+    final stageName = (lead['stage'] is Map ? lead['stage']['name'] : null)
+        ?? lead['stageName']?.toString()
+        ?? lead['currentStage']?.toString()
+        ?? (lead['leadStage'] is Map ? lead['leadStage']['name'] : null)
+        ?? '';
+    final contact = lead['contact'] is Map ? lead['contact'] as Map : null;
+    final phone = contact?['phone']?.toString()
+        ?? (lead['mobileNumber'] ?? lead['phone'] ?? '').toString();
+    final customerName = contact?['name']?.toString()
+        ?? lead['customerName']?.toString()
+        ?? lead['name']?.toString()
+        ?? 'Unknown';
+    final owner = lead['owner'] is Map ? lead['owner'] as Map : null;
+    final assignedTo = owner != null
+        ? '${owner['firstName'] ?? ''} ${owner['lastName'] ?? ''}'.trim()
+        : (lead['assignedDse']?.toString().isNotEmpty == true
+            ? lead['assignedDse'].toString()
+            : (lead['assignedTo'] is Map
+                ? '${lead['assignedTo']['firstName'] ?? ''} ${lead['assignedTo']['lastName'] ?? ''}'.trim()
+                : (lead['assignedToName'] ?? '')));
     final displayAssigned = assignedTo.isNotEmpty ? assignedTo : 'Unassigned';
 
     return GestureDetector(
@@ -574,7 +584,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
           opaque: true,
           pageBuilder: (_, __, ___) => CrmLeadDetailScreen(
             leadId: leadId,
-            leadName: lead['customerName'] ?? 'Lead',
+            leadName: customerName,
           ),
           transitionsBuilder: (_, animation, __, child) =>
               FadeTransition(opacity: animation, child: child),
@@ -601,7 +611,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
             children: [
               Expanded(
                 child: Text(
-                  lead['customerName'] ?? 'Unknown',
+                  customerName,
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
