@@ -5,7 +5,7 @@ class ApiService {
   // Backend runs on port 3000, no /api prefix
   // For Android emulator use 10.0.2.2, for real device use your machine IP
   // static const String baseUrl = 'https://api.mysterymentor.in';
-  static const String baseUrl = 'http://192.168.1.14:3000';
+  static const String baseUrl = 'http://192.168.1.11:3000';
 
   late final Dio _dio;
   final AuthService _auth = AuthService();
@@ -486,6 +486,27 @@ class ApiService {
 
   Future<Response> deleteBranch(String id) async =>
       _dio.delete('/branches/$id');
+
+  Future<Response> getBranchTeam(String branchId) async =>
+      _dio.get('/branches/$branchId/team');
+
+  Future<Response> assignUserToBranch(
+    String branchId, {
+    required String userId,
+    required String branchRole,
+    String? reportingToUserId,
+    bool isPrimary = false,
+  }) async =>
+      _dio.post('/branches/$branchId/users', data: {
+        'userId': userId,
+        'branchRole': branchRole,
+        if (reportingToUserId != null && reportingToUserId.isNotEmpty)
+          'reportingToUserId': reportingToUserId,
+        'isPrimary': isPrimary,
+      });
+
+  Future<Response> removeUserFromBranch(String branchId, String userId) async =>
+      _dio.delete('/branches/$branchId/users/$userId');
 
   // ─── Lead Pipelines ───
 

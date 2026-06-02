@@ -552,7 +552,6 @@ class _CrmReceptionScreenState extends State<CrmReceptionScreen> {
           TextField(
             controller: _nameCtrl,
             textCapitalization: TextCapitalization.words,
-            autofocus: true,
             decoration: const InputDecoration(
               hintText: 'Enter customer name',
               prefixIcon: Icon(Icons.person_outline_rounded),
@@ -583,6 +582,7 @@ class _CrmReceptionScreenState extends State<CrmReceptionScreen> {
               ),
               const SizedBox(width: 8),
               SizedBox(
+                width: 52,
                 height: 52,
                 child: FilledButton(
                   onPressed: _dupChecking ? null : _checkDuplicate,
