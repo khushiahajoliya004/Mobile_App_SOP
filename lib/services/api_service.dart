@@ -1553,6 +1553,32 @@ class ApiService {
     return _dio.post(endpoint, data: data);
   }
 
+  /// POST /calls/bulk-download — download multiple recordings as zip (or single file)
+  Future<Response> bulkDownloadRecordings(List<String> callIds) async {
+    return _dio.post(
+      '/calls/bulk-download',
+      data: {'callIds': callIds},
+      options: Options(responseType: ResponseType.bytes),
+    );
+  }
+
+  /// POST /ai-insights/report/merged-pdf — download merged PDF for customer calls
+  Future<Response> downloadMergedPdf(
+    List<String> callIds, {
+    bool includeAnalysis = true,
+    bool includeTranscription = false,
+  }) async {
+    return _dio.post(
+      '/ai-insights/report/merged-pdf',
+      data: {
+        'callIds': callIds,
+        'includeAnalysis': includeAnalysis,
+        'includeTranscription': includeTranscription,
+      },
+      options: Options(responseType: ResponseType.bytes),
+    );
+  }
+
   Future<Response> genericPatch(
     String endpoint,
     Map<String, dynamic> data,
