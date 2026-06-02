@@ -14,6 +14,8 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
   bool _loading = true;
   List<Map<String, dynamic>> _followUps = [];
   List<Map<String, dynamic>> _leads = [];
+  String _filterStatus = '';
+  bool _filterOverdue = false;
 
   @override
   void initState() {
@@ -23,7 +25,10 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
 
   Future<void> _load() async {
     try {
-      final res = await _api.getFollowUps();
+      final res = await _api.getFollowUps(
+        status: _filterStatus.isEmpty ? null : _filterStatus,
+        overdue: _filterOverdue ? true : null,
+      );
       final raw = res.data;
       final list = raw is List
           ? raw
@@ -221,6 +226,7 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
     String? selectedOutcome;
     final notesCtrl = TextEditingController();
     const outcomes = [
+      'INTERESTED',
       'CALL_LATER',
       'VISIT_PLANNED',
       'TEST_DRIVE_PLANNED',
@@ -322,6 +328,82 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
     );
   }
 
+  void _rescheduleFollowUp(Map<String, dynamic> followUp) async {
+    DateTime selected = DateTime.now().add(const Duration(hours: 1));
+    final existing = followUp['scheduledAt'];
+    if (existing != null) {
+      selected = DateTime.tryParse(existing.toString()) ?? selected;
+    }
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSS) => Padding(
+          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('Reschedule Follow-Up',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 16),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('New Date & Time'),
+                subtitle: Text(
+                  '${selected.day}/${selected.month}/${selected.year} ${selected.hour}:${selected.minute.toString().padLeft(2, '0')}',
+                  style: const TextStyle(color: AppColors.textPrimary),
+                ),
+                trailing: const Icon(Icons.calendar_today, color: AppColors.primary),
+                onTap: () async {
+                  final date = await showDatePicker(
+                    context: ctx,
+                    initialDate: selected,
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                  );
+                  if (date != null && ctx.mounted) {
+                    final time = await showTimePicker(
+                      context: ctx,
+                      initialTime: TimeOfDay.fromDateTime(selected),
+                    );
+                    if (time != null) {
+                      setSS(() {
+                        selected = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+                      });
+                    }
+                  }
+                },
+              ),
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: () async {
+                  try {
+                    await _api.rescheduleFollowUp(
+                      followUp['id'].toString(),
+                      selected.toUtc().toIso8601String(),
+                    );
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    _load();
+                  } catch (e) {
+                    if (ctx.mounted) {
+                      ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text('Failed: $e')));
+                    }
+                  }
+                },
+                child: const Text('Confirm Reschedule'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -336,17 +418,24 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
       color: AppColors.scaffoldBg,
       child: Stack(
         children: [
-          _followUps.isEmpty
-              ? _buildEmptyState()
-              : RefreshIndicator(
-                  color: AppColors.primary,
-                  onRefresh: _load,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _followUps.length,
-                    itemBuilder: (_, i) => _buildFollowUpCard(_followUps[i]),
-                  ),
-                ),
+          Column(
+            children: [
+              _buildFilterBar(),
+              Expanded(
+                child: _followUps.isEmpty
+                    ? _buildEmptyState()
+                    : RefreshIndicator(
+                        color: AppColors.primary,
+                        onRefresh: _load,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: _followUps.length,
+                          itemBuilder: (_, i) => _buildFollowUpCard(_followUps[i]),
+                        ),
+                      ),
+              ),
+            ],
+          ),
           Positioned(
             right: 16,
             bottom: 16,
@@ -355,6 +444,87 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
               backgroundColor: AppColors.primary,
               onPressed: _showCreateSheet,
               child: const Icon(Icons.add, color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterBar() {
+    final statuses = ['', 'PENDING', 'COMPLETED'];
+    final labels = ['All', 'Pending', 'Completed'];
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: List.generate(statuses.length, (i) {
+                  final selected = _filterStatus == statuses[i];
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() => _filterStatus = statuses[i]);
+                      _load();
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: selected ? AppColors.primary : AppColors.scaffoldBg,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: selected ? AppColors.primary : AppColors.textHint.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Text(
+                        labels[i],
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: selected ? Colors.white : AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: () {
+              setState(() => _filterOverdue = !_filterOverdue);
+              _load();
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: _filterOverdue ? AppColors.error.withValues(alpha: 0.1) : AppColors.scaffoldBg,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: _filterOverdue ? AppColors.error : AppColors.textHint.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.warning_amber_rounded, size: 13,
+                      color: _filterOverdue ? AppColors.error : AppColors.textHint),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Overdue',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: _filterOverdue ? AppColors.error : AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -468,38 +638,50 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
           ],
           if (status == 'PENDING' || status == 'SCHEDULED') ...[
             const SizedBox(height: 12),
-            InkWell(
-              onTap: () => _completeFollowUp(followUp),
-              borderRadius: BorderRadius.circular(8),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.success.withValues(alpha: 0.08),
+            Row(
+              children: [
+                InkWell(
+                  onTap: () => _completeFollowUp(followUp),
                   borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.check_circle_outline,
-                      size: 14,
-                      color: AppColors.success,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.success.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    SizedBox(width: 4),
-                    Text(
-                      'Complete',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.success,
-                      ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.check_circle_outline, size: 14, color: AppColors.success),
+                        SizedBox(width: 4),
+                        Text('Complete',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.success)),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
+                const SizedBox(width: 8),
+                InkWell(
+                  onTap: () => _rescheduleFollowUp(followUp),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.schedule, size: 14, color: AppColors.primary),
+                        SizedBox(width: 4),
+                        Text('Reschedule',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primary)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ],

@@ -567,7 +567,12 @@ class _ModuleWrapper extends StatelessWidget {
               ],
             ),
           ),
-          Expanded(child: child),
+          Expanded(
+            child: Scaffold(
+              backgroundColor: AppColors.scaffoldBg,
+              body: child,
+            ),
+          ),
         ],
       ),
     );
