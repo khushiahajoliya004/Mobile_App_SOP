@@ -3,13 +3,11 @@ import 'package:path_provider/path_provider.dart';
 import '../models/audio_file_model.dart';
 
 class AudioFileService {
-  static const String _audioFolder = 'app_flutter';
-
   /// Get all audio files from app storage
   Future<List<AudioFile>> getAllAudioFiles() async {
     try {
       final appDir = await getApplicationDocumentsDirectory();
-      final audioDir = Directory('${appDir.parent.path}/$_audioFolder');
+      final audioDir = Directory(appDir.path);
 
       if (!audioDir.existsSync()) {
         return [];

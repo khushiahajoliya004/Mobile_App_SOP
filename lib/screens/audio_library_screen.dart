@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../main.dart';
@@ -14,6 +15,7 @@ class AudioLibraryScreen extends StatefulWidget {
 class _AudioLibraryScreenState extends State<AudioLibraryScreen> {
   final _audioService = AudioFileService();
   final _audioPlayer = AudioPlayer();
+  final _subscriptions = <StreamSubscription>[];
   List<AudioFile> _audioFiles = [];
   bool _loading = true;
   String? _playingId;
@@ -29,30 +31,33 @@ class _AudioLibraryScreenState extends State<AudioLibraryScreen> {
   }
 
   void _setupAudioPlayer() {
-    _audioPlayer.onPlayerStateChanged.listen((state) {
-      setState(() => _isPlaying = state == PlayerState.playing);
-    });
-
-    _audioPlayer.onDurationChanged.listen((duration) {
-      setState(() => _totalDuration = duration);
-    });
-
-    _audioPlayer.onPositionChanged.listen((position) {
-      setState(() => _currentPosition = position);
-    });
-
-    _audioPlayer.onPlayerComplete.listen((_) {
-      setState(() {
-        _isPlaying = false;
-        _currentPosition = Duration.zero;
-        _playingId = null;
-      });
-    });
+    _subscriptions.addAll([
+      _audioPlayer.onPlayerStateChanged.listen((state) {
+        if (mounted) setState(() => _isPlaying = state == PlayerState.playing);
+      }),
+      _audioPlayer.onDurationChanged.listen((duration) {
+        if (mounted) setState(() => _totalDuration = duration);
+      }),
+      _audioPlayer.onPositionChanged.listen((position) {
+        if (mounted) setState(() => _currentPosition = position);
+      }),
+      _audioPlayer.onPlayerComplete.listen((_) {
+        if (mounted) {
+          setState(() {
+            _isPlaying = false;
+            _currentPosition = Duration.zero;
+            _playingId = null;
+          });
+        }
+      }),
+    ]);
   }
 
   Future<void> _loadAudioFiles() async {
+    if (!mounted) return;
     setState(() => _loading = true);
     final files = await _audioService.getAllAudioFiles();
+    if (!mounted) return;
     setState(() {
       _audioFiles = files;
       _loading = false;
@@ -137,6 +142,9 @@ class _AudioLibraryScreenState extends State<AudioLibraryScreen> {
 
   @override
   void dispose() {
+    for (final sub in _subscriptions) {
+      sub.cancel();
+    }
     _audioPlayer.dispose();
     super.dispose();
   }

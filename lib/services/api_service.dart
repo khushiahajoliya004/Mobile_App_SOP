@@ -487,6 +487,27 @@ class ApiService {
   Future<Response> deleteBranch(String id) async =>
       _dio.delete('/branches/$id');
 
+  Future<Response> getBranchTeam(String branchId) async =>
+      _dio.get('/branches/$branchId/team');
+
+  Future<Response> assignUserToBranch(
+    String branchId, {
+    required String userId,
+    required String branchRole,
+    String? reportingToUserId,
+    bool isPrimary = false,
+  }) async =>
+      _dio.post('/branches/$branchId/users', data: {
+        'userId': userId,
+        'branchRole': branchRole,
+        if (reportingToUserId != null && reportingToUserId.isNotEmpty)
+          'reportingToUserId': reportingToUserId,
+        'isPrimary': isPrimary,
+      });
+
+  Future<Response> removeUserFromBranch(String branchId, String userId) async =>
+      _dio.delete('/branches/$branchId/users/$userId');
+
   // ─── Lead Pipelines ───
 
   Future<Response> createPipeline({

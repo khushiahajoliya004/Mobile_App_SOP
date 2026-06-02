@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../main.dart';
 import '../../services/api_service.dart';
+import 'crm_branch_detail_screen.dart';
 
 class CrmBranchesScreen extends StatefulWidget {
   const CrmBranchesScreen({super.key});
@@ -185,7 +186,12 @@ class _CrmBranchesScreenState extends State<CrmBranchesScreen> {
     final code = branch['code'] ?? '';
     final city = branch['city'] ?? '';
 
-    return Container(
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => CrmBranchDetailScreen(branch: branch)),
+      ).then((_) => _load()),
+      child: Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -282,6 +288,7 @@ class _CrmBranchesScreenState extends State<CrmBranchesScreen> {
           _buildStatusBadge(status),
         ],
       ),
+    ),
     );
   }
 
