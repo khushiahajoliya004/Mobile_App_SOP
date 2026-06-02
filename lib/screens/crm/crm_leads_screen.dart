@@ -582,6 +582,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
           pageBuilder: (_, __, ___) => CrmLeadDetailScreen(
             leadId: leadId,
             leadName: customerName,
+            isDeal: true,
           ),
           transitionsBuilder: (_, animation, __, child) =>
               FadeTransition(opacity: animation, child: child),

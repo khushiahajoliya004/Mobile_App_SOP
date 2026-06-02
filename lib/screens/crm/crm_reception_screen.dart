@@ -399,6 +399,7 @@ class _CrmReceptionScreenState extends State<CrmReceptionScreen> {
                       pageBuilder: (_, __, ___) => CrmLeadDetailScreen(
                         leadId: lead['id'].toString(),
                         leadName: lead['customerName']?.toString() ?? 'Lead',
+                        isDeal: true,
                       ),
                       transitionsBuilder: (_, a, __, c) => FadeTransition(opacity: a, child: c),
                     ));
@@ -516,6 +517,7 @@ class _CrmReceptionScreenState extends State<CrmReceptionScreen> {
                     pageBuilder: (_, __, ___) => CrmLeadDetailScreen(
                       leadId: _createdLead!['id'].toString(),
                       leadName: _createdLead!['customerName']?.toString() ?? 'Lead',
+                      isDeal: true,
                     ),
                     transitionsBuilder: (_, a, __, c) => FadeTransition(opacity: a, child: c),
                   ));
