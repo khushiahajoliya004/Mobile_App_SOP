@@ -873,6 +873,43 @@ class ApiService {
     );
   }
 
+  // ─── CRM v2 Follow-ups (for deals) ───
+
+  Future<Response> getCrmFollowUpsByDeal(String dealId) async {
+    return _dio.get('/crm/follow-ups', queryParameters: {'dealId': dealId});
+  }
+
+  Future<Response> createCrmFollowUp({
+    required String dealId,
+    required DateTime scheduledAt,
+    String type = 'CALL',
+    String? notes,
+    String? contactId,
+  }) async {
+    return _dio.post('/crm/follow-ups', data: {
+      'dealId': dealId,
+      'scheduledAt': scheduledAt.toUtc().toIso8601String(),
+      'type': type,
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
+      if (contactId != null) 'contactId': contactId,
+    });
+  }
+
+  Future<Response> completeCrmFollowUp(
+    String id, {
+    required String outcome,
+    String? notes,
+    String? nextFollowUpDate,
+    String? nextFollowUpType,
+  }) async {
+    return _dio.post('/crm/follow-ups/$id/complete', data: {
+      'outcome': outcome,
+      if (notes != null) 'notes': notes,
+      if (nextFollowUpDate != null) 'nextFollowUpDate': nextFollowUpDate,
+      if (nextFollowUpType != null) 'nextFollowUpType': nextFollowUpType,
+    });
+  }
+
   Future<Response> rescheduleFollowUp(String id, String scheduledAt) async {
     return _dio.post(
       '/follow-ups/$id/reschedule',

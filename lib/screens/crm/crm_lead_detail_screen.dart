@@ -71,10 +71,20 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen>
       Map<String, dynamic> data;
       if (widget.isDeal) {
         // CRM v2 deal
-        final res = await _api.getCrmDeal(widget.leadId);
-        final raw = res.data;
+        final dealRes = await _api.getCrmDeal(widget.leadId);
+        final raw = dealRes.data;
         final deal = raw is Map ? Map<String, dynamic>.from((raw['data'] ?? raw) as Map) : {};
         final contact = deal['contact'] is Map ? deal['contact'] as Map : {};
+
+        // Fetch v2 follow-ups for this deal
+        List followUpsList = [];
+        try {
+          final fuRes = await _api.getCrmFollowUpsByDeal(widget.leadId);
+          final fuRaw = fuRes.data;
+          final fuData = fuRaw is Map ? (fuRaw['data'] ?? fuRaw) : fuRaw;
+          followUpsList = fuData is List ? fuData : (fuData is Map ? (fuData['items'] ?? fuData['followUps'] ?? []) : []);
+        } catch (_) {}
+
         // Normalize deal → lead shape so the existing UI still works
         data = {
           'lead': {
@@ -93,14 +103,14 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen>
             'createdAt': deal['createdAt'],
           },
           'activities': deal['activities'] ?? [],
-          'followUps': [],
+          'followUps': followUpsList,
           'visits': [],
           'testDrives': [],
           'quotations': [],
           'bookings': [],
           'deliveries': [],
           'tasks': [],
-          'stats': { 'daysOld': 0, 'followUps': 0, 'completed': 0, 'pending': 0 },
+          'stats': { 'daysOld': 0, 'followUps': followUpsList.length, 'completed': 0, 'pending': 0 },
         };
       } else {
         // CRM v1 lead
@@ -318,12 +328,21 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen>
                   } else {
                     dt = DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
                   }
-                  await _api.createFollowUp(
-                    leadId: widget.leadId,
-                    scheduledAt: dt,
-                    type: type,
-                    notes: notesCtrl.text.trim().isEmpty ? null : notesCtrl.text.trim(),
-                  );
+                  if (widget.isDeal) {
+                    await _api.createCrmFollowUp(
+                      dealId: widget.leadId,
+                      scheduledAt: dt,
+                      type: type,
+                      notes: notesCtrl.text.trim().isEmpty ? null : notesCtrl.text.trim(),
+                    );
+                  } else {
+                    await _api.createFollowUp(
+                      leadId: widget.leadId,
+                      scheduledAt: dt,
+                      type: type,
+                      notes: notesCtrl.text.trim().isEmpty ? null : notesCtrl.text.trim(),
+                    );
+                  }
                   if (ctx.mounted) Navigator.pop(ctx);
                   _showSnack('Follow-up scheduled', success: true);
                   _loadDetails();
@@ -404,12 +423,21 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen>
             FilledButton(
               onPressed: outcome.isEmpty ? null : () async {
                 try {
-                  await _api.completeFollowUpWithWorkflow(fu['id'].toString(),
-                    outcome: outcome,
-                    notes: notesCtrl.text.trim().isEmpty ? null : notesCtrl.text.trim(),
-                    nextFollowUpDateTime: nextFuDateCtrl.text.isEmpty ? null : nextFuDateCtrl.text,
-                    nextAction: nextAction.isEmpty ? null : nextAction,
-                  );
+                  if (widget.isDeal) {
+                    await _api.completeCrmFollowUp(
+                      fu['id'].toString(),
+                      outcome: outcome,
+                      notes: notesCtrl.text.trim().isEmpty ? null : notesCtrl.text.trim(),
+                      nextFollowUpDate: nextFuDateCtrl.text.isEmpty ? null : nextFuDateCtrl.text,
+                    );
+                  } else {
+                    await _api.completeFollowUpWithWorkflow(fu['id'].toString(),
+                      outcome: outcome,
+                      notes: notesCtrl.text.trim().isEmpty ? null : notesCtrl.text.trim(),
+                      nextFollowUpDateTime: nextFuDateCtrl.text.isEmpty ? null : nextFuDateCtrl.text,
+                      nextAction: nextAction.isEmpty ? null : nextAction,
+                    );
+                  }
                   if (ctx.mounted) Navigator.pop(ctx);
                   _showSnack('Follow-up completed', success: true);
                   _loadDetails();
