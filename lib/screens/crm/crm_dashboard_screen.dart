@@ -25,10 +25,12 @@ class _CrmDashboardSubScreenState extends State<CrmDashboardSubScreen> {
     try {
       final res = await _api.getCrmDashboard();
       final raw = res.data;
-      final data = raw is Map<String, dynamic> ? raw : <String, dynamic>{};
+      final data = raw is Map ? (raw['data'] ?? raw) : <String, dynamic>{};
       setState(() {
-        _stats = (data['stats'] as Map<String, dynamic>?) ?? data;
-        final perf = data['salespersonPerformance'];
+        _stats = data is Map ? Map<String, dynamic>.from(data) : {};
+        final perf = data is Map
+            ? (data['salespersonPerformance'] ?? data['salespersonStats'])
+            : null;
         _salespersonPerformance = perf is List
             ? perf.map((e) => Map<String, dynamic>.from(e as Map)).toList()
             : [];
@@ -73,61 +75,51 @@ class _CrmDashboardSubScreenState extends State<CrmDashboardSubScreen> {
     );
   }
 
+  String _formatPipelineValue(dynamic value) {
+    if (value == null) return '0';
+    final num = double.tryParse(value.toString()) ?? 0;
+    if (num >= 10000000) return '₹${(num / 10000000).toStringAsFixed(1)}Cr';
+    if (num >= 100000) return '₹${(num / 100000).toStringAsFixed(1)}L';
+    if (num >= 1000) return '₹${(num / 1000).toStringAsFixed(1)}K';
+    return '₹${num.toStringAsFixed(0)}';
+  }
+
   Widget _buildStatsGrid() {
     final statItems = [
       _StatItem(
-        'Total Leads',
-        _stats['totalLeads'],
-        Icons.people,
+        'Leads Today',
+        _stats['leadsToday'],
+        Icons.today,
         AppColors.primary,
       ),
       _StatItem(
-        'Open Leads',
-        _stats['openLeads'],
+        'Open Deals',
+        _stats['openDeals'],
         Icons.folder_open,
         AppColors.accent,
       ),
       _StatItem(
-        'Converted',
-        _stats['convertedLeads'],
+        'Pipeline Value',
+        _formatPipelineValue(_stats['pipelineValue']),
+        Icons.monetization_on,
+        AppColors.warning,
+      ),
+      _StatItem(
+        'Won This Month',
+        _stats['wonThisMonth'],
         Icons.check_circle,
         AppColors.success,
       ),
-      _StatItem('Lost', _stats['lostLeads'], Icons.cancel, AppColors.error),
       _StatItem(
-        'Conversion Rate',
-        '${_stats['conversionRate'] ?? 0}%',
-        Icons.trending_up,
-        AppColors.warning,
-      ),
-      _StatItem(
-        'Pending Follow-ups',
-        _stats['pendingFollowUps'],
-        Icons.schedule,
-        AppColors.warning,
-      ),
-      _StatItem(
-        'Overdue Follow-ups',
-        _stats['overdueFollowUps'],
-        Icons.warning_amber,
+        'Lost This Month',
+        _stats['lostThisMonth'],
+        Icons.cancel,
         AppColors.error,
       ),
       _StatItem(
-        'Test Drives',
-        _stats['testDrivesPlanned'],
-        Icons.directions_car,
-        AppColors.accent,
-      ),
-      _StatItem(
-        'Bookings',
-        _stats['confirmedBookings'],
-        Icons.bookmark,
-        AppColors.success,
-      ),
-      _StatItem(
-        'Deliveries',
-        _stats['totalDeliveries'],
-        Icons.local_shipping,
+        'Total Contacts',
+        _stats['totalContacts'],
+        Icons.contacts,
         AppColors.primary,
       ),
     ];
@@ -244,7 +236,7 @@ class _CrmDashboardSubScreenState extends State<CrmDashboardSubScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Leads: ${person['totalLeads'] ?? 0} • Converted: ${person['converted'] ?? 0}',
+                  'Leads: ${person['totalLeads'] ?? 0} • Converted: ${person['convertedLeads'] ?? 0}',
                   style: const TextStyle(
                     fontSize: 12,
                     color: AppColors.textSecondary,

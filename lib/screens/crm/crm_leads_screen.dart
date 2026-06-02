@@ -63,11 +63,13 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
         search: _searchController.text.isEmpty ? null : _searchController.text,
       );
       final raw = res.data;
+      // /leads/board returns { data: [...], total: N }
       final list = raw is List
           ? raw
-          : (raw is Map ? (raw['data'] ?? []) as List : []);
+          : (raw is Map ? (raw['data'] ?? []) : []);
+      final safeList = list is List ? list : [];
       setState(() {
-        _leads = list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        _leads = safeList.map((e) => Map<String, dynamic>.from(e as Map)).toList();
         _loading = false;
       });
     } catch (e) {
@@ -552,8 +554,6 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
   }
 
   Widget _buildLeadCard(Map<String, dynamic> lead) {
-    // /leads/board returns: leadId, mobileNumber, assignedDse (flat string),
-    // leadStatus, currentStage
     final leadId = (lead['leadId'] ?? lead['id'] ?? '').toString();
     final status = (lead['leadStatus'] ?? lead['status'] ?? 'OPEN').toString();
     final stageName = lead['currentStage']?.toString().isNotEmpty == true

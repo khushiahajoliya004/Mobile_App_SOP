@@ -40,7 +40,9 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen>
   // Reassign DSE popup
   bool _showReassignPopup = false;
   List<Map<String, dynamic>> _branchTeam = [];
+  List<Map<String, dynamic>> _reassignBranches = [];
   String? _selectedDseId;
+  String? _reassignBranchId;
   final _reassignReasonCtrl = TextEditingController();
   bool _teamLoading = false;
   bool _reassignLoading = false;
@@ -171,28 +173,45 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen>
   // ── Reassign DSE ──────────────────────────────────────────────────────────
 
   Future<void> _openReassignPopup() async {
+    final leadBranchId = _lead['branchId']?.toString() ??
+        (_lead['branch'] is Map ? _lead['branch']['id']?.toString() : null);
     setState(() {
       _selectedDseId = _lead['assignedToUserId']?.toString();
       _reassignReasonCtrl.clear();
       _reassignSuccess = false;
       _branchTeam = [];
+      _reassignBranches = [];
+      _reassignBranchId = leadBranchId;
       _showReassignPopup = true;
       _teamLoading = true;
     });
     try {
-      final branchId = _lead['branchId']?.toString() ??
-          (_lead['branch'] is Map ? _lead['branch']['id']?.toString() : null);
+      // Load branches list
+      final branchRes = await _api.getBranches();
+      final branchRaw = branchRes.data;
+      final branchList = branchRaw is List
+          ? branchRaw
+          : (branchRaw is Map ? (branchRaw['data'] ?? []) as List : []);
+      final branches = branchList.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      if (mounted) setState(() => _reassignBranches = branches);
+
+      // Load users for the pre-selected branch
+      await _loadReassignUsers(leadBranchId);
+    } catch (_) {
+      if (mounted) setState(() => _teamLoading = false);
+    }
+  }
+
+  Future<void> _loadReassignUsers(String? branchId) async {
+    if (mounted) setState(() { _teamLoading = true; _branchTeam = []; _selectedDseId = null; });
+    try {
       List<Map<String, dynamic>> team = [];
       if (branchId != null && branchId.isNotEmpty) {
         final res = await _api.getCrmUsersByBranch(branchId);
         final raw = res.data;
         final list = raw is List ? raw : (raw is Map ? (raw['data'] ?? []) as List : []);
-        team = list.map((e) => Map<String, dynamic>.from(e as Map)).where((m) {
-          final role = (m['branchRole'] ?? '').toString().toUpperCase();
-          return ['DSE', 'SALES_MANAGER', 'TEAM_LEADER', 'SALESMAN', 'SALES'].any((r) => role.contains(r));
-        }).toList();
-      }
-      if (team.isEmpty) {
+        team = list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      } else {
         final res = await _api.getAssignableUsers();
         final raw = res.data;
         final list = raw is List ? raw : (raw is Map ? (raw['data'] ?? []) as List : []);
@@ -1858,6 +1877,32 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen>
                       ]),
                     )
                   else ...[
+                    // Branch filter dropdown
+                    if (_reassignBranches.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                        child: DropdownButtonFormField<String>(
+                          value: _reassignBranchId,
+                          decoration: InputDecoration(
+                            labelText: 'Filter by Branch',
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          items: [
+                            const DropdownMenuItem<String>(value: null, child: Text('All Branches')),
+                            ..._reassignBranches.map((b) => DropdownMenuItem<String>(
+                              value: b['id']?.toString(),
+                              child: Text(b['name']?.toString() ?? ''),
+                            )),
+                          ],
+                          onChanged: (v) {
+                            setState(() => _reassignBranchId = v);
+                            _loadReassignUsers(v);
+                          },
+                        ),
+                      ),
+                    const SizedBox(height: 4),
                     if (_teamLoading)
                       const Padding(
                         padding: EdgeInsets.all(32),

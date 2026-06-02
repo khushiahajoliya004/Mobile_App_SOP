@@ -43,7 +43,7 @@ class _CrmScreenState extends State<CrmScreen> {
     try {
       final res = await _api.getCrmDashboard();
       final raw = res.data is Map ? res.data['data'] ?? res.data : {};
-      _stats = raw is Map ? Map<String, dynamic>.from(raw['stats'] ?? {}) : {};
+      _stats = raw is Map ? Map<String, dynamic>.from(raw) : {};
     } catch (_) {}
     if (mounted) setState(() => _loading = false);
   }
@@ -93,7 +93,7 @@ class _CrmScreenState extends State<CrmScreen> {
           Icons.dashboard_rounded,
           const Color(0xFF6366F1),
           const Color(0xFF818CF8),
-          '${_stats['totalLeads'] ?? 0} leads',
+          '${_stats['openDeals'] ?? 0} open deals',
           const CrmDashboardSubScreen(),
         ),
       if (_can('LEAD'))
@@ -102,7 +102,7 @@ class _CrmScreenState extends State<CrmScreen> {
           Icons.people_rounded,
           const Color(0xFF10B981),
           const Color(0xFF34D399),
-          '${_stats['openLeads'] ?? 0} open',
+          'Manage your leads',
           const CrmLeadsScreen(),
         ),
       _CrmModule(
@@ -119,7 +119,7 @@ class _CrmScreenState extends State<CrmScreen> {
           Icons.calendar_today_rounded,
           const Color(0xFFF59E0B),
           const Color(0xFFFBBF24),
-          '${_stats['pendingFollowUps'] ?? 0} pending',
+          'Scheduled follow-ups',
           const CrmFollowUpsScreen(),
         ),
       if (_can('VISIT'))
@@ -128,7 +128,7 @@ class _CrmScreenState extends State<CrmScreen> {
           Icons.directions_car_rounded,
           const Color(0xFF0EA5E9),
           const Color(0xFF38BDF8),
-          '${_stats['plannedVisits'] ?? 0} planned',
+          'Planned visits',
           const CrmVisitsScreen(),
         ),
       if (_can('TEST_DRIVE'))
@@ -137,7 +137,7 @@ class _CrmScreenState extends State<CrmScreen> {
           Icons.speed_rounded,
           const Color(0xFFEC4899),
           const Color(0xFFF472B6),
-          '${_stats['testDrivesPlanned'] ?? 0} planned',
+          'Scheduled test drives',
           const CrmTestDrivesScreen(),
         ),
       if (_can('QUOTATION'))
@@ -146,7 +146,7 @@ class _CrmScreenState extends State<CrmScreen> {
           Icons.request_quote_rounded,
           const Color(0xFF8B5CF6),
           const Color(0xFFA78BFA),
-          '${_stats['quotationsSent'] ?? 0} sent',
+          'Active quotations',
           const CrmQuotationsScreen(),
         ),
       if (_can('BOOKING'))
@@ -155,7 +155,7 @@ class _CrmScreenState extends State<CrmScreen> {
           Icons.bookmark_rounded,
           const Color(0xFF14B8A6),
           const Color(0xFF2DD4BF),
-          '${_stats['confirmedBookings'] ?? 0} confirmed',
+          'Confirmed bookings',
           const CrmBookingsScreen(),
         ),
       if (_can('DELIVERY'))
@@ -164,7 +164,7 @@ class _CrmScreenState extends State<CrmScreen> {
           Icons.local_shipping_rounded,
           const Color(0xFFF97316),
           const Color(0xFFFB923C),
-          '${_stats['totalDeliveries'] ?? 0} delivered',
+          'Pending deliveries',
           const CrmDeliveriesScreen(),
         ),
       if (_can('BRANCH'))
@@ -325,7 +325,7 @@ class _CrmScreenState extends State<CrmScreen> {
                       ),
                     ),
                     Text(
-                      'Showroom Operations',
+                      'Pipeline Overview',
                       style: TextStyle(fontSize: 11, color: Colors.white70),
                     ),
                   ],
@@ -336,10 +336,10 @@ class _CrmScreenState extends State<CrmScreen> {
           const SizedBox(height: 16),
           Row(
             children: [
-              _headerStat('${_stats['totalLeads'] ?? 0}', 'Leads'),
-              _headerStat('${_stats['openLeads'] ?? 0}', 'Open'),
-              _headerStat('${_stats['confirmedBookings'] ?? 0}', 'Bookings'),
-              _headerStat('${_stats['conversionRate'] ?? 0}%', 'Conv.'),
+              _headerStat('${_stats['leadsToday'] ?? 0}', 'Today'),
+              _headerStat('${_stats['openDeals'] ?? 0}', 'Open'),
+              _headerStat('${_stats['wonThisMonth'] ?? 0}', 'Won'),
+              _headerStat('${_stats['totalContacts'] ?? 0}', 'Contacts'),
             ],
           ),
         ],
