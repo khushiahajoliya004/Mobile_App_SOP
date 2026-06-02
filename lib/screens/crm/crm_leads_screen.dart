@@ -15,12 +15,15 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
   bool _loading = true;
   List<Map<String, dynamic>> _leads = [];
   List<Map<String, dynamic>> _assignableUsers = [];
+  List<Map<String, dynamic>> _branches = [];
+  List<Map<String, dynamic>> _pipelines = [];
   final _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _load();
+    _loadFormData();
   }
 
   @override
@@ -29,9 +32,34 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
     super.dispose();
   }
 
+  Future<void> _loadFormData() async {
+    try {
+      final results = await Future.wait([
+        _api.getBranches(),
+        _api.getLeadPipelines(),
+        _api.getAssignableUsers(),
+      ]);
+      final bRaw = results[0].data;
+      final pRaw = results[1].data;
+      final uRaw = results[2].data;
+      if (mounted) {
+        setState(() {
+          _branches = _toList(bRaw);
+          _pipelines = _toList(pRaw);
+          _assignableUsers = _toList(uRaw);
+        });
+      }
+    } catch (_) {}
+  }
+
+  List<Map<String, dynamic>> _toList(dynamic raw) {
+    final list = raw is List ? raw : (raw is Map ? (raw['data'] ?? []) as List : []);
+    return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
   Future<void> _load() async {
     try {
-      final res = await _api.getCrmDeals(
+      final res = await _api.getLeadBoard(
         search: _searchController.text.isEmpty ? null : _searchController.text,
       );
       final raw = res.data;
@@ -39,42 +67,12 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
           ? raw
           : (raw is Map ? (raw['data'] ?? []) as List : []);
       setState(() {
-        // Normalize v2 deal fields to a common shape the list can render
-        _leads = list.map((e) {
-          final d = Map<String, dynamic>.from(e as Map);
-          final contact = d['contact'] is Map ? d['contact'] as Map : {};
-          // Map deal fields → lead-like shape for display
-          d['customerName'] = contact['name']?.toString() ?? d['name']?.toString() ?? '';
-          d['phone'] = contact['phone']?.toString() ?? '';
-          d['source'] = contact['source']?.toString() ?? '';
-          // Normalize owner to assignedTo shape (firstName/lastName or name)
-          final owner = d['owner'];
-          if (owner is Map && owner['name'] != null && owner['firstName'] == null) {
-            final parts = owner['name'].toString().split(' ');
-            d['assignedTo'] = { ...owner, 'firstName': parts.first, 'lastName': parts.length > 1 ? parts.sublist(1).join(' ') : '' };
-          } else {
-            d['assignedTo'] = owner;
-          }
-          return d;
-        }).toList();
+        _leads = list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
         _loading = false;
       });
     } catch (e) {
       setState(() => _loading = false);
     }
-  }
-
-  Future<void> _loadAssignableUsers() async {
-    try {
-      final res = await _api.getAssignableUsers();
-      final raw = res.data;
-      final list = raw is List
-          ? raw
-          : (raw is Map ? (raw['data'] ?? []) as List : []);
-      _assignableUsers = list
-          .map((e) => Map<String, dynamic>.from(e as Map))
-          .toList();
-    } catch (_) {}
   }
 
   void _showCreateSheet() {
@@ -84,6 +82,9 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
     String source = 'Walk-in';
     String buyerType = '';
     String priority = 'MEDIUM';
+    String? branchId;
+    String? pipelineId;
+    Map<String, dynamic>? assignedUser;
 
     showModalBottomSheet(
       context: context,
@@ -92,200 +93,293 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheetState) => Padding(
-          padding: EdgeInsets.fromLTRB(
-            20,
-            20,
-            20,
-            MediaQuery.of(ctx).viewInsets.bottom + 20,
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
+        builder: (ctx, setSheetState) {
+          Future<void> pickAssignedUser() async {
+            final searchCtrl = TextEditingController();
+            List<Map<String, dynamic>> filtered = List.from(_assignableUsers);
+            final picked = await showModalBottomSheet<Map<String, dynamic>>(
+              context: ctx,
+              isScrollControlled: true,
+              shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+              builder: (sCtx) => StatefulBuilder(
+                builder: (sCtx, setSub) => SizedBox(
+                  height: MediaQuery.of(sCtx).size.height * 0.6,
+                  child: Column(children: [
+                    const SizedBox(height: 12),
+                    Container(width: 36, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
+                    const SizedBox(height: 10),
+                    const Text('Assign Salesperson', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                    const SizedBox(height: 10),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: TextField(
+                        controller: searchCtrl,
+                        autofocus: true,
+                        decoration: const InputDecoration(hintText: 'Search...', prefixIcon: Icon(Icons.search_rounded), isDense: true),
+                        onChanged: (q) {
+                          final lower = q.toLowerCase();
+                          setSub(() {
+                            filtered = _assignableUsers.where((u) {
+                              final n = '${u['firstName'] ?? ''} ${u['lastName'] ?? ''}'.toLowerCase();
+                              return n.contains(lower) || (u['email'] ?? '').toString().toLowerCase().contains(lower);
+                            }).toList();
+                          });
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Divider(height: 1),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: filtered.length,
+                        itemBuilder: (_, i) {
+                          final u = filtered[i];
+                          final name = '${u['firstName'] ?? ''} ${u['lastName'] ?? ''}'.trim();
+                          return ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: AppColors.primary.withValues(alpha: 0.12),
+                              child: Text(name.isNotEmpty ? name[0].toUpperCase() : '?', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700)),
+                            ),
+                            title: Text(name.isNotEmpty ? name : (u['email'] ?? ''), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                            subtitle: Text(u['email'] ?? '', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                            onTap: () => Navigator.pop(sCtx, u),
+                          );
+                        },
+                      ),
+                    ),
+                  ]),
+                ),
+              ),
+            );
+            if (picked != null) setSheetState(() => assignedUser = picked);
+          }
+
+          return Padding(
+            padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // ── Header ──
+                  Row(children: [
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            AppColors.primary.withValues(alpha: 0.15),
-                            AppColors.accent.withValues(alpha: 0.1),
-                          ],
-                        ),
+                        gradient: LinearGradient(colors: [AppColors.primary.withValues(alpha: 0.15), AppColors.accent.withValues(alpha: 0.1)]),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Icon(
-                        Icons.person_add,
-                        color: AppColors.primary,
-                        size: 22,
+                      child: const Icon(Icons.person_add, color: AppColors.primary, size: 22),
+                    ),
+                    const SizedBox(width: 12),
+                    const Text('Create New Lead', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                  ]),
+                  const SizedBox(height: 20),
+
+                  // ── Customer Name ──
+                  TextField(
+                    controller: nameCtrl,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(labelText: 'Customer Name *', prefixIcon: Icon(Icons.person_outline_rounded)),
+                    onChanged: (_) => setSheetState(() {}),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // ── Phone ──
+                  TextField(
+                    controller: phoneCtrl,
+                    keyboardType: TextInputType.phone,
+                    maxLength: 15,
+                    decoration: const InputDecoration(labelText: 'Mobile Number', prefixIcon: Icon(Icons.phone_outlined), counterText: ''),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // ── Source ──
+                  DropdownButtonFormField<String>(
+                    initialValue: source,
+                    decoration: const InputDecoration(labelText: 'Source', prefixIcon: Icon(Icons.source_outlined)),
+                    items: ['Walk-in', 'Call', 'Website', 'Facebook', 'Instagram', 'Google Ads', 'Reference', 'Event', 'Other']
+                        .map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                    onChanged: (v) => setSheetState(() => source = v!),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // ── Interested Model ──
+                  TextField(
+                    controller: modelCtrl,
+                    decoration: const InputDecoration(labelText: 'Interested Model', prefixIcon: Icon(Icons.directions_car_outlined)),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // ── Priority + Buyer Type (2-column) ──
+                  Row(children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        initialValue: priority,
+                        decoration: const InputDecoration(labelText: 'Priority', isDense: true),
+                        items: const [
+                          DropdownMenuItem(value: 'HOT',    child: Text('🔥 Hot')),
+                          DropdownMenuItem(value: 'WARM',   child: Text('🌡 Warm')),
+                          DropdownMenuItem(value: 'MEDIUM', child: Text('📋 Medium')),
+                          DropdownMenuItem(value: 'COLD',   child: Text('❄ Cold')),
+                        ],
+                        onChanged: (v) => setSheetState(() => priority = v!),
                       ),
                     ),
                     const SizedBox(width: 12),
-                    const Text(
-                      'Create New Lead',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        initialValue: buyerType.isEmpty ? null : buyerType,
+                        decoration: const InputDecoration(labelText: 'Buyer Type', isDense: true),
+                        hint: const Text('Select'),
+                        items: const [
+                          DropdownMenuItem(value: 'FIRST_TIME',   child: Text('First Time')),
+                          DropdownMenuItem(value: 'ADDITIONAL',   child: Text('Additional')),
+                          DropdownMenuItem(value: 'REPLACEMENT',  child: Text('Replacement')),
+                        ],
+                        onChanged: (v) => setSheetState(() => buyerType = v ?? ''),
                       ),
                     ),
+                  ]),
+                  const SizedBox(height: 12),
+
+                  // ── Branch ──
+                  if (_branches.isNotEmpty) ...[
+                    DropdownButtonFormField<String>(
+                      initialValue: branchId,
+                      decoration: const InputDecoration(labelText: 'Branch', prefixIcon: Icon(Icons.business_outlined)),
+                      hint: const Text('Select branch'),
+                      items: _branches.map((b) => DropdownMenuItem<String>(
+                        value: b['id']?.toString(),
+                        child: Text(b['name']?.toString() ?? ''),
+                      )).toList(),
+                      onChanged: (v) => setSheetState(() => branchId = v),
+                    ),
+                    const SizedBox(height: 12),
                   ],
-                ),
-                const SizedBox(height: 20),
-                TextField(
-                  controller: nameCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Customer Name *',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: phoneCtrl,
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(labelText: 'Phone'),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  value: source,
-                  decoration: const InputDecoration(labelText: 'Source'),
-                  items:
-                      [
-                            'Walk-in',
-                            'Call',
-                            'Website',
-                            'Facebook',
-                            'Instagram',
-                            'Google Ads',
-                            'Reference',
-                            'Event',
-                            'Other',
-                          ]
-                          .map(
-                            (s) => DropdownMenuItem(value: s, child: Text(s)),
+
+                  // ── Pipeline ──
+                  if (_pipelines.isNotEmpty) ...[
+                    DropdownButtonFormField<String>(
+                      initialValue: pipelineId,
+                      decoration: const InputDecoration(labelText: 'Pipeline', prefixIcon: Icon(Icons.account_tree_outlined)),
+                      hint: const Text('Select pipeline'),
+                      items: _pipelines.map((p) => DropdownMenuItem<String>(
+                        value: p['id']?.toString(),
+                        child: Text(p['name']?.toString() ?? ''),
+                      )).toList(),
+                      onChanged: (v) => setSheetState(() => pipelineId = v),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+
+                  // ── Assign Salesperson ──
+                  const Text('Assign Salesperson', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+                  const SizedBox(height: 6),
+                  GestureDetector(
+                    onTap: _assignableUsers.isEmpty ? null : pickAssignedUser,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: assignedUser != null ? AppColors.primary.withValues(alpha: 0.5) : Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(10),
+                        color: assignedUser != null ? AppColors.primarySurface : Colors.white,
+                      ),
+                      child: Row(children: [
+                        Icon(Icons.person_search_rounded, size: 18, color: assignedUser != null ? AppColors.primary : AppColors.textHint),
+                        const SizedBox(width: 10),
+                        Expanded(child: Text(
+                          assignedUser != null
+                              ? '${assignedUser!['firstName'] ?? ''} ${assignedUser!['lastName'] ?? ''}'.trim()
+                              : (_assignableUsers.isEmpty ? 'Loading...' : 'Select salesperson'),
+                          style: TextStyle(fontSize: 14, color: assignedUser != null ? AppColors.textPrimary : AppColors.textHint),
+                        )),
+                        if (assignedUser != null)
+                          GestureDetector(
+                            onTap: () => setSheetState(() => assignedUser = null),
+                            child: const Icon(Icons.close_rounded, size: 16, color: AppColors.textHint),
                           )
-                          .toList(),
-                  onChanged: (v) => setSheetState(() => source = v!),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: modelCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Interested Model',
+                        else
+                          const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: AppColors.textHint),
+                      ]),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  value: priority,
-                  decoration: const InputDecoration(labelText: 'Priority'),
-                  items: [
-                    const DropdownMenuItem(value: 'HOT', child: Text('Hot')),
-                    const DropdownMenuItem(value: 'WARM', child: Text('Warm')),
-                    const DropdownMenuItem(
-                      value: 'MEDIUM',
-                      child: Text('Medium'),
-                    ),
-                    const DropdownMenuItem(value: 'COLD', child: Text('Cold')),
-                  ],
-                  onChanged: (v) => setSheetState(() => priority = v!),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  value: buyerType.isEmpty ? null : buyerType,
-                  decoration: const InputDecoration(labelText: 'Buyer Type'),
-                  items: const [
-                    DropdownMenuItem(
-                      value: 'FIRST_TIME',
-                      child: Text('First Time'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'ADDITIONAL',
-                      child: Text('Additional'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'REPLACEMENT',
-                      child: Text('Replacement'),
-                    ),
-                  ],
-                  onChanged: (v) => setSheetState(() => buyerType = v ?? ''),
-                ),
-                const SizedBox(height: 20),
-                FilledButton(
-                  onPressed: () async {
-                    if (nameCtrl.text.trim().isEmpty) return;
+                  const SizedBox(height: 20),
 
-                    // Phone duplicate check
-                    final phone = phoneCtrl.text.trim();
-                    if (phone.isNotEmpty) {
-                      try {
-                        final dupRes = await _api.checkDuplicateLead(phone);
-                        final raw = dupRes.data;
-                        final data = raw is Map ? (raw['data'] ?? raw) : {};
-                        final isDuplicate = data['isDuplicate'] == true || data['exists'] == true;
-                        if (isDuplicate && ctx.mounted) {
-                          final existingName = (data['lead'] ?? data['existingLead'] ?? {})['customerName'] ?? 'another lead';
-                          final proceed = await showDialog<bool>(
-                            context: ctx,
-                            builder: (dlgCtx) => AlertDialog(
-                              title: const Text('Duplicate Phone'),
-                              content: Text(
-                                'Phone $phone already exists as "$existingName". Create anyway?',
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(dlgCtx, false),
-                                  child: const Text('Cancel'),
-                                ),
-                                FilledButton(
-                                  onPressed: () => Navigator.pop(dlgCtx, true),
-                                  style: FilledButton.styleFrom(
-                                    backgroundColor: AppColors.warning,
+                  // ── Submit ──
+                  FilledButton(
+                    onPressed: nameCtrl.text.trim().isEmpty ? null : () async {
+                      final name = nameCtrl.text.trim();
+                      final phone = phoneCtrl.text.trim();
+
+                      if (phone.isNotEmpty) {
+                        try {
+                          final dupRes = await _api.checkDuplicateLead(phone);
+                          final raw = dupRes.data;
+                          final data = raw is Map ? (raw['data'] ?? raw) : {};
+                          final isDuplicate = data['isDuplicate'] == true || data['exists'] == true;
+                          if (isDuplicate && ctx.mounted) {
+                            final existingName = (data['lead'] ?? data['existingLead'] ?? {})['customerName'] ?? 'another lead';
+                            final proceed = await showDialog<bool>(
+                              context: ctx,
+                              builder: (dlgCtx) => AlertDialog(
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                title: const Text('Duplicate Phone'),
+                                content: Text('Phone $phone already exists as "$existingName". Create anyway?'),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.pop(dlgCtx, false), child: const Text('Cancel')),
+                                  FilledButton(
+                                    onPressed: () => Navigator.pop(dlgCtx, true),
+                                    style: FilledButton.styleFrom(backgroundColor: AppColors.warning),
+                                    child: const Text('Create Anyway'),
                                   ),
-                                  child: const Text('Create Anyway'),
-                                ),
-                              ],
-                            ),
-                          );
-                          if (proceed != true) return;
-                        }
-                      } catch (_) {
-                        // If check fails, proceed anyway
+                                ],
+                              ),
+                            );
+                            if (proceed != true) return;
+                          }
+                        } catch (_) {}
                       }
-                    }
 
-                    try {
-                      await _api.createLead(
-                        customerName: nameCtrl.text.trim(),
-                        phone: phone,
-                        source: source,
-                        interestedModel: modelCtrl.text.trim(),
-                        buyerType: buyerType,
-                        priority: priority,
-                      );
-                      if (ctx.mounted) Navigator.pop(ctx);
-                      _load();
-                    } catch (e) {
-                      if (ctx.mounted) {
-                        ScaffoldMessenger.of(ctx).showSnackBar(
-                          SnackBar(content: Text('Failed to create lead: $e')),
+                      try {
+                        await _api.createLead(
+                          customerName: name,
+                          phone: phone.isEmpty ? null : phone,
+                          source: source,
+                          interestedModel: modelCtrl.text.trim().isEmpty ? null : modelCtrl.text.trim(),
+                          buyerType: buyerType.isEmpty ? null : buyerType,
+                          priority: priority,
+                          branchId: branchId,
+                          pipelineId: pipelineId,
+                          assignedToUserId: assignedUser?['id']?.toString(),
                         );
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        _load();
+                      } catch (e) {
+                        if (ctx.mounted) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            SnackBar(content: Text('Failed to create lead: $e')),
+                          );
+                        }
                       }
-                    }
-                  },
-                  child: const Text('Create Lead'),
-                ),
-              ],
+                    },
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('Create Lead', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
 
   void _showAssignDialog(Map<String, dynamic> lead) async {
-    await _loadAssignableUsers();
     if (!mounted) return;
 
     showDialog(
@@ -305,7 +399,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                 ),
                 onTap: () async {
                   try {
-                    await _api.assignLead(lead['id'], user['id']);
+                    await _api.assignLead((lead['leadId'] ?? lead['id']).toString(), user['id']);
                     if (ctx.mounted) Navigator.pop(ctx);
                     _load();
                   } catch (e) {
@@ -326,7 +420,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
 
   void _markLost(Map<String, dynamic> lead) async {
     try {
-      await _api.updateLeadStatus(lead['id'], {'status': 'LOST'});
+      await _api.updateLeadStatus((lead['leadId'] ?? lead['id']).toString(), {'status': 'LOST'});
       _load();
     } catch (e) {
       if (mounted) {
@@ -405,14 +499,20 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
   }
 
   Widget _buildLeadCard(Map<String, dynamic> lead) {
-    final status = (lead['status'] ?? 'OPEN').toString();
-    final stageName = lead['stage'] is Map
-        ? lead['stage']['name']
-        : (lead['stageName'] ?? '');
-    final assignedTo = lead['assignedTo'] is Map
-        ? '${lead['assignedTo']['firstName'] ?? ''} ${lead['assignedTo']['lastName'] ?? ''}'
-              .trim()
-        : (lead['assignedToName'] ?? 'Unassigned');
+    // /leads/board returns: leadId, mobileNumber, assignedDse (flat string),
+    // leadStatus, currentStage
+    final leadId = (lead['leadId'] ?? lead['id'] ?? '').toString();
+    final status = (lead['leadStatus'] ?? lead['status'] ?? 'OPEN').toString();
+    final stageName = lead['currentStage']?.toString().isNotEmpty == true
+        ? lead['currentStage'].toString()
+        : (lead['leadStage'] is Map ? lead['leadStage']['name'] : (lead['stageName'] ?? '')).toString();
+    final phone = (lead['mobileNumber'] ?? lead['phone'] ?? '').toString();
+    final assignedTo = lead['assignedDse']?.toString().isNotEmpty == true
+        ? lead['assignedDse'].toString()
+        : (lead['assignedTo'] is Map
+            ? '${lead['assignedTo']['firstName'] ?? ''} ${lead['assignedTo']['lastName'] ?? ''}'.trim()
+            : (lead['assignedToName'] ?? ''));
+    final displayAssigned = assignedTo.isNotEmpty ? assignedTo : 'Unassigned';
 
     return GestureDetector(
       onTap: () => Navigator.push(
@@ -420,9 +520,8 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
         PageRouteBuilder(
           opaque: true,
           pageBuilder: (_, __, ___) => CrmLeadDetailScreen(
-            leadId: lead['id'].toString(),
-            leadName: lead['customerName'] ?? lead['name'] ?? 'Deal',
-            isDeal: true,
+            leadId: leadId,
+            leadName: lead['customerName'] ?? 'Lead',
           ),
           transitionsBuilder: (_, animation, __, child) =>
               FadeTransition(opacity: animation, child: child),
@@ -466,7 +565,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
               const Icon(Icons.phone, size: 14, color: AppColors.textSecondary),
               const SizedBox(width: 4),
               Text(
-                lead['phone'] ?? 'N/A',
+                phone.isNotEmpty ? phone : 'N/A',
                 style: const TextStyle(
                   fontSize: 13,
                   color: AppColors.textSecondary,
@@ -481,7 +580,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
               const SizedBox(width: 4),
               Expanded(
                 child: Text(
-                  assignedTo,
+                  displayAssigned,
                   style: const TextStyle(
                     fontSize: 13,
                     color: AppColors.textSecondary,
