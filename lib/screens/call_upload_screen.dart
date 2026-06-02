@@ -498,13 +498,13 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
       final raw = res.data;
       final data = raw is Map ? (raw['data'] ?? raw) : {};
       final isDuplicate = data['exists'] == true || data['isDuplicate'] == true;
-      // Backend returns 'leads' array — take the first one
+      // Backend returns 'leads' array or 'contact' object (v2 CRM)
       final leadsList = data['leads'];
       final lead = (leadsList is List && leadsList.isNotEmpty)
           ? leadsList.first
-          : (data['lead'] ?? data['existingLead']);
+          : (data['lead'] ?? data['existingLead'] ?? data['contact']);
       if (isDuplicate && lead != null && lead is Map) {
-        final name = lead['customerName']?.toString() ?? '';
+        final name = (lead['customerName'] ?? lead['name'])?.toString() ?? '';
         setState(() {
           _linkedLeadId = lead['id']?.toString();
           _linkedLeadName = name;
