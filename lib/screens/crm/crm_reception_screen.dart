@@ -690,16 +690,16 @@ class _CrmReceptionScreenState extends State<CrmReceptionScreen> {
               color: AppColors.primarySurface,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Row(
+            child: Row(
               children: [
-                Icon(Icons.info_outline, size: 14, color: AppColors.primary),
-                SizedBox(width: 8),
+                const Icon(Icons.info_outline, size: 14, color: AppColors.primary),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     _currentUser?.branchId != null
                         ? 'Branch auto-set to ${_currentUser!.branchName ?? 'your branch'}. Assign a DSE after creation.'
                         : 'Just name + phone is enough. Branch & DSE are auto-assigned. Details can be added later.',
-                    style: TextStyle(fontSize: 11, color: AppColors.primary),
+                    style: const TextStyle(fontSize: 11, color: AppColors.primary),
                   ),
                 ),
               ],

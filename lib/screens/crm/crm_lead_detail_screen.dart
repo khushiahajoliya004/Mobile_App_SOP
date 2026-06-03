@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../main.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
+import '../../models/user_model.dart';
 
 class CrmLeadDetailScreen extends StatefulWidget {
   final String leadId;
@@ -18,6 +19,8 @@ class CrmLeadDetailScreen extends StatefulWidget {
 class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen>
     with SingleTickerProviderStateMixin {
   final _api = ApiService();
+  final _auth = AuthService();
+  UserModel? _currentUser;
   late TabController _tabCtrl;
 
   bool _loading = true;
@@ -56,7 +59,13 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen>
   void initState() {
     super.initState();
     _tabCtrl = TabController(length: _tabLabels.length, vsync: this);
+    _loadCurrentUser();
     _loadDetails();
+  }
+
+  Future<void> _loadCurrentUser() async {
+    final user = await _auth.getUser();
+    if (mounted) setState(() => _currentUser = user);
   }
 
   @override
@@ -184,28 +193,32 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen>
   Future<void> _openReassignPopup() async {
     final leadBranchId = _lead['branchId']?.toString() ??
         (_lead['branch'] is Map ? _lead['branch']['id']?.toString() : null);
+    // Prefer user's own branch over the lead's branch (matches web frontend logic)
+    final effectiveBranchId = _currentUser?.branchId ?? leadBranchId;
     setState(() {
       _selectedDseId = _lead['assignedToUserId']?.toString();
       _reassignReasonCtrl.clear();
       _reassignSuccess = false;
       _branchTeam = [];
       _reassignBranches = [];
-      _reassignBranchId = leadBranchId;
+      _reassignBranchId = effectiveBranchId;
       _showReassignPopup = true;
       _teamLoading = true;
     });
     try {
-      // Load branches list
-      final branchRes = await _api.getBranches();
-      final branchRaw = branchRes.data;
-      final branchList = branchRaw is List
-          ? branchRaw
-          : (branchRaw is Map ? (branchRaw['data'] ?? []) as List : []);
-      final branches = branchList.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-      if (mounted) setState(() => _reassignBranches = branches);
+      // Only load branches list if user doesn't have a fixed branch
+      if (_currentUser?.branchId == null) {
+        final branchRes = await _api.getBranches();
+        final branchRaw = branchRes.data;
+        final branchList = branchRaw is List
+            ? branchRaw
+            : (branchRaw is Map ? (branchRaw['data'] ?? []) as List : []);
+        final branches = branchList.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        if (mounted) setState(() => _reassignBranches = branches);
+      }
 
-      // Load users for the pre-selected branch
-      await _loadReassignUsers(leadBranchId);
+      // Load users for the effective branch
+      await _loadReassignUsers(effectiveBranchId);
     } catch (_) {
       if (mounted) setState(() => _teamLoading = false);
     }
@@ -1891,8 +1904,8 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen>
                       ]),
                     )
                   else ...[
-                    // Branch filter dropdown
-                    if (_reassignBranches.isNotEmpty)
+                    // Branch filter dropdown — hidden when user's branch is locked
+                    if (_currentUser?.branchId == null && _reassignBranches.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                         child: DropdownButtonFormField<String>(

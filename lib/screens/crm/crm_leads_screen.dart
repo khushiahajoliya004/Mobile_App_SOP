@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../main.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
+import '../../models/user_model.dart';
 import 'crm_lead_detail_screen.dart';
 
 class CrmLeadsScreen extends StatefulWidget {
@@ -12,6 +14,8 @@ class CrmLeadsScreen extends StatefulWidget {
 
 class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
   final _api = ApiService();
+  final _auth = AuthService();
+  UserModel? _currentUser;
   bool _loading = true;
   List<Map<String, dynamic>> _leads = [];
   List<Map<String, dynamic>> _assignableUsers = [];
@@ -22,8 +26,14 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
   @override
   void initState() {
     super.initState();
+    _loadCurrentUser();
     _load();
     _loadFormData();
+  }
+
+  Future<void> _loadCurrentUser() async {
+    final user = await _auth.getUser();
+    if (mounted) setState(() => _currentUser = user);
   }
 
   @override
@@ -76,19 +86,34 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
     }
   }
 
-  void _showCreateSheet() {
+  Future<void> _showCreateSheet() async {
     final nameCtrl = TextEditingController();
     final phoneCtrl = TextEditingController();
     final modelCtrl = TextEditingController();
     String source = 'Walk-in';
     String buyerType = '';
     String priority = 'MEDIUM';
-    String? branchId;
+    // Auto-select branch from user profile, matching web frontend logic
+    String? branchId = _currentUser?.branchId;
+    final bool branchLocked = branchId != null;
     String? pipelineId;
     Map<String, dynamic>? assignedUser;
-    // Reactive user list: all users when no branch, branch users when branch selected
     List<Map<String, dynamic>> sheetUsers = List.from(_assignableUsers);
     bool sheetUsersLoading = false;
+
+    // Pre-fetch branch team if user has a branch (same as web onBranchChange on init)
+    if (branchId != null) {
+      try {
+        final res = await _api.getCrmUsersByBranch(branchId);
+        final raw = res.data;
+        final list = raw is List ? raw : (raw is Map ? (raw['data'] ?? []) as List : []);
+        final users = list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        sheetUsers = users.map((u) => {...u, 'id': u['userId'] ?? u['id']}).toList();
+        if (sheetUsers.isEmpty) sheetUsers = List.from(_assignableUsers);
+      } catch (_) {}
+    }
+
+    if (!mounted) return;
 
     showModalBottomSheet(
       context: context,
@@ -277,20 +302,36 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                   if (_branches.isNotEmpty) ...[
                     DropdownButtonFormField<String>(
                       initialValue: branchId,
-                      decoration: const InputDecoration(labelText: 'Branch', prefixIcon: Icon(Icons.business_outlined)),
+                      decoration: InputDecoration(
+                        labelText: 'Branch',
+                        prefixIcon: const Icon(Icons.business_outlined),
+                        suffixIcon: branchLocked ? const Icon(Icons.lock_outline, size: 16, color: AppColors.primary) : null,
+                      ),
                       hint: const Text('Select branch'),
                       items: [
-                        const DropdownMenuItem<String>(
-                          value: null,
-                          child: Text('All Branches'),
-                        ),
+                        if (!branchLocked)
+                          const DropdownMenuItem<String>(
+                            value: null,
+                            child: Text('All Branches'),
+                          ),
                         ..._branches.map((b) => DropdownMenuItem<String>(
                           value: b['id']?.toString(),
                           child: Text(b['name']?.toString() ?? ''),
                         )),
                       ],
-                      onChanged: (v) => onBranchChanged(v),
+                      onChanged: branchLocked ? null : (v) => onBranchChanged(v),
                     ),
+                    if (branchLocked) ...[
+                      const SizedBox(height: 4),
+                      const Row(
+                        children: [
+                          SizedBox(width: 4),
+                          Icon(Icons.info_outline, size: 12, color: AppColors.primary),
+                          SizedBox(width: 4),
+                          Text('Auto-assigned from your branch', style: TextStyle(fontSize: 11, color: AppColors.primary)),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 12),
                   ],
 
@@ -400,6 +441,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                           name: name,
                           phone: phone.isEmpty ? null : phone,
                           source: source,
+                          branchId: branchId,
                           pipelineId: pipelineId,
                           ownerUserId: assignedUser?['id']?.toString(),
                           notes: modelCtrl.text.trim().isEmpty ? null : 'Interested Model: ${modelCtrl.text.trim()}',
