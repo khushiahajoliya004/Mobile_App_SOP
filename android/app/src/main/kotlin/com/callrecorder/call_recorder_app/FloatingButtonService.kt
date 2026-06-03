@@ -18,6 +18,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.PowerManager
 import android.util.DisplayMetrics
 import android.util.Log
 import android.view.Gravity
@@ -70,6 +71,9 @@ class FloatingButtonService : Service() {
     private var screenWidth = 0
     private var screenHeight = 0
 
+    // Wake lock — keeps CPU alive during recording when screen turns off
+    private var wakeLock: PowerManager.WakeLock? = null
+
     // Recording state
     private var isRecording = false
     private var recordingSeconds = 0
@@ -106,6 +110,8 @@ class FloatingButtonService : Service() {
     override fun onDestroy() {
         hideButton()
         timerHandler.removeCallbacks(timerRunnable)
+        if (wakeLock?.isHeld == true) wakeLock?.release()
+        wakeLock = null
         instance = null
         super.onDestroy()
     }
@@ -273,6 +279,10 @@ class FloatingButtonService : Service() {
             recordingSeconds = 0
             (floatingView as? FloatingButtonView)?.setRecordingState(true, 0)
             timerHandler.postDelayed(timerRunnable, 1000)
+            // Acquire wake lock so recording continues when screen turns off
+            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MysteryMentor:RecordingWakeLock")
+            wakeLock?.acquire(2 * 60 * 60 * 1000L) // max 2 hours
             Log.i(TAG, "Recording started via floating button: $path")
         } else {
             Log.w(TAG, "Failed to start recording via floating button")
@@ -284,6 +294,9 @@ class FloatingButtonService : Service() {
         val info = CallRecorderEngine.stopRecording()
         isRecording = false
         recordingSeconds = 0
+        // Release wake lock when recording stops
+        if (wakeLock?.isHeld == true) wakeLock?.release()
+        wakeLock = null
         (floatingView as? FloatingButtonView)?.setRecordingState(false, 0)
 
         // Write command file for Flutter compatibility

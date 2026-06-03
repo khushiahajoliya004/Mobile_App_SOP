@@ -24,6 +24,9 @@
     <!-- Foreground Service - CRITICAL for background recording -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
+
+    <!-- Wake Lock - keeps CPU awake during recording when screen turns off -->
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
     
     <!-- CRASH FIX: Removed FOREGROUND_SERVICE_SPECIAL_USE - not needed for microphone recording -->
     <!-- <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/> -->
