@@ -4,8 +4,7 @@ import 'auth_service.dart';
 class ApiService {
   // Backend runs on port 3000, no /api prefix
   // For Android emulator use 10.0.2.2, for real device use your machine IP
-  // static const String baseUrl = 'https://apimysterymentorqa.mysterymentor.in';
-  static const String baseUrl = 'http://192.168.1.13:3000';
+  static const String baseUrl = 'https://apimysterymentorqa.mysterymentor.in';
 
   late final Dio _dio;
   final AuthService _auth = AuthService();

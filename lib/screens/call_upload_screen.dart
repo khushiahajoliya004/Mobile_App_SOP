@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
@@ -425,22 +426,47 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
     });
 
     try {
-      await _api.createCall(
-        customerName: _customerNameController.text.trim(),
-        companyId: _user!.companyId!,
-        userId: _user!.id,
-        categoryId: _sopCategoryId,
-        salesStageId: _sopSalesStageId,
-        notes: _notesController.text.trim().isNotEmpty
-            ? _notesController.text.trim()
-            : null,
-        audioFilePath: _audioFilePath,
-        audioFileName: _audioFileName,
-        leadId: _linkedLeadId,
-        phoneNumber: _phoneController.text.trim().isNotEmpty
-            ? _phoneController.text.trim()
-            : null,
-      );
+      debugPrint('[Upload] companyId=${_user!.companyId} userId=${_user!.id}');
+      debugPrint('[Upload] categoryId=$_sopCategoryId salesStageId=$_sopSalesStageId');
+      debugPrint('[Upload] audioPath=$_audioFilePath audioName=$_audioFileName');
+      debugPrint('[Upload] leadId=$_linkedLeadId phone=${_phoneController.text.trim()}');
+
+      final customerName = _customerNameController.text.trim();
+      final companyId = _user!.companyId!;
+      final userId = _user!.id;
+      final notes = _notesController.text.trim().isNotEmpty ? _notesController.text.trim() : null;
+      final phone = _phoneController.text.trim().isNotEmpty ? _phoneController.text.trim() : null;
+
+      try {
+        await _api.createCall(
+          customerName: customerName,
+          companyId: companyId,
+          userId: userId,
+          categoryId: _sopCategoryId,
+          salesStageId: _sopSalesStageId,
+          notes: notes,
+          audioFilePath: _audioFilePath,
+          audioFileName: _audioFileName,
+          leadId: _linkedLeadId,
+          phoneNumber: phone,
+        );
+      } on DioException catch (e1) {
+        if (e1.response?.statusCode == 500) {
+          // Retry without optional relational IDs that may not exist in prod DB
+          debugPrint('[Upload] 500 on full payload, retrying without optional IDs...');
+          await _api.createCall(
+            customerName: customerName,
+            companyId: companyId,
+            userId: userId,
+            notes: notes,
+            audioFilePath: _audioFilePath,
+            audioFileName: _audioFileName,
+            phoneNumber: phone,
+          );
+        } else {
+          rethrow;
+        }
+      }
 
       if (mounted) {
         setState(() {
@@ -458,11 +484,27 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
       }
     } catch (e) {
       if (mounted) {
+        String errMsg = 'Upload failed. Try again.';
+        if (e is DioException) {
+          final data = e.response?.data;
+          if (data is Map) {
+            errMsg = data['message']?.toString() ?? data['error']?.toString() ?? errMsg;
+          } else if (data is String && data.isNotEmpty) {
+            errMsg = data;
+          } else if (e.response?.statusCode != null) {
+            errMsg = 'Server error ${e.response!.statusCode}. Try again.';
+          }
+        }
+        if (e is DioException) {
+          debugPrint('[Upload] status: ${e.response?.statusCode}');
+          debugPrint('[Upload] response body: ${e.response?.data}');
+        }
+        debugPrint('[Upload] error: $e');
         setState(() {
-          _statusMessage = 'Upload failed. Check credits or try again.';
+          _statusMessage = errMsg;
           _isError = true;
         });
-        _showSnack('Upload failed. Try again.');
+        _showSnack(errMsg);
       }
     } finally {
       if (mounted) setState(() => _uploading = false);
