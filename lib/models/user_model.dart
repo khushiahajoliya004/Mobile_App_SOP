@@ -12,6 +12,9 @@ class UserModel {
   final List<String> permissions;
   final List<String> allowedModules;
   final List<RoleModel> roles;
+  final String? branchId;
+  final String? branchName;
+  final String? branchRole;
 
   UserModel({
     required this.id,
@@ -27,6 +30,9 @@ class UserModel {
     required this.permissions,
     required this.allowedModules,
     required this.roles,
+    this.branchId,
+    this.branchName,
+    this.branchRole,
   });
 
   String get fullName => '$firstName $lastName'.trim();
@@ -61,6 +67,9 @@ class UserModel {
       permissions: perms.toList(),
       allowedModules: List<String>.from(json['_allowedModules'] ?? []),
       roles: roles,
+      branchId: json['branchId'],
+      branchName: json['branchName'],
+      branchRole: json['branchRole'],
     );
   }
 
@@ -77,6 +86,9 @@ class UserModel {
     'aiEnabled': aiEnabled,
     '_allowedModules': allowedModules,
     'roles': roles.map((r) => r.toJson()).toList(),
+    'branchId': branchId,
+    'branchName': branchName,
+    'branchRole': branchRole,
   };
 
   bool hasPermission(String permission) => permissions.contains(permission);

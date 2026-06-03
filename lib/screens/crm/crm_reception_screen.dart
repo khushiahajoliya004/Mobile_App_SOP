@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../main.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
+import '../../models/user_model.dart';
 import 'crm_lead_detail_screen.dart';
 
 class CrmReceptionScreen extends StatefulWidget {
@@ -12,6 +14,8 @@ class CrmReceptionScreen extends StatefulWidget {
 
 class _CrmReceptionScreenState extends State<CrmReceptionScreen> {
   final _api = ApiService();
+  final _auth = AuthService();
+  UserModel? _currentUser;
 
   // ── Steps: form | duplicate | success ──
   String _step = 'form';
@@ -51,7 +55,13 @@ class _CrmReceptionScreenState extends State<CrmReceptionScreen> {
   @override
   void initState() {
     super.initState();
+    _loadCurrentUser();
     _loadSources();
+  }
+
+  Future<void> _loadCurrentUser() async {
+    final user = await _auth.getUser();
+    if (mounted) setState(() => _currentUser = user);
   }
 
   @override
@@ -119,6 +129,7 @@ class _CrmReceptionScreenState extends State<CrmReceptionScreen> {
         phone: phone,
         email: _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
         source: _source,
+        branchId: _currentUser?.branchId,
         notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
       );
       final raw = res.data;
@@ -171,12 +182,14 @@ class _CrmReceptionScreenState extends State<CrmReceptionScreen> {
       ),
     );
 
-    // Load team
+    // Load team — prefer user's own branch, then lead's branch, then all
     try {
-      final branchId = lead['branchId']?.toString() ?? (lead['branch'] is Map ? lead['branch']['id']?.toString() : null);
+      final effectiveBranchId = _currentUser?.branchId
+          ?? lead['branchId']?.toString()
+          ?? (lead['branch'] is Map ? lead['branch']['id']?.toString() : null);
       List<Map<String, dynamic>> team = [];
-      if (branchId != null && branchId.isNotEmpty) {
-        final res = await _api.getCrmUsersByBranch(branchId);
+      if (effectiveBranchId != null && effectiveBranchId.isNotEmpty) {
+        final res = await _api.getCrmUsersByBranch(effectiveBranchId);
         final raw = res.data;
         final list = raw is List ? raw : (raw is Map ? (raw['data'] ?? []) as List : []);
         team = list.map((e) => Map<String, dynamic>.from(e as Map)).where((m) {
@@ -683,7 +696,9 @@ class _CrmReceptionScreenState extends State<CrmReceptionScreen> {
                 SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Just name + phone is enough. Branch & DSE are auto-assigned. Details can be added later.',
+                    _currentUser?.branchId != null
+                        ? 'Branch auto-set to ${_currentUser!.branchName ?? 'your branch'}. Assign a DSE after creation.'
+                        : 'Just name + phone is enough. Branch & DSE are auto-assigned. Details can be added later.',
                     style: TextStyle(fontSize: 11, color: AppColors.primary),
                   ),
                 ),

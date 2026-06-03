@@ -693,6 +693,7 @@ class ApiService {
     String? source,
     String? pipelineId,
     String? ownerUserId,
+    String? branchId,
     String? notes,
   }) async {
     return _dio.post(
@@ -705,6 +706,7 @@ class ApiService {
         if (source != null && source.isNotEmpty) 'source': source,
         if (pipelineId != null && pipelineId.isNotEmpty) 'pipelineId': pipelineId,
         if (ownerUserId != null && ownerUserId.isNotEmpty) 'ownerUserId': ownerUserId,
+        if (branchId != null && branchId.isNotEmpty) 'branchId': branchId,
         if (notes != null && notes.isNotEmpty) 'notes': notes,
       },
     );
