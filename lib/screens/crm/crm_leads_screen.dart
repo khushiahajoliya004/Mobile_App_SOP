@@ -52,6 +52,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
       final bRaw = results[0].data;
       final pRaw = results[1].data;
       final uRaw = results[2].data;
+      debugPrint('branches raw: $bRaw');
       if (mounted) {
         setState(() {
           _branches = _toList(bRaw);
@@ -59,7 +60,9 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
           _assignableUsers = _toList(uRaw);
         });
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('_loadFormData error: $e');
+    }
   }
 
   List<Map<String, dynamic>> _toList(dynamic raw) {

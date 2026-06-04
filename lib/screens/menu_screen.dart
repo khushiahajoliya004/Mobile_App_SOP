@@ -105,6 +105,15 @@ class MenuScreen extends StatelessWidget {
               'Leads & pipeline',
               const CrmScreen(),
             ),
+          if (_can('BRANCH'))
+            _M(
+              'Branches',
+              Icons.store_rounded,
+              const Color(0xFF0EA5E9),
+              const Color(0xFF38BDF8),
+              'Manage branches',
+              const CrmBranchesScreen(),
+            ),
         ],
       ),
       _Section(
