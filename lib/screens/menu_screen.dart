@@ -6,6 +6,7 @@ import 'call_upload_screen.dart';
 import 'ai_insights/ai_insights_screen.dart';
 import 'audio_library_screen.dart';
 import 'crm/crm_screen.dart';
+import 'crm/crm_branches_screen.dart';
 import 'analytics/analytics_screen.dart';
 import 'call_approvals/call_approvals_screen.dart';
 import 'sop_builder/sop_list_screen.dart';
@@ -18,6 +19,28 @@ import 'credits/credits_screen.dart';
 import 'assign_sop/assign_sop_screen.dart';
 import 'roles/role_list_screen.dart';
 import 'team/team_screen.dart';
+import 'companies/company_list_screen.dart';
+import 'distributors/distributor_list_screen.dart';
+import 'plans/plan_list_screen.dart';
+import 'modules/module_list_screen.dart';
+import 'operations/operation_list_screen.dart';
+import 'permissions/permission_list_screen.dart';
+import 'llm_config/llm_config_screen.dart';
+import 'call_report/call_report_screen.dart';
+import 'employee_performance/employee_performance_screen.dart';
+import 'sales_performance/sales_performance_screen.dart';
+import 'team_report/team_report_screen.dart';
+import 'prompt_settings/prompt_settings_screen.dart';
+import 'settings/wa_settings_screen.dart';
+import 'crm_v2/crm_contacts_screen.dart';
+import 'crm_v2/crm_deals_screen.dart';
+import 'crm_v2/crm_activities_screen.dart';
+import 'crm_v2/crm_custom_properties_screen.dart';
+import 'crm_v2/crm_pipeline_settings_screen.dart';
+import 'crm_v2/crm_master_data_screen.dart';
+import 'daily_transcripts/daily_transcripts_screen.dart';
+import 'salesman_sop/salesman_sop_screen.dart';
+import 'analytics/analytics_compare_screen.dart';
 
 class MenuScreen extends StatelessWidget {
   final UserModel? user;
@@ -134,9 +157,73 @@ class MenuScreen extends StatelessWidget {
               'Industry types',
               const IndustriesScreen(),
             ),
+          _M(
+            'SOP Checklist',
+            Icons.checklist_rounded,
+            const Color(0xFF10B981),
+            const Color(0xFF34D399),
+            'View assigned SOPs',
+            const SalesmanSopScreen(),
+          ),
         ],
       ),
-      _Section('Analytics', Icons.insights_rounded, const Color(0xFF3B82F6), [
+      _Section('CRM v2', Icons.contacts_rounded, const Color(0xFF10B981), [
+        if (_can('LEAD'))
+          _M(
+            'Contacts',
+            Icons.person_rounded,
+            const Color(0xFF10B981),
+            const Color(0xFF34D399),
+            'Manage CRM contacts',
+            const CrmContactsScreen(),
+          ),
+        if (_can('LEAD'))
+          _M(
+            'Deals',
+            Icons.handshake_rounded,
+            const Color(0xFF3B82F6),
+            const Color(0xFF60A5FA),
+            'Track deals & pipeline',
+            const CrmDealsScreen(),
+          ),
+        if (_can('LEAD'))
+          _M(
+            'Activities',
+            Icons.event_note_rounded,
+            const Color(0xFF8B5CF6),
+            const Color(0xFFA78BFA),
+            'Calls, emails, meetings',
+            const CrmActivitiesScreen(),
+          ),
+        if (_can('LEAD'))
+          _M(
+            'Properties',
+            Icons.tune_rounded,
+            const Color(0xFF14B8A6),
+            const Color(0xFF2DD4BF),
+            'Custom CRM fields',
+            const CrmCustomPropertiesScreen(),
+          ),
+        if (user?.isCompanyAdmin == true || user?.isSuperAdmin == true)
+          _M(
+            'Pipeline Settings',
+            Icons.account_tree_rounded,
+            const Color(0xFF6366F1),
+            const Color(0xFF818CF8),
+            'Manage pipelines & stages',
+            const CrmPipelineSettingsScreen(),
+          ),
+        if (user?.isCompanyAdmin == true || user?.isSuperAdmin == true)
+          _M(
+            'Master Data',
+            Icons.dataset_rounded,
+            const Color(0xFF64748B),
+            const Color(0xFF94A3B8),
+            'Lead sources, stages & more',
+            const CrmMasterDataScreen(),
+          ),
+      ]),
+      _Section('Reports', Icons.assessment_rounded, const Color(0xFF3B82F6), [
         if (_can('ANALYTICS'))
           _M(
             'Analytics',
@@ -146,12 +233,84 @@ class MenuScreen extends StatelessWidget {
             'Performance data',
             const AnalyticsScreen(),
           ),
+        if (_can('ANALYTICS'))
+          _M(
+            '360° Compare',
+            Icons.compare_arrows_rounded,
+            const Color(0xFF8B5CF6),
+            const Color(0xFFA78BFA),
+            'Compare users side by side',
+            const AnalyticsCompareScreen(),
+          ),
+        if (_can('ANALYTICS'))
+          _M(
+            'Daily Transcripts',
+            Icons.receipt_long_rounded,
+            const Color(0xFF0D9488),
+            const Color(0xFF14B8A6),
+            'Call transcripts by date',
+            const DailyTranscriptsScreen(),
+          ),
+        if (_can('ANALYTICS'))
+          _M(
+            'Call Report',
+            Icons.phone_in_talk_rounded,
+            const Color(0xFF6366F1),
+            const Color(0xFF818CF8),
+            'Daily call statistics',
+            const CallReportScreen(),
+          ),
+        if (_can('ANALYTICS'))
+          _M(
+            'Employee Performance',
+            Icons.person_search_rounded,
+            const Color(0xFF0EA5E9),
+            const Color(0xFF38BDF8),
+            'Individual scores & calls',
+            const EmployeePerformanceScreen(),
+          ),
+        if (_can('ANALYTICS'))
+          _M(
+            'Sales Performance',
+            Icons.trending_up_rounded,
+            const Color(0xFF10B981),
+            const Color(0xFF34D399),
+            'Leads & conversion funnel',
+            const SalesPerformanceScreen(),
+          ),
+        if (_can('ANALYTICS'))
+          _M(
+            'Team Report',
+            Icons.groups_rounded,
+            const Color(0xFFF59E0B),
+            const Color(0xFFFBBF24),
+            'Team-wide summary',
+            const TeamReportScreen(),
+          ),
       ]),
       _Section(
         'Administration',
         Icons.admin_panel_settings_rounded,
         const Color(0xFF8B5CF6),
         [
+          if (user?.isSuperAdmin == true)
+            _M(
+              'Companies',
+              Icons.business_rounded,
+              const Color(0xFF6366F1),
+              const Color(0xFF818CF8),
+              'Manage companies',
+              const CompanyListScreen(),
+            ),
+          if (user?.isSuperAdmin == true)
+            _M(
+              'Distributors',
+              Icons.store_mall_directory_rounded,
+              const Color(0xFF0EA5E9),
+              const Color(0xFF38BDF8),
+              'Manage distributors',
+              const DistributorListScreen(),
+            ),
           if (_can('USER'))
             _M(
               'Users',
@@ -169,6 +328,15 @@ class MenuScreen extends StatelessWidget {
               const Color(0xFFFBBF24),
               'Permissions',
               const RolesScreen(),
+            ),
+          if (_can('BRANCH'))
+            _M(
+              'Branches',
+              Icons.store_rounded,
+              const Color(0xFF14B8A6),
+              const Color(0xFF2DD4BF),
+              'Manage branches',
+              const CrmBranchesScreen(),
             ),
           if (_can('CREDIT'))
             _M(
@@ -196,6 +364,76 @@ class MenuScreen extends StatelessWidget {
               const Color(0xFF38BDF8),
               'View team analysis',
               const TeamScreen(),
+            ),
+        ],
+      ),
+      _Section(
+        'Settings',
+        Icons.settings_rounded,
+        const Color(0xFF64748B),
+        [
+          if (user?.isSuperAdmin == true)
+            _M(
+              'Plans',
+              Icons.card_membership_rounded,
+              const Color(0xFF6366F1),
+              const Color(0xFF818CF8),
+              'Subscription plans',
+              const PlanListScreen(),
+            ),
+          if (user?.isSuperAdmin == true)
+            _M(
+              'Modules',
+              Icons.view_module_rounded,
+              const Color(0xFF0EA5E9),
+              const Color(0xFF38BDF8),
+              'System modules',
+              const ModuleListScreen(),
+            ),
+          if (user?.isSuperAdmin == true)
+            _M(
+              'Operations',
+              Icons.settings_applications_rounded,
+              const Color(0xFF14B8A6),
+              const Color(0xFF2DD4BF),
+              'System operations',
+              const OperationListScreen(),
+            ),
+          if (user?.isSuperAdmin == true || user?.isCompanyAdmin == true)
+            _M(
+              'Permissions',
+              Icons.lock_rounded,
+              const Color(0xFFF59E0B),
+              const Color(0xFFFBBF24),
+              'Manage permissions',
+              const PermissionListScreen(),
+            ),
+          if (user?.isSuperAdmin == true || user?.isCompanyAdmin == true)
+            _M(
+              'LLM Config',
+              Icons.auto_awesome_rounded,
+              const Color(0xFF8B5CF6),
+              const Color(0xFFA78BFA),
+              'AI prompt templates',
+              const LlmConfigScreen(),
+            ),
+          if (user?.isCompanyAdmin == true || user?.isSuperAdmin == true)
+            _M(
+              'Prompt Settings',
+              Icons.text_snippet_rounded,
+              const Color(0xFF10B981),
+              const Color(0xFF34D399),
+              'Master prompt config',
+              const PromptSettingsScreen(),
+            ),
+          if (user?.isCompanyAdmin == true || user?.isSuperAdmin == true)
+            _M(
+              'WhatsApp Settings',
+              Icons.message_rounded,
+              const Color(0xFF25D366),
+              const Color(0xFF128C7E),
+              'WA audit & auto-send',
+              const WaSettingsScreen(),
             ),
         ],
       ),

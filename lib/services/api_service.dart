@@ -452,9 +452,34 @@ class ApiService {
     );
   }
 
-  // ─── Plans (for credit purchase) ───
+  // ─── Plans ───
 
   Future<Response> getPlans() async => _dio.get('/plans');
+
+  Future<Response> getActivePlans() async => _dio.get('/plans/active');
+
+  Future<Response> createPlan({
+    required String name,
+    String? description,
+    required double price,
+    required int credits,
+  }) async {
+    return _dio.post('/plans', data: {
+      'name': name,
+      if (description != null && description.isNotEmpty)
+        'description': description,
+      'price': price,
+      'credits': credits,
+    });
+  }
+
+  Future<Response> updatePlan(String id, Map<String, dynamic> data) async =>
+      _dio.patch('/plans/$id', data: data);
+
+  Future<Response> updatePlanStatus(String id, String status) async =>
+      _dio.patch('/plans/$id/status/$status');
+
+  Future<Response> deletePlan(String id) async => _dio.delete('/plans/$id');
 
   // ─── Branches ───
 
@@ -627,6 +652,114 @@ class ApiService {
   Future<Response> getMyCompany() async {
     return _dio.get('/companies/my-company/details');
   }
+
+  /// GET /companies
+  Future<Response> getCompanies() async => _dio.get('/companies');
+
+  /// GET /companies/:id
+  Future<Response> getCompany(String id) async => _dio.get('/companies/$id');
+
+  /// POST /companies
+  Future<Response> createCompany({
+    required String name,
+    required String email,
+    required String distributorId,
+    String? phone,
+    String? address,
+    String? contactPerson,
+    String? gstNumber,
+    String? website,
+    String? password,
+    String? industryId,
+    String? businessType,
+    String? state,
+    String? language,
+    String? evaluationFocus,
+  }) async {
+    return _dio.post(
+      '/companies',
+      data: {
+        'name': name,
+        'email': email,
+        'distributorId': distributorId,
+        if (phone != null && phone.isNotEmpty) 'phone': phone,
+        if (address != null && address.isNotEmpty) 'address': address,
+        if (contactPerson != null && contactPerson.isNotEmpty)
+          'contactPerson': contactPerson,
+        if (gstNumber != null && gstNumber.isNotEmpty) 'gstNumber': gstNumber,
+        if (website != null && website.isNotEmpty) 'website': website,
+        if (password != null && password.isNotEmpty) 'password': password,
+        if (industryId != null && industryId.isNotEmpty)
+          'industryId': industryId,
+        if (businessType != null && businessType.isNotEmpty)
+          'businessType': businessType,
+        if (state != null && state.isNotEmpty) 'state': state,
+        if (language != null && language.isNotEmpty) 'language': language,
+        if (evaluationFocus != null && evaluationFocus.isNotEmpty)
+          'evaluationFocus': evaluationFocus,
+      },
+    );
+  }
+
+  /// PATCH /companies/:id
+  Future<Response> updateCompany(
+    String id,
+    Map<String, dynamic> data,
+  ) async => _dio.patch('/companies/$id', data: data);
+
+  /// PATCH /companies/:id/status/:status
+  Future<Response> updateCompanyStatus(String id, String status) async =>
+      _dio.patch('/companies/$id/status/$status');
+
+  /// DELETE /companies/:id
+  Future<Response> deleteCompany(String id) async =>
+      _dio.delete('/companies/$id');
+
+  // ─── Distributors ───
+
+  /// GET /distributors
+  Future<Response> getDistributors() async => _dio.get('/distributors');
+
+  /// GET /distributors/:id
+  Future<Response> getDistributor(String id) async =>
+      _dio.get('/distributors/$id');
+
+  /// POST /distributors
+  Future<Response> createDistributor({
+    required String name,
+    required String email,
+    String? phone,
+    String? address,
+    String? contactPerson,
+    String? gstNumber,
+  }) async {
+    return _dio.post(
+      '/distributors',
+      data: {
+        'name': name,
+        'email': email,
+        if (phone != null && phone.isNotEmpty) 'phone': phone,
+        if (address != null && address.isNotEmpty) 'address': address,
+        if (contactPerson != null && contactPerson.isNotEmpty)
+          'contactPerson': contactPerson,
+        if (gstNumber != null && gstNumber.isNotEmpty) 'gstNumber': gstNumber,
+      },
+    );
+  }
+
+  /// PATCH /distributors/:id
+  Future<Response> updateDistributor(
+    String id,
+    Map<String, dynamic> data,
+  ) async => _dio.patch('/distributors/$id', data: data);
+
+  /// PATCH /distributors/:id/status/:status
+  Future<Response> updateDistributorStatus(String id, String status) async =>
+      _dio.patch('/distributors/$id/status/$status');
+
+  /// DELETE /distributors/:id
+  Future<Response> deleteDistributor(String id) async =>
+      _dio.delete('/distributors/$id');
 
   // ─── CRM ───
 
@@ -916,7 +1049,7 @@ class ApiService {
   }
 
   Future<Response> createCrmFollowUp({
-    required String dealId,
+    String? dealId,
     required DateTime scheduledAt,
     String type = 'CALL',
     String? notes,
@@ -924,7 +1057,7 @@ class ApiService {
     String? assignedToUserId,
   }) async {
     return _dio.post('/crm/follow-ups', data: {
-      'dealId': dealId,
+      if (dealId != null && dealId.isNotEmpty) 'dealId': dealId,
       'scheduledAt': scheduledAt.toUtc().toIso8601String(),
       'type': type,
       if (notes != null && notes.isNotEmpty) 'notes': notes,
@@ -1592,5 +1725,467 @@ class ApiService {
 
   Future<Response> genericDelete(String endpoint) async {
     return _dio.delete(endpoint);
+  }
+
+  // ─── Modules ───
+
+  Future<Response> getModules() async => _dio.get('/modules');
+
+  Future<Response> updateModuleStatus(String id, String status) async =>
+      _dio.patch('/modules/$id/status/$status');
+
+  // ─── Operations ───
+
+  Future<Response> getOperations() async => _dio.get('/operations');
+
+  Future<Response> updateOperationStatus(String id, String status) async =>
+      _dio.patch('/operations/$id/status/$status');
+
+  // ─── Permissions (full CRUD) ───
+
+  Future<Response> createPermission({
+    required String name,
+    required String moduleId,
+    required String operationId,
+  }) async {
+    return _dio.post('/permissions', data: {
+      'name': name,
+      'moduleId': moduleId,
+      'operationId': operationId,
+    });
+  }
+
+  Future<Response> updatePermission(
+    String id,
+    Map<String, dynamic> data,
+  ) async => _dio.patch('/permissions/$id', data: data);
+
+  Future<Response> updatePermissionStatus(String id, String status) async =>
+      _dio.patch('/permissions/$id/status/$status');
+
+  Future<Response> deletePermission(String id) async =>
+      _dio.delete('/permissions/$id');
+
+  Future<Response> getGroupedPermissions() async =>
+      _dio.get('/permissions/grouped');
+
+  // ─── LLM Config ───
+
+  Future<Response> getLlmTemplates({
+    String? companyId,
+    String? stage,
+  }) async {
+    return _dio.get('/llm-config/templates', queryParameters: {
+      if (companyId != null) 'companyId': companyId,
+      if (stage != null) 'stage': stage,
+    });
+  }
+
+  Future<Response> getLlmProviders() async =>
+      _dio.get('/llm-config/providers');
+
+  Future<Response> createLlmTemplate(Map<String, dynamic> data) async =>
+      _dio.post('/llm-config/templates', data: data);
+
+  Future<Response> updateLlmTemplate(
+    String id,
+    Map<String, dynamic> data,
+  ) async => _dio.put('/llm-config/templates/$id', data: data);
+
+  Future<Response> deleteLlmTemplate(String id) async =>
+      _dio.delete('/llm-config/templates/$id');
+
+  Future<Response> getLlmStageConfigs(String companyId) async =>
+      _dio.get('/llm-config/stages/$companyId');
+
+  Future<Response> getLlmLogs(String companyId, {String? stage, int limit = 50}) async {
+    return _dio.get('/llm-config/logs/$companyId', queryParameters: {
+      if (stage != null) 'stage': stage,
+      'limit': limit,
+    });
+  }
+
+  // ─── Call Report ───
+
+  Future<Response> getCallReportDaily({
+    String? fromDate,
+    String? toDate,
+    String? companyId,
+  }) async {
+    return _dio.get('/ai-insights/report/daily', queryParameters: {
+      if (fromDate != null) 'fromDate': fromDate,
+      if (toDate != null) 'toDate': toDate,
+      if (companyId != null) 'companyId': companyId,
+    });
+  }
+
+  Future<Response> getCallReportDailyDetail(
+    String date, {
+    String? userId,
+    String? companyId,
+  }) async {
+    return _dio.get('/ai-insights/report/daily/$date', queryParameters: {
+      if (userId != null) 'userId': userId,
+      if (companyId != null) 'companyId': companyId,
+    });
+  }
+
+  Future<Response> getCallReportGrouped({
+    String? fromDate,
+    String? toDate,
+    String? userId,
+    String? companyId,
+  }) async {
+    return _dio.get('/ai-insights/report/grouped', queryParameters: {
+      if (fromDate != null) 'fromDate': fromDate,
+      if (toDate != null) 'toDate': toDate,
+      if (userId != null) 'userId': userId,
+      if (companyId != null) 'companyId': companyId,
+    });
+  }
+
+  // ─── Employee Performance ───
+
+  Future<Response> getEmployeePerformance({
+    int page = 1,
+    int limit = 20,
+    String? search,
+    String? fromDate,
+    String? toDate,
+    String? sortBy,
+    String? sortOrder,
+  }) async {
+    return _dio.get('/employee-performance', queryParameters: {
+      'page': page,
+      'limit': limit,
+      if (search != null && search.isNotEmpty) 'search': search,
+      if (fromDate != null) 'fromDate': fromDate,
+      if (toDate != null) 'toDate': toDate,
+      if (sortBy != null) 'sortBy': sortBy,
+      if (sortOrder != null) 'sortOrder': sortOrder,
+    });
+  }
+
+  Future<Response> getEmployeePerformanceDetail(
+    String userId, {
+    String? fromDate,
+    String? toDate,
+  }) async {
+    return _dio.get('/employee-performance/$userId', queryParameters: {
+      if (fromDate != null) 'fromDate': fromDate,
+      if (toDate != null) 'toDate': toDate,
+    });
+  }
+
+  // ─── Sales Performance Report ───
+
+  Future<Response> getSalesPerformanceSummary({
+    int page = 1,
+    int limit = 20,
+    String? fromDate,
+    String? toDate,
+    String? branchId,
+    String? search,
+  }) async {
+    return _dio.get('/sales-performance-report/summary', queryParameters: {
+      'page': page,
+      'limit': limit,
+      if (fromDate != null) 'fromDate': fromDate,
+      if (toDate != null) 'toDate': toDate,
+      if (branchId != null) 'branchId': branchId,
+      if (search != null && search.isNotEmpty) 'search': search,
+    });
+  }
+
+  Future<Response> getSalesPerformanceFunnel({
+    String? fromDate,
+    String? toDate,
+    String? branchId,
+  }) async {
+    return _dio.get('/sales-performance-report/lead-conversion-funnel',
+        queryParameters: {
+      if (fromDate != null) 'fromDate': fromDate,
+      if (toDate != null) 'toDate': toDate,
+      if (branchId != null) 'branchId': branchId,
+    });
+  }
+
+  Future<Response> getSalesPerformanceCallMetrics({
+    String? fromDate,
+    String? toDate,
+    String? branchId,
+  }) async {
+    return _dio.get('/sales-performance-report/call-recording-metrics',
+        queryParameters: {
+      if (fromDate != null) 'fromDate': fromDate,
+      if (toDate != null) 'toDate': toDate,
+      if (branchId != null) 'branchId': branchId,
+    });
+  }
+
+  // ─── Team Report ───
+
+  Future<Response> getTeamReport({
+    String? branchId,
+    String? fromDate,
+    String? toDate,
+  }) async {
+    return _dio.get('/employee-performance/team-report', queryParameters: {
+      if (branchId != null) 'branchId': branchId,
+      if (fromDate != null) 'fromDate': fromDate,
+      if (toDate != null) 'toDate': toDate,
+    });
+  }
+
+  // ─── Prompt Settings ───
+
+  Future<Response> getMyPrompt() async => _dio.get('/my-prompt');
+
+  Future<Response> updateMyPrompt(Map<String, dynamic> data) async =>
+      _dio.put('/my-prompt', data: data);
+
+  // ─── WA Settings ───
+
+  Future<Response> getWaSettings() async => _dio.get('/settings/wa');
+
+  Future<Response> updateWaSettings({
+    String? waAuditNumber,
+    bool? waAutoSendEnabled,
+  }) async {
+    return _dio.patch('/settings/wa', data: {
+      if (waAuditNumber != null) 'waAuditNumber': waAuditNumber,
+      if (waAutoSendEnabled != null) 'waAutoSendEnabled': waAutoSendEnabled,
+    });
+  }
+
+  // ─── CRM v2 Contacts ───
+
+  Future<Response> createCrmContact({
+    required String name,
+    String? phone,
+    String? email,
+    String? alternatePhone,
+    String? companyName,
+    String? source,
+    String? lifecycleStage,
+    String? profession,
+    String? address,
+    String? city,
+    String? state,
+  }) async {
+    return _dio.post('/crm/contacts', data: {
+      'name': name,
+      if (phone != null && phone.isNotEmpty) 'phone': phone,
+      if (email != null && email.isNotEmpty) 'email': email,
+      if (alternatePhone != null && alternatePhone.isNotEmpty)
+        'alternatePhone': alternatePhone,
+      if (companyName != null && companyName.isNotEmpty)
+        'companyName': companyName,
+      if (source != null && source.isNotEmpty) 'source': source,
+      if (lifecycleStage != null && lifecycleStage.isNotEmpty)
+        'lifecycleStage': lifecycleStage,
+      if (profession != null && profession.isNotEmpty) 'profession': profession,
+      if (address != null && address.isNotEmpty) 'address': address,
+      if (city != null && city.isNotEmpty) 'city': city,
+      if (state != null && state.isNotEmpty) 'state': state,
+    });
+  }
+
+  Future<Response> updateCrmContact(
+    String id,
+    Map<String, dynamic> data,
+  ) async => _dio.patch('/crm/contacts/$id', data: data);
+
+  Future<Response> deleteCrmContact(String id) async =>
+      _dio.delete('/crm/contacts/$id');
+
+  Future<Response> getCrmContact(String id) async =>
+      _dio.get('/crm/contacts/$id');
+
+  // ─── CRM v2 Deals ───
+
+  Future<Response> createCrmDeal({
+    required String name,
+    required String contactId,
+    required String pipelineId,
+    required String stageId,
+    double? expectedValue,
+    String? closeDate,
+    String? priority,
+    String? ownerUserId,
+    String? branchId,
+  }) async {
+    return _dio.post('/crm/deals', data: {
+      'name': name,
+      'contactId': contactId,
+      'pipelineId': pipelineId,
+      'stageId': stageId,
+      if (expectedValue != null) 'expectedValue': expectedValue,
+      if (closeDate != null) 'closeDate': closeDate,
+      if (priority != null) 'priority': priority,
+      if (ownerUserId != null) 'ownerUserId': ownerUserId,
+      if (branchId != null) 'branchId': branchId,
+    });
+  }
+
+  Future<Response> moveCrmDealStage(String id, String stageId) async =>
+      _dio.patch('/crm/deals/$id/stage', data: {'stageId': stageId});
+
+  Future<Response> markDealWon(String id) async =>
+      _dio.post('/crm/deals/$id/won');
+
+  Future<Response> markDealLost(String id, {String? lostReason}) async =>
+      _dio.post('/crm/deals/$id/lost', data: {
+        if (lostReason != null && lostReason.isNotEmpty)
+          'lostReason': lostReason,
+      });
+
+  Future<Response> deleteCrmDeal(String id) async =>
+      _dio.delete('/crm/deals/$id');
+
+  Future<Response> getCrmPipelines() async => _dio.get('/crm/pipelines');
+
+  Future<Response> getCrmPipeline(String id) async =>
+      _dio.get('/crm/pipelines/$id');
+
+  // ─── CRM v2 Activities ───
+
+  Future<Response> getCrmActivities({
+    int page = 1,
+    int limit = 30,
+    String? type,
+    String? fromDate,
+    String? toDate,
+    String? dealId,
+    String? contactId,
+  }) async {
+    return _dio.get('/crm/activities', queryParameters: {
+      'page': page,
+      'limit': limit,
+      if (type != null && type.isNotEmpty) 'type': type,
+      if (fromDate != null) 'fromDate': fromDate,
+      if (toDate != null) 'toDate': toDate,
+      if (dealId != null) 'dealId': dealId,
+      if (contactId != null) 'contactId': contactId,
+    });
+  }
+
+  Future<Response> createCrmActivityLog({
+    required String type,
+    String? contactId,
+    String? dealId,
+    String? title,
+    String? notes,
+    String? outcome,
+    String? dueDate,
+  }) async {
+    return _dio.post('/crm/activities', data: {
+      'type': type,
+      if (contactId != null) 'contactId': contactId,
+      if (dealId != null) 'dealId': dealId,
+      if (title != null && title.isNotEmpty) 'title': title,
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
+      if (outcome != null && outcome.isNotEmpty) 'outcome': outcome,
+      if (dueDate != null) 'dueDate': dueDate,
+    });
+  }
+
+  Future<Response> updateCrmActivity(
+    String id,
+    Map<String, dynamic> data,
+  ) async => _dio.patch('/crm/activities/$id', data: data);
+
+  // ─── CRM v2 Custom Properties ───
+
+  Future<Response> getCrmProperties({String? objectType}) async {
+    return _dio.get('/crm/properties', queryParameters: {
+      if (objectType != null) 'objectType': objectType,
+    });
+  }
+
+  Future<Response> createCrmProperty({
+    required String name,
+    required String fieldKey,
+    required String fieldType,
+    required String objectType,
+    String? description,
+    List<String>? options,
+    String? groupName,
+    bool isRequired = false,
+  }) async {
+    return _dio.post('/crm/properties', data: {
+      'name': name,
+      'fieldKey': fieldKey,
+      'fieldType': fieldType,
+      'objectType': objectType,
+      if (description != null && description.isNotEmpty) 'description': description,
+      if (options != null && options.isNotEmpty) 'options': options,
+      if (groupName != null && groupName.isNotEmpty) 'groupName': groupName,
+      'isRequired': isRequired,
+    });
+  }
+
+  Future<Response> updateCrmProperty(
+    String id,
+    Map<String, dynamic> data,
+  ) async => _dio.patch('/crm/properties/$id', data: data);
+
+  Future<Response> deleteCrmProperty(String id) async =>
+      _dio.delete('/crm/properties/$id');
+
+  // ─── CRM v2 Pipeline Management ───
+
+  Future<Response> createCrmPipeline({
+    required String name,
+    bool isDefault = false,
+  }) async {
+    return _dio.post('/crm/pipelines', data: {
+      'name': name,
+      'isDefault': isDefault,
+    });
+  }
+
+  Future<Response> addCrmPipelineStage(
+    String pipelineId, {
+    required String name,
+    String type = 'OPEN',
+    int? slaDays,
+    double? winProbability,
+  }) async {
+    return _dio.post('/crm/pipelines/$pipelineId/stages', data: {
+      'name': name,
+      'type': type,
+      if (slaDays != null) 'slaDays': slaDays,
+      if (winProbability != null) 'winProbability': winProbability,
+    });
+  }
+
+  Future<Response> updateCrmPipelineStage(
+    String pipelineId,
+    String stageId,
+    Map<String, dynamic> data,
+  ) async => _dio.patch('/crm/pipelines/$pipelineId/stages/$stageId', data: data);
+
+  Future<Response> deleteCrmPipeline(String id) async =>
+      _dio.delete('/crm/pipelines/$id');
+
+  // ─── CRM v2 Follow-ups by Contact ───
+
+  Future<Response> getCrmFollowUpsByContact(String contactId) async {
+    return _dio.get('/crm/follow-ups', queryParameters: {'contactId': contactId});
+  }
+
+  // ─── Analytics Compare (User 360°) ───
+
+  Future<Response> getAnalyticsUser360({
+    required List<String> userIds,
+    String period = '30d',
+    String? categoryId,
+  }) async {
+    return _dio.get('/analytics/user-360', queryParameters: {
+      'userIds': userIds.join(','),
+      'period': period,
+      if (categoryId != null) 'categoryId': categoryId,
+    });
   }
 }
