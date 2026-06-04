@@ -202,7 +202,7 @@ class _CrmActivitiesScreenState extends State<CrmActivitiesScreen> {
     );
   }
 
-  Widget _dropdown<T>(T value, String hint, List<DropdownMenuItem<T>> items, ValueChanged<T?> onChanged) {
+  Widget _dropdown<T>(T? value, String hint, List<DropdownMenuItem<T>> items, ValueChanged<T?> onChanged) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(color: AppColors.surfaceLight, borderRadius: BorderRadius.circular(12)),
