@@ -29,6 +29,10 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
   String _activeTab = 'analysis';
   String _listView = 'calls'; // 'calls' or 'byCustomer'
 
+  // Calls tab: drill into a customer's individual calls
+  List<Map<String, dynamic>>? _callsCustomerCalls;
+  Map<String, dynamic>? _callsCustomerGroup;
+
   // Filters / Pagination
   String _search = '';
   String _statusFilter = '';
@@ -450,6 +454,7 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
   Widget build(BuildContext context) {
     if (_selected != null) return _detailScreen();
     if (_selectedGroup != null) return _mergedDetailScreen();
+    if (_callsCustomerCalls != null) return _callsCustomerScreen();
 
     return Column(
       children: [
@@ -557,9 +562,10 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
                           ? ListView.builder(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 16),
-                              itemCount: _calls.length,
+                              itemCount: _groupByCustomer().length,
                               itemBuilder: (_, i) =>
-                                  _callTile(_calls[i]),
+                                  _callsGroupTile(
+                                      _groupByCustomer()[i]),
                             )
                           : ListView.builder(
                               padding: const EdgeInsets.symmetric(
@@ -889,6 +895,160 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  // Calls tab: grouped tile that drills into individual calls
+  Widget _callsGroupTile(Map<String, dynamic> group) {
+    final calls = group['calls'] as List<Map<String, dynamic>>;
+    final score = group['avgScore'] as int?;
+    final name = group['customerName'] as String;
+    final count = group['callCount'] as int;
+
+    return GestureDetector(
+      onTap: () => setState(() {
+        _callsCustomerCalls = calls;
+        _callsCustomerGroup = group;
+        _selectedCallIds.clear();
+      }),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.surfaceLight),
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 22,
+              backgroundColor: AppColors.primary.withValues(alpha: 0.12),
+              child: Text(
+                name.isNotEmpty ? name[0].toUpperCase() : '?',
+                style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 13)),
+                  Text('$count call${count > 1 ? 's' : ''}',
+                      style: const TextStyle(
+                          fontSize: 11, color: AppColors.textSecondary)),
+                ],
+              ),
+            ),
+            if (score != null)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _scoreColor(score).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Column(
+                  children: [
+                    Text('$score%',
+                        style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: _scoreColor(score))),
+                    Text(_scoreLabel(score),
+                        style: TextStyle(
+                            fontSize: 8,
+                            fontWeight: FontWeight.w600,
+                            color: _scoreColor(score))),
+                  ],
+                ),
+              )
+            else
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceLight,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                    '${calls.where((c) => c['analysisStatus'] == 'COMPLETED').length}/$count done',
+                    style: const TextStyle(
+                        fontSize: 10, color: AppColors.textHint)),
+              ),
+            const SizedBox(width: 4),
+            const Icon(Icons.chevron_right,
+                size: 18, color: AppColors.textHint),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Calls tab: individual calls for a selected customer
+  Widget _callsCustomerScreen() {
+    final calls = _callsCustomerCalls!;
+    final group = _callsCustomerGroup!;
+    final name = group['customerName'] as String;
+    final count = group['callCount'] as int;
+
+    return Column(
+      children: [
+        // Header
+        Container(
+          padding: const EdgeInsets.fromLTRB(12, 8, 16, 10),
+          child: Row(
+            children: [
+              GestureDetector(
+                onTap: () => setState(() {
+                  _callsCustomerCalls = null;
+                  _callsCustomerGroup = null;
+                  _selectedCallIds.clear();
+                }),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceLight,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.arrow_back_rounded, size: 18),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(name,
+                        style: const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w700)),
+                    Text('$count call${count > 1 ? 's' : ''}',
+                        style: const TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textSecondary)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Bulk download bar
+        if (_selectedCallIds.isNotEmpty) _bulkBar(),
+        // Individual calls
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: calls.length,
+            itemBuilder: (_, i) => _callTile(calls[i]),
+          ),
+        ),
+      ],
     );
   }
 
