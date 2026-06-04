@@ -1950,10 +1950,12 @@ class ApiService {
   Future<Response> updateWaSettings({
     String? waAuditNumber,
     bool? waAutoSendEnabled,
+    bool? showTranscription,
   }) async {
     return _dio.patch('/settings/wa', data: {
       if (waAuditNumber != null) 'waAuditNumber': waAuditNumber,
       if (waAutoSendEnabled != null) 'waAutoSendEnabled': waAutoSendEnabled,
+      if (showTranscription != null) 'showTranscription': showTranscription,
     });
   }
 

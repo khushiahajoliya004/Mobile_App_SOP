@@ -33,6 +33,9 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
   List<Map<String, dynamic>>? _callsCustomerCalls;
   Map<String, dynamic>? _callsCustomerGroup;
 
+  // Transcription visibility (company-wide setting)
+  bool _showTranscription = true;
+
   // Filters / Pagination
   String _search = '';
   String _statusFilter = '';
@@ -62,6 +65,7 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
   void initState() {
     super.initState();
     _load();
+    _loadTranscriptionSetting();
   }
 
   @override
@@ -141,6 +145,26 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
       }
     } catch (_) {
       setState(() => _detailLoading = false);
+    }
+  }
+
+  Future<void> _loadTranscriptionSetting() async {
+    try {
+      final res = await _api.getWaSettings();
+      final d = res.data?['data'] ?? res.data;
+      if (d is Map && mounted) {
+        setState(() => _showTranscription = d['showTranscription'] != false);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _toggleTranscription() async {
+    final newVal = !_showTranscription;
+    setState(() => _showTranscription = newVal);
+    try {
+      await _api.updateWaSettings(showTranscription: newVal);
+    } catch (_) {
+      if (mounted) setState(() => _showTranscription = !newVal);
     }
   }
 
@@ -1586,22 +1610,55 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
             Text('${merged.split(' ').length} words',
                 style: const TextStyle(
                     fontSize: 10, color: AppColors.textHint)),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: _toggleTranscription,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _showTranscription
+                          ? Icons.visibility_off
+                          : Icons.visibility,
+                      size: 13,
+                      color: AppColors.primary,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      _showTranscription ? 'Hide' : 'Show',
+                      style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primary),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.surfaceLight),
+        if (_showTranscription)
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.surfaceLight),
+            ),
+            child: Text(merged,
+                style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textPrimary,
+                    height: 1.6)),
           ),
-          child: Text(merged,
-              style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textPrimary,
-                  height: 1.6)),
-        ),
       ],
     );
   }
@@ -2038,22 +2095,55 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
             Text('${text.split(' ').length} words',
                 style: const TextStyle(
                     fontSize: 10, color: AppColors.textHint)),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: _toggleTranscription,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _showTranscription
+                          ? Icons.visibility_off
+                          : Icons.visibility,
+                      size: 13,
+                      color: AppColors.primary,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      _showTranscription ? 'Hide' : 'Show',
+                      style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primary),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.surfaceLight),
+        if (_showTranscription)
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.surfaceLight),
+            ),
+            child: Text(text,
+                style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textPrimary,
+                    height: 1.6)),
           ),
-          child: Text(text,
-              style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textPrimary,
-                  height: 1.6)),
-        ),
       ],
     );
   }
