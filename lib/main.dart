@@ -256,13 +256,11 @@ class _AuthGateState extends State<AuthGate> {
     final onboardingComplete =
         prefs.getBool('permissions_onboarding_complete') ?? false;
 
-    // Initialize notifications if logged in
+    // Initialize notifications in background — don't block auth gate
     if (token != null) {
-      try {
-        await NotificationService().initialize();
-      } catch (e) {
+      NotificationService().initialize().catchError((e) {
         debugPrint('Failed to initialize notifications: $e');
-      }
+      });
     }
 
     setState(() {

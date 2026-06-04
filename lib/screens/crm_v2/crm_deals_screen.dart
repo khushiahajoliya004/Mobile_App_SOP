@@ -435,7 +435,8 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
   Widget _dealTile(Map<String, dynamic> deal) {
     final name = '${deal['name'] ?? ''}';
     final status = deal['status'] as String?;
-    final value = (deal['expectedValue'] ?? deal['value'] as num?)?.toDouble();
+    final rawValue = deal['expectedValue'] ?? deal['value'];
+    final value = rawValue == null ? null : double.tryParse('$rawValue');
     final contactName = deal['contact']?['name'] ?? deal['contactName'] ?? '';
     final stageName = deal['stage']?['name'] ?? deal['stageName'] ?? '';
     final statusColor = _statusColor(status);
