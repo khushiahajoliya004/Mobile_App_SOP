@@ -6,6 +6,7 @@ import 'call_upload_screen.dart';
 import 'ai_insights/ai_insights_screen.dart';
 import 'audio_library_screen.dart';
 import 'crm/crm_screen.dart';
+import 'crm/crm_branches_screen.dart';
 import 'analytics/analytics_screen.dart';
 import 'call_approvals/call_approvals_screen.dart';
 import 'sop_builder/sop_list_screen.dart';
@@ -81,6 +82,15 @@ class MenuScreen extends StatelessWidget {
               const Color(0xFF34D399),
               'Leads & pipeline',
               const CrmScreen(),
+            ),
+          if (_can('BRANCH'))
+            _M(
+              'Branches',
+              Icons.store_rounded,
+              const Color(0xFF0EA5E9),
+              const Color(0xFF38BDF8),
+              'Manage branches',
+              const CrmBranchesScreen(),
             ),
         ],
       ),
