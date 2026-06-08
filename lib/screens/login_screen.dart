@@ -78,6 +78,9 @@ class _LoginScreenState extends State<LoginScreen>
         userJson['_allowedModules'] = List<String>.from(
           data['allowedModules'] ?? [],
         );
+        // branchId/branchRole come at top-level of login response, not inside user{}
+        userJson['branchId'] ??= data['branchId'];
+        userJson['branchRole'] ??= data['branchRole'];
         final user = UserModel.fromJson(userJson);
         await _auth.saveUser(user);
         await _auth.saveAllowedModules(user.allowedModules);

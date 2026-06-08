@@ -62,14 +62,14 @@ class _CrmScreenState extends State<CrmScreen> {
 
     final modules = <_CrmModule>[
       // Reception — always visible for CRM users
-      _CrmModule(
-        'Reception',
-        Icons.support_agent_rounded,
-        const Color(0xFF059669),
-        const Color(0xFF34D399),
-        'Phone lookup & new leads',
-        const CrmReceptionScreen(),
-      ),
+      // _CrmModule(
+      //   'Reception',
+      //   Icons.support_agent_rounded,
+      //   const Color(0xFF059669),
+      //   const Color(0xFF34D399),
+      //   'Phone lookup & new leads',
+      //   const CrmReceptionScreen(),
+      // ),
       // My Tasks — always visible, highest priority
       _CrmModule(
         'My Tasks',
