@@ -28,17 +28,17 @@ class BootReceiver : BroadcastReceiver() {
                     return
                 }
 
-                Log.i("BootReceiver", "Device booted, starting CallMonitorService")
-                try {
-                    val serviceIntent = Intent(ctx, CallMonitorService::class.java)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        ctx.startForegroundService(serviceIntent)
-                    } else {
-                        ctx.startService(serviceIntent)
-                    }
-                } catch (e: Exception) {
-                    Log.e("BootReceiver", "Failed to start service: ${e.message}")
-                }
+                // Log.i("BootReceiver", "Device booted, starting CallMonitorService")
+                // try {
+                //     val serviceIntent = Intent(ctx, CallMonitorService::class.java)
+                //     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                //         ctx.startForegroundService(serviceIntent)
+                //     } else {
+                //         ctx.startService(serviceIntent)
+                //     }
+                // } catch (e: Exception) {
+                //     Log.e("BootReceiver", "Failed to start service: ${e.message}")
+                // }
             }
         }
     }

@@ -75,7 +75,7 @@ class CallRecorderPlugin : FlutterPlugin, ActivityAware {
         }
 
         // Auto-start CallMonitorService when app engine attaches
-        startCallMonitorService(binding.applicationContext)
+        // startCallMonitorService(binding.applicationContext)
 
         Log.i(TAG, "Plugin attached to engine, all channels registered")
     }

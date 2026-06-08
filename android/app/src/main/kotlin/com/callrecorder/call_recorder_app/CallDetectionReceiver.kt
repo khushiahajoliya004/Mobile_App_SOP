@@ -24,12 +24,12 @@ class CallDetectionReceiver : BroadcastReceiver() {
             when (intent.action) {
                 Intent.ACTION_NEW_OUTGOING_CALL -> {
                     Log.d(TAG, "Outgoing call detected")
-                    ensureServiceRunning(context)
+                    // ensureServiceRunning(context)
                 }
                 TelephonyManager.ACTION_PHONE_STATE_CHANGED -> {
                     val stateStr = intent.getStringExtra(TelephonyManager.EXTRA_STATE) ?: return
                     Log.d(TAG, "Phone state changed: $stateStr")
-                    ensureServiceRunning(context)
+                    // ensureServiceRunning(context)
                 }
             }
         } catch (e: Exception) {
