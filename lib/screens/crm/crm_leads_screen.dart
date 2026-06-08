@@ -262,43 +262,6 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                   ),
                   const SizedBox(height: 12),
 
-                  // ── Interested Model ──
-                  TextField(
-                    controller: modelCtrl,
-                    decoration: const InputDecoration(labelText: 'Interested Model', prefixIcon: Icon(Icons.directions_car_outlined)),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // ── Priority + Buyer Type (2-column) ──
-                  Row(children: [
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        initialValue: priority,
-                        decoration: const InputDecoration(labelText: 'Priority', isDense: true),
-                        items: const [
-                          DropdownMenuItem(value: 'HOT',    child: Text('🔥 Hot')),
-                          DropdownMenuItem(value: 'WARM',   child: Text('🌡 Warm')),
-                          DropdownMenuItem(value: 'MEDIUM', child: Text('📋 Medium')),
-                          DropdownMenuItem(value: 'COLD',   child: Text('❄ Cold')),
-                        ],
-                        onChanged: (v) => setSheetState(() => priority = v!),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        initialValue: buyerType.isEmpty ? null : buyerType,
-                        decoration: const InputDecoration(labelText: 'Buyer Type', isDense: true),
-                        hint: const Text('Select'),
-                        items: const [
-                          DropdownMenuItem(value: 'FIRST_TIME',   child: Text('First Time')),
-                          DropdownMenuItem(value: 'ADDITIONAL',   child: Text('Additional')),
-                          DropdownMenuItem(value: 'REPLACEMENT',  child: Text('Replacement')),
-                        ],
-                        onChanged: (v) => setSheetState(() => buyerType = v ?? ''),
-                      ),
-                    ),
-                  ]),
                   const SizedBox(height: 12),
 
                   // ── Branch ──
