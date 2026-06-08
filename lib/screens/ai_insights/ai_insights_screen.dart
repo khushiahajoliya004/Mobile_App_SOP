@@ -38,7 +38,10 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
 
   // Filters / Pagination
   String _search = '';
+  String _userSearch = '';
   String _statusFilter = '';
+  DateTime? _dateFrom;
+  DateTime? _dateTo;
   int _page = 1;
   int _total = 0;
   int _totalPages = 0;
@@ -79,7 +82,19 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final res = await _api.getAiInsights(page: _page, limit: 20);
+      final res = await _api.getAiInsights(
+        page: _page,
+        limit: 20,
+        search: _search.isNotEmpty ? _search : null,
+        userSearch: _userSearch.isNotEmpty ? _userSearch : null,
+        status: _statusFilter.isNotEmpty ? _statusFilter : null,
+        startDate: _dateFrom != null
+            ? '${_dateFrom!.year}-${_dateFrom!.month.toString().padLeft(2, '0')}-${_dateFrom!.day.toString().padLeft(2, '0')}'
+            : null,
+        endDate: _dateTo != null
+            ? '${_dateTo!.year}-${_dateTo!.month.toString().padLeft(2, '0')}-${_dateTo!.day.toString().padLeft(2, '0')}'
+            : null,
+      );
       final raw = res.data;
       if (raw is Map) {
         _calls = ((raw['data'] ?? []) as List)
@@ -498,7 +513,7 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
             ],
           ),
         ),
-        // Search + Refresh
+        // Row 1: Search customer + Refresh
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           child: Row(
@@ -512,7 +527,7 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
                   },
                   decoration: InputDecoration(
                     hintText: 'Search customer...',
-                    prefixIcon: const Icon(Icons.search, size: 20),
+                    prefixIcon: const Icon(Icons.person_search, size: 20),
                     filled: true,
                     fillColor: Colors.white,
                     contentPadding:
@@ -547,24 +562,106 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
             ],
           ),
         ),
-        // Status chips + View toggle
-        SizedBox(
-          height: 32,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+        // Row 2: Search user + Date filter
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Row(
             children: [
-              _statusChip('All', ''),
-              _statusChip('Completed', 'COMPLETED'),
-              _statusChip('Processing', 'PROCESSING'),
-              _statusChip('Pending', 'PENDING'),
-              _statusChip('Failed', 'FAILED'),
-              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  onChanged: (v) {
+                    _userSearch = v;
+                    _page = 1;
+                    _load();
+                  },
+                  decoration: InputDecoration(
+                    hintText: 'Search user...',
+                    prefixIcon: const Icon(Icons.manage_accounts, size: 20),
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding:
+                        const EdgeInsets.symmetric(vertical: 10),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide:
+                          BorderSide(color: AppColors.surfaceLight),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide:
+                          BorderSide(color: AppColors.surfaceLight),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: _pickDateRange,
+                child: Container(
+                  height: 44,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    color: (_dateFrom != null || _dateTo != null)
+                        ? AppColors.primary
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: (_dateFrom != null || _dateTo != null)
+                          ? AppColors.primary
+                          : AppColors.surfaceLight,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.date_range,
+                        size: 18,
+                        color: (_dateFrom != null || _dateTo != null)
+                            ? Colors.white
+                            : AppColors.textSecondary,
+                      ),
+                      if (_dateFrom != null || _dateTo != null) ...[
+                        const SizedBox(width: 4),
+                        Text(
+                          _dateRangeLabel(),
+                          style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white),
+                        ),
+                        const SizedBox(width: 4),
+                        GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _dateFrom = null;
+                              _dateTo = null;
+                            });
+                            _page = 1;
+                            _load();
+                          },
+                          child: const Icon(Icons.close,
+                              size: 14, color: Colors.white),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Row 3: Status dropdown + View toggle
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Row(
+            children: [
+              _statusDropdown(),
+              const SizedBox(width: 8),
               _viewToggle(),
             ],
           ),
         ),
-        const SizedBox(height: 8),
         // Bulk download bar
         if (_selectedCallIds.isNotEmpty && _listView == 'calls')
           _bulkBar(),
@@ -633,6 +730,101 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
             ),
           ),
       ],
+    );
+  }
+
+  // ─── Date Range Picker ────────────────────────────────────────────────
+
+  String _dateRangeLabel() {
+    final fmt = (DateTime d) =>
+        '${d.day}/${d.month}';
+    if (_dateFrom != null && _dateTo != null) {
+      return '${fmt(_dateFrom!)}-${fmt(_dateTo!)}';
+    }
+    if (_dateFrom != null) return '>${fmt(_dateFrom!)}';
+    if (_dateTo != null) return '<${fmt(_dateTo!)}';
+    return '';
+  }
+
+  Future<void> _pickDateRange() async {
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      initialDateRange: _dateFrom != null && _dateTo != null
+          ? DateTimeRange(start: _dateFrom!, end: _dateTo!)
+          : null,
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: ColorScheme.light(
+            primary: AppColors.primary,
+            onPrimary: Colors.white,
+            surface: Colors.white,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null) {
+      setState(() {
+        _dateFrom = picked.start;
+        _dateTo = picked.end;
+      });
+      _page = 1;
+      _load();
+    }
+  }
+
+  // ─── Status Dropdown ──────────────────────────────────────────────────
+
+  Widget _statusDropdown() {
+    const options = [
+      ('All', ''),
+      ('Completed', 'COMPLETED'),
+      ('Processing', 'PROCESSING'),
+      ('Pending', 'PENDING'),
+      ('Failed', 'FAILED'),
+    ];
+    final isFiltered = _statusFilter.isNotEmpty;
+    return Expanded(
+      child: Container(
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: isFiltered ? AppColors.primary.withValues(alpha: 0.08) : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isFiltered ? AppColors.primary : AppColors.surfaceLight,
+          ),
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            value: _statusFilter,
+            isExpanded: true,
+            icon: Icon(
+              Icons.keyboard_arrow_down,
+              size: 18,
+              color: isFiltered ? AppColors.primary : AppColors.textSecondary,
+            ),
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: isFiltered ? AppColors.primary : AppColors.textSecondary,
+            ),
+            items: options
+                .map((o) => DropdownMenuItem<String>(
+                      value: o.$2,
+                      child: Text(o.$1),
+                    ))
+                .toList(),
+            onChanged: (val) {
+              setState(() => _statusFilter = val ?? '');
+              _page = 1;
+              _load();
+            },
+          ),
+        ),
+      ),
     );
   }
 
@@ -767,33 +959,6 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
           ],
         ),
       );
-
-  Widget _statusChip(String label, String value) {
-    final active = _statusFilter == value;
-    return GestureDetector(
-      onTap: () {
-        setState(() => _statusFilter = value);
-        _page = 1;
-        _load();
-      },
-      child: Container(
-        margin: const EdgeInsets.only(right: 6),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: active ? AppColors.primary : Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-              color: active ? AppColors.primary : AppColors.surfaceLight),
-        ),
-        child: Text(label,
-            style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: active ? Colors.white : AppColors.textSecondary)),
-      ),
-    );
-  }
 
   Widget _callTile(Map<String, dynamic> call) {
     final score = call['sopScore'] != null

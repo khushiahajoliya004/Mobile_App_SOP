@@ -40,7 +40,11 @@ class _MediaStoreFile {
 }
 
 class CallUploadScreen extends StatefulWidget {
-  const CallUploadScreen({super.key});
+  final String? leadId;
+  final String? leadName;
+  final String? leadPhone;
+
+  const CallUploadScreen({super.key, this.leadId, this.leadName, this.leadPhone});
 
   @override
   State<CallUploadScreen> createState() => _CallUploadScreenState();
@@ -84,6 +88,12 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.leadId != null) {
+      _linkedLeadId = widget.leadId;
+      _linkedLeadName = widget.leadName;
+      _customerNameController.text = widget.leadName ?? '';
+      _phoneController.text = widget.leadPhone ?? '';
+    }
     _loadData();
   }
 

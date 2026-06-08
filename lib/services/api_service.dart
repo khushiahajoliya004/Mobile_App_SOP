@@ -92,12 +92,12 @@ class ApiService {
     );
   }
 
-  /// PATCH /auth/change-password
+  /// POST /auth/change-password
   Future<Response> changePassword({
     required String currentPassword,
     required String newPassword,
   }) async {
-    return _dio.patch(
+    return _dio.post(
       '/auth/change-password',
       data: {'currentPassword': currentPassword, 'newPassword': newPassword},
     );
@@ -634,11 +634,22 @@ class ApiService {
 
   // ─── AI Insights ───
 
-  Future<Response> getAiInsights({int page = 1, int limit = 20}) async {
-    return _dio.get(
-      '/ai-insights',
-      queryParameters: {'page': page, 'limit': limit},
-    );
+  Future<Response> getAiInsights({
+    int page = 1,
+    int limit = 20,
+    String? search,
+    String? userSearch,
+    String? status,
+    String? startDate,
+    String? endDate,
+  }) async {
+    final params = <String, dynamic>{'page': page, 'limit': limit};
+    if (search != null && search.isNotEmpty) params['search'] = search;
+    if (userSearch != null && userSearch.isNotEmpty) params['userSearch'] = userSearch;
+    if (status != null && status.isNotEmpty) params['status'] = status;
+    if (startDate != null) params['startDate'] = startDate;
+    if (endDate != null) params['endDate'] = endDate;
+    return _dio.get('/ai-insights', queryParameters: params);
   }
 
   Future<Response> getAiInsightDetail(String callId) async {

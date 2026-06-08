@@ -3,6 +3,8 @@ import '../../main.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../models/user_model.dart';
+import '../call_recorder_screen.dart';
+import '../call_upload_screen.dart';
 import 'crm_lead_detail_screen.dart';
 
 class CrmLeadsScreen extends StatefulWidget {
@@ -403,7 +405,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                       }
 
                       try {
-                        await _api.createCrmQuickLead(
+                        final res = await _api.createCrmQuickLead(
                           name: name,
                           phone: phone.isEmpty ? null : phone,
                           source: source,
@@ -412,8 +414,20 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                           ownerUserId: assignedUser?['id']?.toString(),
                           notes: modelCtrl.text.trim().isEmpty ? null : 'Interested Model: ${modelCtrl.text.trim()}',
                         );
+                        // Extract new lead ID from response
+                        String? newLeadId;
+                        final resData = res.data;
+                        if (resData is Map) {
+                          final inner = resData['data'] ?? resData['deal'] ?? resData['lead'] ?? resData;
+                          if (inner is Map) {
+                            newLeadId = (inner['id'] ?? inner['dealId'] ?? inner['leadId'])?.toString();
+                          }
+                        }
                         if (ctx.mounted) Navigator.pop(ctx);
                         _load();
+                        if (mounted && newLeadId != null) {
+                          _showNewLeadRecordingSheet(newLeadId, name, phone);
+                        }
                       } catch (e) {
                         if (ctx.mounted) {
                           ScaffoldMessenger.of(ctx).showSnackBar(
@@ -489,6 +503,267 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
       }
     }
   }
+
+  Widget _wrapped(String title, Widget child) => Material(
+    color: AppColors.scaffoldBg,
+    child: Column(
+      children: [
+        Builder(
+          builder: (ctx) => Container(
+            padding: EdgeInsets.only(
+              top: MediaQuery.of(ctx).padding.top + 8,
+              left: 4,
+              right: 16,
+              bottom: 14,
+            ),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF1E1B4B), Color(0xFF312E81), AppColors.primary],
+              ),
+            ),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        Expanded(child: child),
+      ],
+    ),
+  );
+
+  void _navigateToRecorder(String leadId, String leadName) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _wrapped(
+          leadName,
+          CallRecorderScreen(leadId: leadId, leadCustomerName: leadName),
+        ),
+      ),
+    ).then((_) => _load());
+  }
+
+  void _navigateToUpload(String leadId, String leadName, String phone) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _wrapped(
+          'Upload Call',
+          CallUploadScreen(leadId: leadId, leadName: leadName, leadPhone: phone),
+        ),
+      ),
+    ).then((_) => _load());
+  }
+
+  void _navigateToDetail(String leadId, String leadName) {
+    Navigator.push(
+      context,
+      PageRouteBuilder(
+        opaque: true,
+        pageBuilder: (_, __, ___) => CrmLeadDetailScreen(
+          leadId: leadId,
+          leadName: leadName,
+          isDeal: true,
+        ),
+        transitionsBuilder: (_, animation, __, child) =>
+            FadeTransition(opacity: animation, child: child),
+      ),
+    ).then((_) => _load());
+  }
+
+  // Shown after a new lead is created
+  void _showNewLeadRecordingSheet(String leadId, String leadName, String phone) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Lead created!',
+                style: const TextStyle(fontSize: 13, color: AppColors.textHint),
+              ),
+              Text(
+                leadName,
+                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Do you want to start a recording?',
+                style: TextStyle(fontSize: 15, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _navigateToUpload(leadId, leadName, phone);
+                      },
+                      icon: const Icon(Icons.upload_file_rounded, size: 18),
+                      label: const Text('Upload Call'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _navigateToRecorder(leadId, leadName);
+                      },
+                      icon: const Icon(Icons.mic_rounded, size: 18),
+                      label: const Text('Start Recording'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Center(
+                  child: Text('Skip for now', style: TextStyle(color: AppColors.textHint)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Shown when tapping an existing lead
+  void _showLeadActionSheet(String leadId, String leadName, String phone) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                leadName,
+                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Do you want to add a recording?',
+                style: TextStyle(fontSize: 15, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 20),
+              _sheetTile(
+                ctx: ctx,
+                icon: Icons.mic_rounded,
+                color: AppColors.primary,
+                label: 'Start Recording',
+                subtitle: 'Record a new call for this lead',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _navigateToRecorder(leadId, leadName);
+                },
+              ),
+              const SizedBox(height: 8),
+              _sheetTile(
+                ctx: ctx,
+                icon: Icons.upload_file_rounded,
+                color: const Color(0xFF0EA5E9),
+                label: 'Upload Call',
+                subtitle: 'Upload an existing audio file',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _navigateToUpload(leadId, leadName, phone);
+                },
+              ),
+              const SizedBox(height: 8),
+              _sheetTile(
+                ctx: ctx,
+                icon: Icons.person_outline_rounded,
+                color: AppColors.textSecondary,
+                label: 'Open Lead',
+                subtitle: 'View lead details',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _navigateToDetail(leadId, leadName);
+                },
+              ),
+              const SizedBox(height: 4),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _sheetTile({
+    required BuildContext ctx,
+    required IconData icon,
+    required Color color,
+    required String label,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(12),
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.surfaceLight),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, size: 20, color: color),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                Text(subtitle, style: const TextStyle(fontSize: 12, color: AppColors.textHint)),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right_rounded, color: AppColors.textHint, size: 18),
+        ],
+      ),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -583,19 +858,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
     final displayAssigned = assignedTo.isNotEmpty ? assignedTo : 'Unassigned';
 
     return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        PageRouteBuilder(
-          opaque: true,
-          pageBuilder: (_, __, ___) => CrmLeadDetailScreen(
-            leadId: leadId,
-            leadName: customerName,
-            isDeal: true,
-          ),
-          transitionsBuilder: (_, animation, __, child) =>
-              FadeTransition(opacity: animation, child: child),
-        ),
-      ).then((_) => _load()),
+      onTap: () => _showLeadActionSheet(leadId, customerName, phone),
       child: Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(

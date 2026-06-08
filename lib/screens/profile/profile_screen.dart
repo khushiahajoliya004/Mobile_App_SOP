@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../main.dart';
 import '../../services/api_service.dart';
@@ -227,59 +228,133 @@ class ProfileScreen extends StatelessWidget {
   void _changePassword(BuildContext context) {
     final cur = TextEditingController();
     final nw = TextEditingController();
+    // Capture messenger before any async gap — context may be stale after await
+    final messenger = ScaffoldMessenger.of(context);
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          'Change Password',
-          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: cur,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: 'Current Password'),
+      builder: (ctx) {
+        var loading = false;
+        String? errorMsg;
+
+        return StatefulBuilder(
+          builder: (ctx, setState) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
             ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: nw,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: 'New Password'),
+            title: const Text(
+              'Change Password',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (errorMsg != null) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.error.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.error_outline,
+                          size: 16,
+                          color: AppColors.error,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            errorMsg!,
+                            style: const TextStyle(
+                              color: AppColors.error,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                TextField(
+                  controller: cur,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Current Password',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: nw,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: 'New Password'),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: loading ? null : () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: loading
+                    ? null
+                    : () async {
+                        if (cur.text.isEmpty || nw.text.isEmpty) return;
+                        setState(() {
+                          loading = true;
+                          errorMsg = null;
+                        });
+                        try {
+                          await ApiService().changePassword(
+                            currentPassword: cur.text,
+                            newPassword: nw.text,
+                          );
+                          if (ctx.mounted) Navigator.pop(ctx);
+                          messenger.showSnackBar(
+                            const SnackBar(
+                              content: Text('Password changed successfully'),
+                            ),
+                          );
+                        } catch (e) {
+                          String msg = 'Something went wrong. Please try again.';
+                          if (e is DioException) {
+                            final data = e.response?.data;
+                            if (data is Map) {
+                              msg =
+                                  data['message'] as String? ??
+                                  data['error'] as String? ??
+                                  msg;
+                            }
+                          }
+                          if (ctx.mounted) {
+                            setState(() {
+                              loading = false;
+                              errorMsg = msg;
+                            });
+                          }
+                        }
+                      },
+                child: loading
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text('Change'),
+              ),
+            ],
           ),
-          FilledButton(
-            onPressed: () async {
-              if (cur.text.isEmpty || nw.text.isEmpty) return;
-              try {
-                await ApiService().changePassword(
-                  currentPassword: cur.text,
-                  newPassword: nw.text,
-                );
-                if (ctx.mounted) Navigator.pop(ctx);
-                if (context.mounted)
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Password changed')),
-                  );
-              } catch (e) {
-                if (context.mounted)
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text('Failed: $e')));
-              }
-            },
-            child: const Text('Change'),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 

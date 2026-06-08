@@ -240,14 +240,16 @@ class _CrmDealDetailScreenState extends State<CrmDealDetailScreen> {
     final deal = _deal ?? {};
     final name = deal['name'] ?? widget.dealName;
     final status = deal['status'] as String?;
-    final value = ((deal['expectedValue'] ?? deal['value']) as num?)?.toDouble();
+    final value = num.tryParse((deal['expectedValue'] ?? deal['value'] ?? '').toString())?.toDouble();
     final contactName = deal['contact']?['name'] ?? deal['contactName'] ?? '';
     final contactPhone = deal['contact']?['phone'] ?? '';
     final stageName = deal['stage']?['name'] ?? deal['stageName'] ?? '';
     final currentStageId = deal['stageId'] as String?;
     final statusColor = status == 'WON' ? AppColors.success : status == 'LOST' ? AppColors.error : AppColors.primary;
 
-    return Column(children: [
+    return Material(
+      color: Colors.white,
+      child: Column(children: [
       Container(
         color: Colors.white,
         padding: const EdgeInsets.all(16),
@@ -323,7 +325,8 @@ class _CrmDealDetailScreenState extends State<CrmDealDetailScreen> {
         onRefresh: _load,
         child: _tab == 0 ? _timelineTab() : _tab == 1 ? _followUpsTab() : _stageHistoryTab(),
       )),
-    ]);
+    ]),
+    );
   }
 
   Widget _actionBtn(IconData icon, String label, Color color, VoidCallback onTap) => GestureDetector(
