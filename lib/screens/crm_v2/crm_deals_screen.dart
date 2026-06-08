@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../main.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
+import '../../models/user_model.dart';
 import 'crm_deal_detail_screen.dart';
 
 class CrmDealsScreen extends StatefulWidget {
@@ -11,6 +13,8 @@ class CrmDealsScreen extends StatefulWidget {
 
 class _CrmDealsScreenState extends State<CrmDealsScreen> {
   final _api = ApiService();
+  final _auth = AuthService();
+  UserModel? _currentUser;
   bool _loading = true;
   List<Map<String, dynamic>> _deals = [];
   List<Map<String, dynamic>> _pipelines = [];
@@ -25,6 +29,9 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
   }
 
   Future<void> _init() async {
+    final user = await _auth.getUser();
+    debugPrint('[CrmDeals] user=${user?.email}, branchId=${user?.branchId}, branchName=${user?.branchName}');
+    if (mounted) setState(() => _currentUser = user);
     try {
       final res = await _api.getCrmPipelines();
       final raw = res.data;
@@ -48,9 +55,11 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
+      debugPrint('[CrmDeals] calling getCrmDeals with branchId=${_currentUser?.branchId}, pipelineId=$_selectedPipelineId');
       final res = await _api.getCrmDeals(
         pipelineId: _selectedPipelineId,
         search: _search.isNotEmpty ? _search : null,
+        branchId: _currentUser?.branchId,
       );
       final raw = res.data;
       _deals = raw is List
