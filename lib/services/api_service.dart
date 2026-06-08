@@ -92,12 +92,12 @@ class ApiService {
     );
   }
 
-  /// POST /auth/change-password
+  /// PATCH /auth/change-password
   Future<Response> changePassword({
     required String currentPassword,
     required String newPassword,
   }) async {
-    return _dio.post(
+    return _dio.patch(
       '/auth/change-password',
       data: {'currentPassword': currentPassword, 'newPassword': newPassword},
     );

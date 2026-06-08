@@ -236,6 +236,8 @@ class ProfileScreen extends StatelessWidget {
       builder: (ctx) {
         var loading = false;
         String? errorMsg;
+        var curObscure = true;
+        var nwObscure = true;
 
         return StatefulBuilder(
           builder: (ctx, setState) => AlertDialog(
@@ -283,16 +285,34 @@ class ProfileScreen extends StatelessWidget {
                 ],
                 TextField(
                   controller: cur,
-                  obscureText: true,
-                  decoration: const InputDecoration(
+                  obscureText: curObscure,
+                  decoration: InputDecoration(
                     labelText: 'Current Password',
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        curObscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                        size: 20,
+                        color: AppColors.textHint,
+                      ),
+                      onPressed: () => setState(() => curObscure = !curObscure),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: nw,
-                  obscureText: true,
-                  decoration: const InputDecoration(labelText: 'New Password'),
+                  obscureText: nwObscure,
+                  decoration: InputDecoration(
+                    labelText: 'New Password',
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        nwObscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                        size: 20,
+                        color: AppColors.textHint,
+                      ),
+                      onPressed: () => setState(() => nwObscure = !nwObscure),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -326,10 +346,12 @@ class ProfileScreen extends StatelessWidget {
                           if (e is DioException) {
                             final data = e.response?.data;
                             if (data is Map) {
-                              msg =
-                                  data['message'] as String? ??
-                                  data['error'] as String? ??
-                                  msg;
+                              final raw = data['message'] ?? data['error'];
+                              if (raw is String) {
+                                msg = raw;
+                              } else if (raw is List && raw.isNotEmpty) {
+                                msg = raw.first.toString();
+                              }
                             }
                           }
                           if (ctx.mounted) {
