@@ -1,5 +1,8 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
 import 'auth_service.dart';
+import '../screens/login_screen.dart';
+import '../utils/navigator_key.dart';
 
 class ApiService {
   // Backend runs on port 3000, no /api prefix
@@ -8,6 +11,7 @@ class ApiService {
 
   late final Dio _dio;
   final AuthService _auth = AuthService();
+  static bool _sessionExpiredDialogOpen = false;
 
   ApiService() {
     _dio = Dio(
@@ -32,6 +36,50 @@ class ApiService {
             options.headers['Authorization'] = 'Bearer $token';
           }
           handler.next(options);
+        },
+        onError: (DioException e, handler) async {
+          if (e.response?.statusCode == 401 && !_sessionExpiredDialogOpen) {
+            _sessionExpiredDialogOpen = true;
+            await _auth.logout();
+            final context = navigatorKey.currentContext;
+            if (context != null) {
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (ctx) => PopScope(
+                  canPop: false,
+                  child: AlertDialog(
+                    title: const Text('Session Expired'),
+                    content: const Text(
+                      'Your session has expired. Please login again.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () {
+                          _sessionExpiredDialogOpen = false;
+                          Navigator.of(ctx).pop();
+                          navigatorKey.currentState?.pushAndRemoveUntil(
+                            MaterialPageRoute(
+                              builder: (_) => const LoginScreen(),
+                            ),
+                            (route) => false,
+                          );
+                        },
+                        child: const Text('Login Again'),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            } else {
+              _sessionExpiredDialogOpen = false;
+              navigatorKey.currentState?.pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
+                (route) => false,
+              );
+            }
+          }
+          handler.next(e);
         },
       ),
     );

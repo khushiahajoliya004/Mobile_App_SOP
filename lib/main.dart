@@ -11,6 +11,7 @@ import 'screens/overlay_button.dart';
 import 'services/auth_service.dart';
 import 'services/foreground_service.dart';
 import 'services/notification_service.dart';
+import 'utils/navigator_key.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -91,6 +92,7 @@ class CallRecorderApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'MysteryMentor',
+      navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
