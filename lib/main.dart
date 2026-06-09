@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -21,15 +22,16 @@ void main() async {
     ),
   );
 
-  // Initialize Firebase with generated options
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-    // Set background message handler
-    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-  } catch (e) {
-    debugPrint('Failed to initialize Firebase: $e');
+  // Firebase is only configured for Android — skip on iOS
+  if (!Platform.isIOS) {
+    try {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    } catch (e) {
+      debugPrint('Failed to initialize Firebase: $e');
+    }
   }
 
   // Initialize foreground service with error handling
@@ -37,7 +39,6 @@ void main() async {
     await ForegroundServiceManager.initService();
   } catch (e) {
     debugPrint('Failed to initialize foreground service: $e');
-    // Continue anyway - the app should still work
   }
 
   runApp(const CallRecorderApp());
@@ -256,8 +257,8 @@ class _AuthGateState extends State<AuthGate> {
     final onboardingComplete =
         prefs.getBool('permissions_onboarding_complete') ?? false;
 
-    // Initialize notifications in background — don't block auth gate
-    if (token != null) {
+    // Initialize notifications in background — Android only (iOS has no Firebase config)
+    if (token != null && !Platform.isIOS) {
       NotificationService().initialize().catchError((e) {
         debugPrint('Failed to initialize notifications: $e');
       });

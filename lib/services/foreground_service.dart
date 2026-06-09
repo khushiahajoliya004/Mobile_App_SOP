@@ -55,7 +55,6 @@ class ForegroundServiceManager {
       print('Foreground service initialized successfully');
     } catch (e) {
       print('Failed to initialize foreground service: $e');
-      rethrow;
     }
   }
 

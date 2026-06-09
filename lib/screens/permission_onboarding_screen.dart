@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart';
@@ -20,31 +21,36 @@ class _PermissionOnboardingScreenState
     setState(() => _isRequesting = true);
 
     try {
-      // Request microphone (most critical)
-      final micGranted =
-          await PermissionHelper.requestMicrophoneWithExplanation(context);
+      // Request microphone — result is best-effort; iOS 17+ deprecated the
+      // underlying AVAudioSession API so permission_handler may return false
+      // even after the user grants. We proceed regardless and let feature
+      // screens re-check when they actually need the mic.
+      await PermissionHelper.requestMicrophoneWithExplanation(context);
 
-      if (micGranted) {
-        // Request phone state (for call detection)
+      // Phone state and storage are Android-only
+      if (!Platform.isIOS) {
+        if (!mounted) return;
         await PermissionHelper.requestPhoneStateWithExplanation(context);
-
-        // Request storage
+        if (!mounted) return;
         await PermissionHelper.requestStorageWithExplanation(context);
+      }
 
-        // Request notification (optional)
-        await PermissionHelper.requestNotificationWithExplanation(context);
-
-        // Mark onboarding as complete
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool('permissions_onboarding_complete', true);
-
+      // Notification (optional) — timeout guards against iOS hangs
+      try {
         if (mounted) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const HomeScreen()),
-          );
+          await PermissionHelper.requestNotificationWithExplanation(context)
+              .timeout(const Duration(seconds: 15));
         }
-      } else {
-        setState(() => _isRequesting = false);
+      } catch (_) {}
+
+      // Mark onboarding complete and navigate regardless of permission results
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('permissions_onboarding_complete', true);
+
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+        );
       }
     } catch (e) {
       setState(() => _isRequesting = false);
@@ -134,18 +140,20 @@ class _PermissionOnboardingScreenState
                   'Microphone',
                   'Record calls for analysis',
                 ),
-                const SizedBox(height: 16),
-                _buildPermissionItem(
-                  Icons.phone_rounded,
-                  'Phone State',
-                  'Detect calls automatically',
-                ),
-                const SizedBox(height: 16),
-                _buildPermissionItem(
-                  Icons.folder_rounded,
-                  'Storage',
-                  'Save recordings locally',
-                ),
+                if (!Platform.isIOS) ...[
+                  const SizedBox(height: 16),
+                  _buildPermissionItem(
+                    Icons.phone_rounded,
+                    'Phone State',
+                    'Detect calls automatically',
+                  ),
+                  const SizedBox(height: 16),
+                  _buildPermissionItem(
+                    Icons.folder_rounded,
+                    'Storage',
+                    'Save recordings locally',
+                  ),
+                ],
                 const SizedBox(height: 16),
                 _buildPermissionItem(
                   Icons.notifications_rounded,
