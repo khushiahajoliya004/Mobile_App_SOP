@@ -16,7 +16,8 @@ import '../models/user_model.dart';
 class CallRecorderScreen extends StatefulWidget {
   final String? leadId;
   final String? leadCustomerName;
-  const CallRecorderScreen({super.key, this.leadId, this.leadCustomerName});
+  final String? leadPhone;
+  const CallRecorderScreen({super.key, this.leadId, this.leadCustomerName, this.leadPhone});
   @override
   State<CallRecorderScreen> createState() => _CallRecorderScreenState();
 }
@@ -243,12 +244,14 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
         final cid = cd?['id']?.toString();
         final as2 = cd?['analysisStatus'] ?? '';
         if (widget.leadId != null && cid != null) {
-          await _api.createLeadActivity(
-            leadId: widget.leadId!,
-            type: 'CALL',
-            callId: cid,
-            notes: 'Recording from mobile',
-          );
+          try {
+            await _api.createLeadActivity(
+              leadId: widget.leadId!,
+              type: 'CALL',
+              callId: cid,
+              notes: 'Recording from mobile',
+            );
+          } catch (_) {}
         }
         final isAi =
             _user!.aiEnabled && (as2 == 'PENDING' || as2 == 'PROCESSING');
@@ -494,7 +497,9 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
       _statusMessage != null &&
       (_statusMessage!.contains('failed') ||
           _statusMessage!.contains('Failed') ||
-          _statusMessage!.contains('Error'));
+          _statusMessage!.contains('Error') ||
+          _statusMessage!.contains('not found') ||
+          _statusMessage!.contains('Not found'));
 
   @override
   void dispose() {
@@ -608,7 +613,9 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
             if (widget.leadCustomerName != null)
               _banner(
                 Icons.person_rounded,
-                widget.leadCustomerName!,
+                (widget.leadPhone != null && widget.leadPhone!.isNotEmpty)
+                    ? '${widget.leadCustomerName!}  •  ${widget.leadPhone!}'
+                    : widget.leadCustomerName!,
                 const Color(0xFF818CF8),
               ),
 

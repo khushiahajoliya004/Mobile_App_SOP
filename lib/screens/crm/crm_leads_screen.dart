@@ -547,13 +547,13 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
     ),
   );
 
-  void _navigateToRecorder(String leadId, String leadName) {
+  void _navigateToRecorder(String leadId, String leadName, [String? phone]) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => _wrapped(
           leadName,
-          CallRecorderScreen(leadId: leadId, leadCustomerName: leadName),
+          CallRecorderScreen(leadId: leadId, leadCustomerName: leadName, leadPhone: phone),
         ),
       ),
     ).then((_) => _load());
@@ -632,7 +632,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                     child: FilledButton.icon(
                       onPressed: () {
                         Navigator.pop(ctx);
-                        _navigateToRecorder(leadId, leadName);
+                        _navigateToRecorder(leadId, leadName, phone);
                       },
                       icon: const Icon(Icons.mic_rounded, size: 18),
                       label: const Text('Start Recording'),
@@ -688,7 +688,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                 subtitle: 'Record a new call for this lead',
                 onTap: () {
                   Navigator.pop(ctx);
-                  _navigateToRecorder(leadId, leadName);
+                  _navigateToRecorder(leadId, leadName, phone);
                 },
               ),
               const SizedBox(height: 8),
