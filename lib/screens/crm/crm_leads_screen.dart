@@ -256,7 +256,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
 
                   // ── Source ──
                   DropdownButtonFormField<String>(
-                    initialValue: source,
+                    value: source,
                     decoration: const InputDecoration(labelText: 'Source', prefixIcon: Icon(Icons.source_outlined)),
                     items: ['Walk-in', 'Call', 'Website', 'Facebook', 'Instagram', 'Google Ads', 'Reference', 'Event', 'Other']
                         .map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
@@ -269,7 +269,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                   // ── Branch ──
                   if (_branches.isNotEmpty) ...[
                     DropdownButtonFormField<String>(
-                      initialValue: branchId,
+                      value: branchId,
                       decoration: InputDecoration(
                         labelText: 'Branch',
                         prefixIcon: const Icon(Icons.business_outlined),
@@ -306,7 +306,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                   // ── Pipeline ──
                   if (_pipelines.isNotEmpty) ...[
                     DropdownButtonFormField<String>(
-                      initialValue: pipelineId,
+                      value: pipelineId,
                       decoration: const InputDecoration(labelText: 'Pipeline', prefixIcon: Icon(Icons.account_tree_outlined)),
                       hint: const Text('Select pipeline'),
                       items: _pipelines.map((p) => DropdownMenuItem<String>(

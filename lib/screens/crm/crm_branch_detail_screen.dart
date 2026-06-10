@@ -447,7 +447,7 @@ class _CrmBranchDetailScreenState extends State<CrmBranchDetailScreen> {
           const Text('Role', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
           const SizedBox(height: 6),
           DropdownButtonFormField<String>(
-            initialValue: _selectedRole,
+            value: _selectedRole,
             decoration: const InputDecoration(prefixIcon: Icon(Icons.badge_outlined), isDense: true),
             hint: const Text('Select role'),
             items: _roles.map((r) => DropdownMenuItem<String>(

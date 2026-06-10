@@ -44,11 +44,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Material(
       color: AppColors.scaffoldBg,
-      child: Column(
-        children: [
-          Expanded(child: IndexedStack(index: _currentTab, children: screens)),
-          _buildBottomNav(),
-        ],
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            Expanded(
+              child: IndexedStack(index: _currentTab, children: screens),
+            ),
+            _buildBottomNav(),
+          ],
+        ),
       ),
     );
   }
