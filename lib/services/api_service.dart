@@ -30,17 +30,30 @@ class ApiService {
     );
 
     _dio.interceptors.add(
+      LogInterceptor(
+        requestBody: true,
+        responseBody: true,
+        requestHeader: false,
+        responseHeader: false,
+        logPrint: (o) => print('[API] $o'),
+      ),
+    );
+
+    _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          final token = await _auth.getToken();
-          if (token != null) {
-            options.headers['Authorization'] = 'Bearer $token';
+          if (!options.path.contains('/auth/login')) {
+            final token = await _auth.getToken();
+            if (token != null) {
+              options.headers['Authorization'] = 'Bearer $token';
+            }
           }
           handler.next(options);
         },
         onError: (DioException e, handler) async {
-          final isLoginRequest = e.requestOptions.path.contains('/auth/login');
-          if (e.response?.statusCode == 401 && !_sessionExpiredDialogOpen && !isLoginRequest) {
+          final path = e.requestOptions.path;
+          final isAuthCall = path.contains('/auth/login') || path.contains('/notifications/register-token') || path.contains('/notifications/unregister-token');
+          if (e.response?.statusCode == 401 && !_sessionExpiredDialogOpen && !isAuthCall) {
             _sessionExpiredDialogOpen = true;
             await _auth.logout();
             final context = navigatorKey.currentContext;
