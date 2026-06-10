@@ -50,9 +50,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     setState(() => _loading = true);
     _user = await _auth.getUser();
     try {
-      final res = _user?.isCompanyAdmin == true || _user?.isSuperAdmin == true
-          ? await _api.getCompanyDashboard(period: '30d')
-          : await _api.getMyDashboard(period: '30d');
+      final res = await _api.getCompanyDashboard(period: '30d');
       final raw = res.data;
       // Handle: raw, raw['data'], or raw['data']['stats'] nesting
       final dataMap = raw is Map
