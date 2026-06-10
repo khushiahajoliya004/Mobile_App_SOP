@@ -7,8 +7,8 @@ import '../utils/navigator_key.dart';
 class ApiService {
   // Backend runs on port 3000, no /api prefix
   // For Android emulator use 10.0.2.2, for real device use your machine IP
-  // static const String baseUrl = 'https://apimysterymentorqa.mysterymentor.in';
-  static const String baseUrl = 'https://api.mysterymentor.in';
+  static const String baseUrl = 'https://apimysterymentorqa.mysterymentor.in';
+  // static const String baseUrl = 'https://api.mysterymentor.in';
 
   late final Dio _dio;
   final AuthService _auth = AuthService();
@@ -39,7 +39,8 @@ class ApiService {
           handler.next(options);
         },
         onError: (DioException e, handler) async {
-          if (e.response?.statusCode == 401 && !_sessionExpiredDialogOpen) {
+          final isLoginRequest = e.requestOptions.path.contains('/auth/login');
+          if (e.response?.statusCode == 401 && !_sessionExpiredDialogOpen && !isLoginRequest) {
             _sessionExpiredDialogOpen = true;
             await _auth.logout();
             final context = navigatorKey.currentContext;
