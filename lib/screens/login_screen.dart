@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
 import '../main.dart';
 import '../services/auth_service.dart';
 import '../services/api_service.dart';
@@ -70,7 +71,7 @@ class _LoginScreenState extends State<LoginScreen>
       _error = null;
     });
     try {
-      final response = await _api.login(_emailCtrl.text.trim(), _passCtrl.text);
+      final response = await _api.login(_emailCtrl.text.trim(), _passCtrl.text.trim());
       final data = response.data['data'] ?? response.data;
       await _auth.saveToken(data['token'] ?? '');
       if (data['user'] != null) {
@@ -99,14 +100,22 @@ class _LoginScreenState extends State<LoginScreen>
     } catch (e) {
       setState(() {
         final msg = e.toString();
+        // Extract actual server message if available
+        String? serverMsg;
+        if (e is DioException) {
+          final body = e.response?.data;
+          if (body is Map) {
+            serverMsg = body['message']?.toString() ?? body['error']?.toString();
+          }
+        }
         if (msg.contains('SocketException') || msg.contains('Connection refused') || msg.contains('Network')) {
           _error = 'Cannot connect to server. Check your WiFi or server IP.';
         } else if (msg.contains('401') || msg.contains('Invalid credentials')) {
-          _error = 'Invalid email or password';
+          _error = serverMsg ?? 'Invalid email or password';
         } else if (msg.contains('500')) {
           _error = 'Server error. Please try again or contact support.';
         } else {
-          _error = 'Login failed: $msg';
+          _error = serverMsg ?? 'Login failed: $msg';
         }
       });
     } finally {
