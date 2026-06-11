@@ -26,10 +26,7 @@ class DefaultFirebaseOptions {
       case TargetPlatform.android:
         return android;
       case TargetPlatform.iOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for ios - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return ios;
       case TargetPlatform.macOS:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for macos - '
@@ -58,5 +55,14 @@ class DefaultFirebaseOptions {
     messagingSenderId: '154416729951',
     projectId: 'mystery-mentor-app',
     storageBucket: 'mystery-mentor-app.firebasestorage.app',
+  );
+
+  static const FirebaseOptions ios = FirebaseOptions(
+    apiKey: 'AIzaSyD_Gn9M9tyZ0pPKvqKKWZ57NKUBSMw5onY',
+    appId: '1:154416729951:ios:d4695b0a61c1be40d2b0ea',
+    messagingSenderId: '154416729951',
+    projectId: 'mystery-mentor-app',
+    storageBucket: 'mystery-mentor-app.firebasestorage.app',
+    iosBundleId: 'com.mysterymentor.apps',
   );
 }

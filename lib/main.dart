@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -23,16 +22,13 @@ void main() async {
     ),
   );
 
-  // Firebase is only configured for Android — skip on iOS
-  if (!Platform.isIOS) {
-    try {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
-      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-    } catch (e) {
-      debugPrint('Failed to initialize Firebase: $e');
-    }
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  } catch (e) {
+    debugPrint('Failed to initialize Firebase: $e');
   }
 
   // Initialize foreground service with error handling
@@ -259,8 +255,8 @@ class _AuthGateState extends State<AuthGate> {
     final onboardingComplete =
         prefs.getBool('permissions_onboarding_complete') ?? false;
 
-    // Initialize notifications in background — Android only (iOS has no Firebase config)
-    if (token != null && !Platform.isIOS) {
+    // Initialize notifications in background
+    if (token != null) {
       NotificationService().initialize().catchError((e) {
         debugPrint('Failed to initialize notifications: $e');
       });

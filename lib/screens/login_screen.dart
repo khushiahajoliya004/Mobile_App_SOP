@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
-import 'dart:io';
 import '../main.dart';
 import '../services/auth_service.dart';
 import '../services/api_service.dart';
@@ -89,11 +88,9 @@ class _LoginScreenState extends State<LoginScreen>
         await _auth.saveAllowedModules(user.allowedModules);
       }
       // Initialize FCM after login so token gets registered for this user
-      if (!Platform.isIOS) {
-        NotificationService().initialize().catchError((e) {
-          debugPrint('[FCM] Init after login failed: $e');
-        });
-      }
+      NotificationService().initialize().catchError((e) {
+        debugPrint('[FCM] Init after login failed: $e');
+      });
       if (_rememberMe) {
         await _auth.setRememberMe(true);
         await _auth.saveCredentials(_emailCtrl.text.trim(), _passCtrl.text);
