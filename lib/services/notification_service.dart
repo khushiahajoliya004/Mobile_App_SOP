@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
 import '../utils/navigator_key.dart';
 import '../screens/crm/crm_leads_screen.dart';
+import '../screens/crm/crm_screen.dart';
 
 /// Top-level handler for background messages (must be top-level function)
 @pragma('vm:entry-point')
@@ -180,11 +181,16 @@ class NotificationService {
     final type = data['type']?.toString();
     final dealId = data['dealId']?.toString();
     if (type == 'LEAD_ASSIGNED' && dealId != null) {
-      navigatorKey.currentState?.push(
-        MaterialPageRoute(
-          builder: (_) => CrmLeadsScreen(highlightDealId: dealId),
-        ),
-      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        navigatorKey.currentState?.push(
+          MaterialPageRoute(
+            builder: (_) => CrmSubWrapper(
+              title: 'Leads',
+              child: CrmLeadsScreen(highlightDealId: dealId),
+            ),
+          ),
+        );
+      });
     }
   }
 
