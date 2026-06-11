@@ -9,7 +9,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.mysterymentor.apps</string>
+	<string>com.mysterymentor.app</string>
 	<key>PROJECT_ID</key>
 	<string>mystery-mentor-app</string>
 	<key>STORAGE_BUCKET</key>
@@ -25,6 +25,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:154416729951:ios:d4695b0a61c1be40d2b0ea</string>
+	<string>1:154416729951:ios:86d1770b475e784dd2b0ea</string>
 </dict>
 </plist>
