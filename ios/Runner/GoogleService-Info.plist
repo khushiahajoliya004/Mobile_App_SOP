@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>API_KEY</key>
+	<string>AIzaSyD_Gn9M9tyZ0pPKvqKKWZ57NKUBSMw5onY</string>
+	<key>GCM_SENDER_ID</key>
+	<string>154416729951</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.mysterymentor.apps</string>
+	<key>PROJECT_ID</key>
+	<string>mystery-mentor-app</string>
+	<key>STORAGE_BUCKET</key>
+	<string>mystery-mentor-app.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:154416729951:ios:d4695b0a61c1be40d2b0ea</string>
+</dict>
+</plist>
