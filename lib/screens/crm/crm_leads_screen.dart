@@ -472,7 +472,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                 ),
                 onTap: () async {
                   try {
-                    await _api.assignLead((lead['id'] ?? lead['leadId']).toString(), user['id']);
+                    await _api.updateCrmDeal((lead['id'] ?? lead['leadId']).toString(), {'ownerUserId': user['id']});
                     if (ctx.mounted) Navigator.pop(ctx);
                     _load();
                   } catch (e) {
