@@ -120,7 +120,9 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
   Future<void> _showCreateSheet() async {
     final nameCtrl = TextEditingController();
     final phoneCtrl = TextEditingController();
+    final emailCtrl = TextEditingController();
     final modelCtrl = TextEditingController();
+    final expectedValueCtrl = TextEditingController();
     String source = 'Walk-in';
     String buyerType = '';
     String priority = 'MEDIUM';
@@ -280,6 +282,26 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                   ),
                   const SizedBox(height: 12),
 
+                  // ── Email ──
+                  TextField(
+                    controller: emailCtrl,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.email_outlined)),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // ── Expected Value ──
+                  TextField(
+                    controller: expectedValueCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Expected Value',
+                      prefixIcon: Icon(Icons.currency_rupee_rounded),
+                      hintText: 'e.g. 500000',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
                   // ── Source ──
                   DropdownButtonFormField<String>(
                     value: source,
@@ -290,6 +312,26 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                   ),
                   const SizedBox(height: 12),
 
+                  // ── Priority ──
+                  DropdownButtonFormField<String>(
+                    value: priority,
+                    decoration: const InputDecoration(labelText: 'Priority', prefixIcon: Icon(Icons.flag_outlined)),
+                    items: [
+                      DropdownMenuItem(value: 'HOT', child: Row(children: [Icon(Icons.local_fire_department, size: 16, color: Colors.red.shade600), const SizedBox(width: 6), const Text('Hot')])),
+                      DropdownMenuItem(value: 'WARM', child: Row(children: [Icon(Icons.wb_sunny, size: 16, color: Colors.orange.shade600), const SizedBox(width: 6), const Text('Warm')])),
+                      DropdownMenuItem(value: 'MEDIUM', child: Row(children: [Icon(Icons.remove_circle_outline, size: 16, color: Colors.blue.shade600), const SizedBox(width: 6), const Text('Medium')])),
+                      DropdownMenuItem(value: 'COLD', child: Row(children: [Icon(Icons.ac_unit, size: 16, color: Colors.blueGrey.shade600), const SizedBox(width: 6), const Text('Cold')])),
+                    ],
+                    onChanged: (v) => setSheetState(() => priority = v!),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // ── Interested Model ──
+                  TextField(
+                    controller: modelCtrl,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(labelText: 'Interested Model', prefixIcon: Icon(Icons.directions_car_outlined)),
+                  ),
                   const SizedBox(height: 12),
 
                   // ── Branch ──
@@ -431,14 +473,19 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                       }
 
                       try {
+                        final evText = expectedValueCtrl.text.trim();
                         final res = await _api.createCrmQuickLead(
                           name: name,
                           phone: phone.isEmpty ? null : phone,
+                          email: emailCtrl.text.trim().isEmpty ? null : emailCtrl.text.trim(),
                           source: source,
                           branchId: branchId,
                           pipelineId: pipelineId,
                           ownerUserId: assignedUser?['id']?.toString(),
-                          notes: modelCtrl.text.trim().isEmpty ? null : 'Interested Model: ${modelCtrl.text.trim()}',
+                          notes: null,
+                          expectedValue: evText.isNotEmpty ? double.tryParse(evText) : null,
+                          priority: priority,
+                          interestedModel: modelCtrl.text.trim().isEmpty ? null : modelCtrl.text.trim(),
                         );
                         // Extract new lead ID from response
                         String? newLeadId;

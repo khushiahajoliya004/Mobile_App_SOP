@@ -368,8 +368,12 @@ class _CrmDailyTranscriptsScreenState extends State<CrmDailyTranscriptsScreen> {
     final transcription = detail?['transcription']?.toString() ??
         detail?['transcript']?.toString() ??
         (base['transcription']?.toString() ?? '');
-    final summary = detail?['callSummary'] ?? base['callSummary'];
-    final sections = ((detail?['sectionScores'] ?? detail?['aiAnalysis']?['sectionScores'] ?? []) as List);
+    final summary = detail?['callSummary'] ??
+        detail?['aiAnalysis']?['callSummary'] ??
+        base['callSummary'];
+    final sections = ((detail?['sectionScores'] ??
+        detail?['aiAnalysis']?['sectionScores'] ??
+        []) as List);
     final overallScore = detail?['sopScore'] ?? base['sopScore'];
 
     const tabs = ['Transcription', 'Summary', 'Score'];
@@ -507,7 +511,7 @@ class _CrmDailyTranscriptsScreenState extends State<CrmDailyTranscriptsScreen> {
         const SizedBox(height: 16),
         ...sections.map((s) {
           final sec = s is Map ? Map<String, dynamic>.from(s) : <String, dynamic>{};
-          final name = sec['sectionName'] ?? sec['name'] ?? '';
+          final name = sec['title'] ?? sec['sectionName'] ?? sec['name'] ?? '';
           final secScore = num.tryParse((sec['score'] ?? sec['percentage'] ?? 0).toString()) ?? 0;
           final c = secScore >= 75 ? AppColors.success : secScore >= 50 ? AppColors.warning : AppColors.error;
           return Container(

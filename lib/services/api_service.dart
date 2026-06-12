@@ -916,6 +916,9 @@ class ApiService {
     String? ownerUserId,
     String? branchId,
     String? notes,
+    double? expectedValue,
+    String? priority,
+    String? interestedModel,
   }) async {
     return _dio.post(
       '/crm/contacts/quick-lead',
@@ -931,6 +934,10 @@ class ApiService {
           'ownerUserId': ownerUserId,
         if (branchId != null && branchId.isNotEmpty) 'branchId': branchId,
         if (notes != null && notes.isNotEmpty) 'notes': notes,
+        if (expectedValue != null) 'expectedValue': expectedValue,
+        if (priority != null && priority.isNotEmpty) 'priority': priority,
+        if (interestedModel != null && interestedModel.isNotEmpty)
+          'interestedModel': interestedModel,
       },
     );
   }
