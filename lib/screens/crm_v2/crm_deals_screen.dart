@@ -55,11 +55,14 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      debugPrint('[CrmDeals] calling getCrmDeals with branchId=${_currentUser?.branchId}, pipelineId=$_selectedPipelineId');
+      // Team leaders must NOT pass branchId — backend uses reportingToUserId hierarchy to scope deals.
+      // Passing branchId would bypass team-leader visibility and show all branch deals instead.
+      final isTeamLeader = _currentUser?.branchRole == 'TEAM_LEADER';
+      debugPrint('[CrmDeals] calling getCrmDeals isTeamLeader=$isTeamLeader branchId=${isTeamLeader ? 'skipped' : _currentUser?.branchId}, pipelineId=$_selectedPipelineId');
       final res = await _api.getCrmDeals(
         pipelineId: _selectedPipelineId,
         search: _search.isNotEmpty ? _search : null,
-        branchId: _currentUser?.branchId,
+        branchId: isTeamLeader ? null : _currentUser?.branchId,
       );
       final raw = res.data;
       _deals = raw is List

@@ -51,10 +51,16 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
 
   Future<void> _loadFormData() async {
     try {
+      final user = _currentUser ?? await _auth.getUser();
+      final isTeamLeader = user?.branchRole == 'TEAM_LEADER';
+
       final results = await Future.wait([
         _api.getBranches(),
         _api.getLeadPipelines(),
-        _api.getAssignableUsers(),
+        // Team leaders see only their direct salesmen in the assignee dropdown
+        isTeamLeader && user?.id != null
+            ? _api.getUsersByReportingTo(user!.id)
+            : _api.getAssignableUsers(),
       ]);
       final bRaw = results[0].data;
       final pRaw = results[1].data;

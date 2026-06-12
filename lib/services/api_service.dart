@@ -848,6 +848,9 @@ class ApiService {
   Future<Response> getAssignableUsers() async =>
       _dio.get('/crm-dashboard/assignable-users');
 
+  Future<Response> getUsersByReportingTo(String teamLeaderUserId) async =>
+      _dio.get('/users', queryParameters: {'reportingToUserId': teamLeaderUserId});
+
   Future<Response> getMyCrmPermissions() async =>
       _dio.get('/crm/my-permissions');
 
