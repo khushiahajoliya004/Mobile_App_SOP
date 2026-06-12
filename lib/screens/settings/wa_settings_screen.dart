@@ -61,7 +61,7 @@ class _WaSettingsScreenState extends State<WaSettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+    if (_loading) return const Material(color: Colors.white, child: Center(child: CircularProgressIndicator(color: AppColors.primary)));
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

@@ -16,11 +16,9 @@ import '../screens/crm/crm_screen.dart';
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   debugPrint('[FCM] Background message: ${message.messageId}');
-  // iOS: system shows background notifications automatically from FCM payload
-  // Android: show local notification manually
-  if (Platform.isAndroid) {
-    await NotificationService._showLocalNotification(message);
-  }
+  // When the app is in the background, Android auto-displays the notification
+  // from the FCM 'notification' payload — do NOT call _showLocalNotification
+  // here or the user will see two notifications for every push.
 }
 
 class NotificationService {

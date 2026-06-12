@@ -67,6 +67,8 @@ class _DailyTranscriptsScreenState extends State<DailyTranscriptsScreen> {
     if (mounted) setState(() => _loadingDetail = false);
   }
 
+  num _toNum(dynamic v) => v is num ? v : num.tryParse(v?.toString() ?? '') ?? 0;
+
   String _fmtDate(String d) {
     try {
       final dt = DateTime.parse(d);
@@ -108,7 +110,7 @@ class _DailyTranscriptsScreenState extends State<DailyTranscriptsScreen> {
                 itemBuilder: (_, i) {
                   final d = _dates[i];
                   final date = d['date'] as String? ?? '';
-                  final count = (d['callCount'] ?? d['count'] ?? d['total'] ?? 0) as num;
+                  final count = _toNum(d['callCount'] ?? d['count'] ?? d['total'] ?? 0);
                   return GestureDetector(
                     onTap: () => _loadCallsForDate(date),
                     child: Container(
@@ -159,8 +161,8 @@ class _DailyTranscriptsScreenState extends State<DailyTranscriptsScreen> {
                   final c = _calls[i];
                   final id = c['id'] ?? c['callId'] ?? '';
                   final customer = c['customerName'] ?? c['customer'] ?? 'Unknown';
-                  final duration = (c['duration'] ?? c['durationMinutes'] ?? 0) as num;
-                  final score = (c['sopScore'] ?? c['score'] ?? c['overallScore'] ?? 0) as num;
+                  final duration = _toNum(c['duration'] ?? c['durationMinutes'] ?? 0);
+                  final score = _toNum(c['sopScore'] ?? c['score'] ?? c['overallScore'] ?? 0);
                   final scoreColor = score >= 80 ? AppColors.success : score >= 50 ? AppColors.warning : AppColors.error;
                   return GestureDetector(
                     onTap: () => id.isNotEmpty ? _loadInsight(id.toString()) : null,
@@ -193,7 +195,7 @@ class _DailyTranscriptsScreenState extends State<DailyTranscriptsScreen> {
   }
 
   Widget _detailView() {
-    if (_loadingDetail) return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+    if (_loadingDetail) return const Material(color: Colors.white, child: Center(child: CircularProgressIndicator(color: AppColors.primary)));
     final insight = _selectedInsight!;
     final tabs = ['Transcription', 'Summary', 'Score'];
     return Column(children: [
@@ -240,10 +242,52 @@ class _DailyTranscriptsScreenState extends State<DailyTranscriptsScreen> {
   }
 
   Widget _summaryTab(Map<String, dynamic> insight) {
-    final summary = insight['summary'] ?? insight['callSummary'] ?? '';
+    final rawSummary = insight['summary'] ??
+        insight['callSummary'] ??
+        insight['aiAnalysis']?['callSummary'];
     final keyPoints = (insight['keyPoints'] ?? insight['highlights'] ?? []) as List;
+
+    // If summary is a Q&A list, render each item
+    if (rawSummary is List && rawSummary.isNotEmpty) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Summary', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        ...rawSummary.map((item) {
+          final m = item is Map ? Map<String, dynamic>.from(item) : <String, dynamic>{};
+          final q = m['question']?.toString() ?? '';
+          final a = m['answer']?.toString() ?? '';
+          if (a.isEmpty) return const SizedBox.shrink();
+          return Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.surfaceLight)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              if (q.isNotEmpty) ...[
+                Text(q, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 4),
+              ],
+              Text(a, style: const TextStyle(fontSize: 13, height: 1.5)),
+            ]),
+          );
+        }),
+        if (keyPoints.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          const Text('Key Points', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          ...keyPoints.map((p) => Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('• ', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700)),
+              Expanded(child: Text('$p', style: const TextStyle(fontSize: 13))),
+            ]),
+          )),
+        ],
+      ]);
+    }
+
+    final summary = rawSummary?.toString() ?? '';
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      if (summary.toString().isNotEmpty) ...[
+      if (summary.isNotEmpty) ...[
         const Text('Summary', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
         const SizedBox(height: 8),
         Container(
@@ -270,8 +314,13 @@ class _DailyTranscriptsScreenState extends State<DailyTranscriptsScreen> {
   }
 
   Widget _scoreTab(Map<String, dynamic> insight) {
-    final sections = (insight['sections'] ?? insight['sopSections'] ?? insight['evaluation']?['sections'] ?? []) as List;
-    final overallScore = (insight['overallScore'] ?? insight['sopScore'] ?? insight['score'] ?? 0) as num;
+    final sections = (insight['sectionScores'] ??
+        insight['aiAnalysis']?['sectionScores'] ??
+        insight['sections'] ??
+        insight['sopSections'] ??
+        insight['evaluation']?['sections'] ??
+        []) as List;
+    final overallScore = _toNum(insight['overallScore'] ?? insight['sopScore'] ?? insight['score'] ?? 0);
     final scoreColor = overallScore >= 80 ? AppColors.success : overallScore >= 50 ? AppColors.warning : AppColors.error;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Container(
@@ -292,8 +341,8 @@ class _DailyTranscriptsScreenState extends State<DailyTranscriptsScreen> {
         const SizedBox(height: 8),
         ...sections.map((s) {
           final sec = s is Map ? Map<String, dynamic>.from(s) : <String, dynamic>{};
-          final name = sec['name'] ?? sec['sectionName'] ?? '';
-          final score = (sec['score'] ?? sec['percentage'] ?? 0) as num;
+          final name = sec['title'] ?? sec['name'] ?? sec['sectionName'] ?? '';
+          final score = _toNum(sec['score'] ?? sec['percentage'] ?? 0);
           final c = score >= 80 ? AppColors.success : score >= 50 ? AppColors.warning : AppColors.error;
           return Container(
             margin: const EdgeInsets.only(bottom: 8),

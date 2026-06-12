@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../main.dart';
 import '../../services/api_service.dart';
@@ -24,6 +25,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
   List<Map<String, dynamic>> _assignableUsers = [];
   List<Map<String, dynamic>> _branches = [];
   List<Map<String, dynamic>> _pipelines = [];
+  String? _selectedPipelineId;
   final _searchController = TextEditingController();
   final _scrollController = ScrollController();
   String? _highlightedId;
@@ -32,14 +34,32 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
   void initState() {
     super.initState();
     _highlightedId = widget.highlightDealId;
-    _loadCurrentUser();
-    _load();
-    _loadFormData();
+    _init();
   }
 
-  Future<void> _loadCurrentUser() async {
+  Future<void> _init() async {
     final user = await _auth.getUser();
     if (mounted) setState(() => _currentUser = user);
+
+    // Load pipelines first — backend requires pipelineId to return deals
+    try {
+      final res = await _api.getCrmPipelines();
+      final raw = res.data;
+      final pipelines = raw is List
+          ? raw.map((e) => Map<String, dynamic>.from(e)).toList()
+          : ((raw is Map ? (raw['data'] ?? []) : []) as List)
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+      if (mounted) {
+        setState(() {
+          _pipelines = pipelines;
+          if (pipelines.isNotEmpty) _selectedPipelineId = pipelines.first['id']?.toString();
+        });
+      }
+    } catch (_) {}
+
+    await _load();
+    _loadFormData();
   }
 
   @override
@@ -51,19 +71,21 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
 
   Future<void> _loadFormData() async {
     try {
+      final user = _currentUser ?? await _auth.getUser();
+      final isTeamLeader = user?.branchRole == 'TEAM_LEADER';
+
       final results = await Future.wait([
         _api.getBranches(),
-        _api.getLeadPipelines(),
-        _api.getAssignableUsers(),
+        // Team leaders see only their direct salesmen in the assignee dropdown
+        isTeamLeader && user?.id != null
+            ? _api.getUsersByReportingTo(user!.id)
+            : _api.getAssignableUsers(),
       ]);
       final bRaw = results[0].data;
-      final pRaw = results[1].data;
-      final uRaw = results[2].data;
-      debugPrint('branches raw: $bRaw');
+      final uRaw = results[1].data;
       if (mounted) {
         setState(() {
           _branches = _toList(bRaw);
-          _pipelines = _toList(pRaw);
           _assignableUsers = _toList(uRaw);
         });
       }
@@ -95,6 +117,8 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
   Future<void> _load() async {
     try {
       final res = await _api.getCrmDeals(
+        pipelineId: _selectedPipelineId,
+        branchId: _currentUser?.branchId,
         search: _searchController.text.isEmpty ? null : _searchController.text,
       );
       final raw = res.data;
@@ -120,14 +144,15 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
   Future<void> _showCreateSheet() async {
     final nameCtrl = TextEditingController();
     final phoneCtrl = TextEditingController();
-    final modelCtrl = TextEditingController();
+    final emailCtrl = TextEditingController();
+    final notesCtrl = TextEditingController();
+    final expectedValueCtrl = TextEditingController();
     String source = 'Walk-in';
-    String buyerType = '';
-    String priority = 'MEDIUM';
     // Auto-select branch from user profile, matching web frontend logic
     String? branchId = _currentUser?.branchId;
     final bool branchLocked = branchId != null;
-    String? pipelineId;
+    // Auto-select first pipeline — backend requires pipelineId when createDeal=true
+    String? pipelineId = _pipelines.isNotEmpty ? _pipelines.first['id']?.toString() : null;
     Map<String, dynamic>? assignedUser;
     List<Map<String, dynamic>> sheetUsers = List.from(_assignableUsers);
     bool sheetUsersLoading = false;
@@ -271,12 +296,21 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                   ),
                   const SizedBox(height: 12),
 
-                  // ── Phone ──
+                  // ── Phone * ──
                   TextField(
                     controller: phoneCtrl,
                     keyboardType: TextInputType.phone,
                     maxLength: 15,
-                    decoration: const InputDecoration(labelText: 'Mobile Number', prefixIcon: Icon(Icons.phone_outlined), counterText: ''),
+                    decoration: const InputDecoration(labelText: 'Phone Number *', prefixIcon: Icon(Icons.phone_outlined), counterText: ''),
+                    onChanged: (_) => setSheetState(() {}),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // ── Email ──
+                  TextField(
+                    controller: emailCtrl,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.email_outlined)),
                   ),
                   const SizedBox(height: 12),
 
@@ -288,8 +322,6 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                         .map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
                     onChanged: (v) => setSheetState(() => source = v!),
                   ),
-                  const SizedBox(height: 12),
-
                   const SizedBox(height: 12),
 
                   // ── Branch ──
@@ -304,10 +336,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                       hint: const Text('Select branch'),
                       items: [
                         if (!branchLocked)
-                          const DropdownMenuItem<String>(
-                            value: null,
-                            child: Text('All Branches'),
-                          ),
+                          const DropdownMenuItem<String>(value: null, child: Text('All Branches')),
                         ..._branches.map((b) => DropdownMenuItem<String>(
                           value: b['id']?.toString(),
                           child: Text(b['name']?.toString() ?? ''),
@@ -317,14 +346,12 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                     ),
                     if (branchLocked) ...[
                       const SizedBox(height: 4),
-                      const Row(
-                        children: [
-                          SizedBox(width: 4),
-                          Icon(Icons.info_outline, size: 12, color: AppColors.primary),
-                          SizedBox(width: 4),
-                          Text('Auto-assigned from your branch', style: TextStyle(fontSize: 11, color: AppColors.primary)),
-                        ],
-                      ),
+                      const Row(children: [
+                        SizedBox(width: 4),
+                        Icon(Icons.info_outline, size: 12, color: AppColors.primary),
+                        SizedBox(width: 4),
+                        Text('Auto-assigned from your branch', style: TextStyle(fontSize: 11, color: AppColors.primary)),
+                      ]),
                     ],
                     const SizedBox(height: 12),
                   ],
@@ -343,6 +370,18 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                     ),
                     const SizedBox(height: 12),
                   ],
+
+                  // ── Expected Value ──
+                  TextField(
+                    controller: expectedValueCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Expected Value (₹)',
+                      prefixIcon: Icon(Icons.currency_rupee_rounded),
+                      hintText: 'e.g. 500000',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
 
                   // ── Assign Salesperson ──
                   Row(children: [
@@ -393,22 +432,36 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                       ]),
                     ),
                   ),
+                  const SizedBox(height: 12),
+
+                  // ── Notes ──
+                  TextField(
+                    controller: notesCtrl,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Notes',
+                      prefixIcon: Icon(Icons.notes_rounded),
+                      hintText: 'Any initial notes...',
+                      alignLabelWithHint: true,
+                    ),
+                  ),
                   const SizedBox(height: 20),
 
                   // ── Submit ──
                   FilledButton(
-                    onPressed: nameCtrl.text.trim().isEmpty ? null : () async {
+                    onPressed: (nameCtrl.text.trim().isEmpty || phoneCtrl.text.trim().isEmpty || (_pipelines.isNotEmpty && pipelineId == null)) ? null : () async {
                       final name = nameCtrl.text.trim();
                       final phone = phoneCtrl.text.trim();
 
                       if (phone.isNotEmpty) {
                         try {
-                          final dupRes = await _api.checkDuplicateLead(phone);
+                          final dupRes = await _api.checkDuplicateCrmContact(phone);
                           final raw = dupRes.data;
-                          final data = raw is Map ? (raw['data'] ?? raw) : {};
-                          final isDuplicate = data['isDuplicate'] == true || data['exists'] == true;
+                          final list = raw is List ? raw : (raw is Map ? (raw['data'] ?? raw['contacts'] ?? []) : []);
+                          final isDuplicate = list is List && (list as List).isNotEmpty;
                           if (isDuplicate && ctx.mounted) {
-                            final existingName = (data['lead'] ?? data['existingLead'] ?? {})['customerName'] ?? 'another lead';
+                            final first = (list as List).first;
+                            final existingName = first is Map ? (first['name'] ?? 'another contact') : 'another contact';
                             final proceed = await showDialog<bool>(
                               context: ctx,
                               builder: (dlgCtx) => AlertDialog(
@@ -431,14 +484,18 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                       }
 
                       try {
+                        final evText = expectedValueCtrl.text.trim();
+                        final notes = notesCtrl.text.trim();
                         final res = await _api.createCrmQuickLead(
                           name: name,
                           phone: phone.isEmpty ? null : phone,
+                          email: emailCtrl.text.trim().isEmpty ? null : emailCtrl.text.trim(),
                           source: source,
                           branchId: branchId,
                           pipelineId: pipelineId,
                           ownerUserId: assignedUser?['id']?.toString(),
-                          notes: modelCtrl.text.trim().isEmpty ? null : 'Interested Model: ${modelCtrl.text.trim()}',
+                          expectedValue: evText.isNotEmpty ? double.tryParse(evText) : null,
+                          notes: notes.isNotEmpty ? notes : null,
                         );
                         // Extract new lead ID from response
                         String? newLeadId;
@@ -456,8 +513,16 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                         }
                       } catch (e) {
                         if (ctx.mounted) {
+                          String msg = 'Failed to create lead';
+                          if (e is DioException) {
+                            final body = e.response?.data;
+                            final serverMsg = body is Map
+                                ? (body['message'] ?? body['error'] ?? body['msg'])?.toString()
+                                : null;
+                            msg = serverMsg ?? msg;
+                          }
                           ScaffoldMessenger.of(ctx).showSnackBar(
-                            SnackBar(content: Text('Failed to create lead: $e')),
+                            SnackBar(content: Text(msg)),
                           );
                         }
                       }
@@ -519,7 +584,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
 
   void _markLost(Map<String, dynamic> lead) async {
     try {
-      await _api.updateLeadStatus((lead['id'] ?? lead['leadId']).toString(), {'status': 'LOST'});
+      await _api.markDealLost((lead['id'] ?? lead['leadId']).toString());
       _load();
     } catch (e) {
       if (mounted) {
@@ -601,7 +666,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
     Navigator.push(
       context,
       PageRouteBuilder(
-        opaque: true,
+        opaque: false,
         pageBuilder: (_, __, ___) => CrmLeadDetailScreen(
           leadId: leadId,
           leadName: leadName,

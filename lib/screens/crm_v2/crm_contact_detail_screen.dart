@@ -251,7 +251,7 @@ class _CrmContactDetailScreenState extends State<CrmContactDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+    if (_loading) return const Material(color: Colors.white, child: Center(child: CircularProgressIndicator(color: AppColors.primary)));
     final contact = _contact ?? {};
     final name = contact['name'] ?? widget.contactName;
     final phone = contact['phone'] ?? '';

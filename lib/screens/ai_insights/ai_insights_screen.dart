@@ -683,10 +683,8 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
                           ? ListView.builder(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 16),
-                              itemCount: _groupByCustomer().length,
-                              itemBuilder: (_, i) =>
-                                  _callsGroupTile(
-                                      _groupByCustomer()[i]),
+                              itemCount: _calls.length,
+                              itemBuilder: (_, i) => _callTile(_calls[i]),
                             )
                           : ListView.builder(
                               padding: const EdgeInsets.symmetric(
@@ -1071,15 +1069,17 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
                 ],
               ),
             ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                _statusBadge(status),
-                const SizedBox(height: 4),
-                Text(_formatDate(call['createdAt']),
-                    style: const TextStyle(
-                        fontSize: 10, color: AppColors.textHint)),
-              ],
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  _statusBadge(status),
+                  const SizedBox(height: 4),
+                  Text(_formatDate(call['createdAt']),
+                      style: const TextStyle(
+                          fontSize: 10, color: AppColors.textHint)),
+                ],
+              ),
             ),
           ],
         ),
@@ -1091,7 +1091,9 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
   Widget _callsGroupTile(Map<String, dynamic> group) {
     final calls = group['calls'] as List<Map<String, dynamic>>;
     final score = group['avgScore'] as int?;
-    final name = group['customerName'] as String;
+    final name = ((group['customerName'] as String? ?? '').trim().isNotEmpty
+        ? (group['customerName'] as String).trim()
+        : 'Customer');
     final count = group['callCount'] as int;
 
     return GestureDetector(
@@ -1244,7 +1246,9 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
   Widget _customerGroupTile(Map<String, dynamic> group) {
     final calls = group['calls'] as List<Map<String, dynamic>>;
     final score = group['avgScore'] as int?;
-    final name = group['customerName'] as String;
+    final name = ((group['customerName'] as String? ?? '').trim().isNotEmpty
+        ? (group['customerName'] as String).trim()
+        : 'Customer');
     final count = group['callCount'] as int;
 
     return GestureDetector(

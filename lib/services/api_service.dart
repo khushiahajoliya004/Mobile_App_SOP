@@ -848,6 +848,9 @@ class ApiService {
   Future<Response> getAssignableUsers() async =>
       _dio.get('/crm-dashboard/assignable-users');
 
+  Future<Response> getUsersByReportingTo(String teamLeaderUserId) async =>
+      _dio.get('/users', queryParameters: {'reportingToUserId': teamLeaderUserId});
+
   Future<Response> getMyCrmPermissions() async =>
       _dio.get('/crm/my-permissions');
 
@@ -916,6 +919,7 @@ class ApiService {
     String? ownerUserId,
     String? branchId,
     String? notes,
+    double? expectedValue,
   }) async {
     return _dio.post(
       '/crm/contacts/quick-lead',
@@ -931,6 +935,7 @@ class ApiService {
           'ownerUserId': ownerUserId,
         if (branchId != null && branchId.isNotEmpty) 'branchId': branchId,
         if (notes != null && notes.isNotEmpty) 'notes': notes,
+        if (expectedValue != null) 'expectedValue': expectedValue,
       },
     );
   }
@@ -1826,6 +1831,34 @@ class ApiService {
     return _dio.delete(endpoint);
   }
 
+  // ─── Force Update ───
+
+  /// GET /app/version-config
+  Future<Response> getVersionConfig() async =>
+      _dio.get('/app/version-config');
+
+  /// POST /app/version-config
+  Future<Response> saveVersionConfig({
+    required bool forceUpdateEnabled,
+    required int minAndroidBuild,
+    required int minIosBuild,
+    required String updateMessage,
+    required String androidStoreUrl,
+    required String iosStoreUrl,
+  }) async {
+    return _dio.post(
+      '/app/version-config',
+      data: {
+        'forceUpdateEnabled': forceUpdateEnabled,
+        'minAndroidBuild': minAndroidBuild,
+        'minIosBuild': minIosBuild,
+        'updateMessage': updateMessage,
+        'androidStoreUrl': androidStoreUrl,
+        'iosStoreUrl': iosStoreUrl,
+      },
+    );
+  }
+
   // ─── Modules ───
 
   Future<Response> getModules() async => _dio.get('/modules');
@@ -2188,6 +2221,9 @@ class ApiService {
 
   Future<Response> getCrmPipeline(String id) async =>
       _dio.get('/crm/pipelines/$id');
+
+  Future<Response> checkDuplicateCrmContact(String phone) async =>
+      _dio.get('/crm/contacts', queryParameters: {'phone': phone});
 
   // ─── CRM v2 Activities ───
 

@@ -11,7 +11,7 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (user == null) return const Center(child: CircularProgressIndicator());
+    if (user == null) return const Material(color: Colors.white, child: Center(child: CircularProgressIndicator()));
 
     return SafeArea(
       child: ListView(
