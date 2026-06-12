@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -8,6 +10,8 @@ import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/permission_onboarding_screen.dart';
 import 'screens/overlay_button.dart';
+import 'screens/force_update/force_update_screen.dart';
+import 'services/api_service.dart';
 import 'services/auth_service.dart';
 import 'services/foreground_service.dart';
 import 'services/notification_service.dart';
@@ -239,6 +243,10 @@ class _AuthGateState extends State<AuthGate> {
   bool _loading = true;
   bool _loggedIn = false;
   bool _onboardingComplete = false;
+  bool _forceUpdate = false;
+  String _updateMessage = '';
+  String _androidStoreUrl = '';
+  String _iosStoreUrl = '';
 
   @override
   void initState() {
@@ -250,16 +258,16 @@ class _AuthGateState extends State<AuthGate> {
     final auth = AuthService();
     final token = await auth.getToken();
 
-    // Check if permission onboarding is complete
     final prefs = await SharedPreferences.getInstance();
     final onboardingComplete =
         prefs.getBool('permissions_onboarding_complete') ?? false;
 
-    // Initialize notifications in background
     if (token != null) {
       NotificationService().initialize().catchError((e) {
         debugPrint('Failed to initialize notifications: $e');
       });
+
+      await _checkForceUpdate();
     }
 
     setState(() {
@@ -267,6 +275,31 @@ class _AuthGateState extends State<AuthGate> {
       _onboardingComplete = onboardingComplete;
       _loading = false;
     });
+  }
+
+  Future<void> _checkForceUpdate() async {
+    try {
+      final res = await ApiService().getVersionConfig();
+      if (res.data['success'] != true) return;
+
+      final d = res.data['data'];
+      if (d['forceUpdateEnabled'] != true) return;
+
+      final info = await PackageInfo.fromPlatform();
+      final currentBuild = int.tryParse(info.buildNumber) ?? 0;
+      final minBuild = Platform.isIOS
+          ? (d['minIosBuild'] as num?)?.toInt() ?? 0
+          : (d['minAndroidBuild'] as num?)?.toInt() ?? 0;
+
+      if (currentBuild < minBuild) {
+        _forceUpdate = true;
+        _updateMessage = d['updateMessage'] ?? '';
+        _androidStoreUrl = d['androidStoreUrl'] ?? '';
+        _iosStoreUrl = d['iosStoreUrl'] ?? '';
+      }
+    } catch (e) {
+      debugPrint('Version check failed: $e');
+    }
   }
 
   @override
@@ -291,17 +324,22 @@ class _AuthGateState extends State<AuthGate> {
       );
     }
 
-    // Not logged in -> show login
     if (!_loggedIn) {
       return const LoginScreen();
     }
 
-    // Logged in but onboarding not complete -> show permission onboarding
+    if (_forceUpdate) {
+      return ForceUpdateScreen(
+        message: _updateMessage,
+        androidStoreUrl: _androidStoreUrl,
+        iosStoreUrl: _iosStoreUrl,
+      );
+    }
+
     if (!_onboardingComplete) {
       return const PermissionOnboardingScreen();
     }
 
-    // All good -> show home
     return const HomeScreen();
   }
 }

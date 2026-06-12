@@ -41,6 +41,7 @@ import 'crm_v2/crm_master_data_screen.dart';
 import 'daily_transcripts/daily_transcripts_screen.dart';
 import 'salesman_sop/salesman_sop_screen.dart';
 import 'analytics/analytics_compare_screen.dart';
+import 'force_update/force_update_settings_screen.dart';
 
 class MenuScreen extends StatelessWidget {
   final UserModel? user;
@@ -107,6 +108,7 @@ class MenuScreen extends StatelessWidget {
       _M('Operations', Icons.settings_applications_rounded, const Color(0xFF14B8A6), const Color(0xFF2DD4BF), 'System operations', const OperationListScreen()),
       _M('Permissions', Icons.lock_rounded, const Color(0xFFEC4899), const Color(0xFFF472B6), 'Manage permissions', const PermissionListScreen()),
       _M('LLM Config', Icons.auto_awesome_rounded, const Color(0xFF8B5CF6), const Color(0xFFA78BFA), 'AI prompt templates', const LlmConfigScreen()),
+      _M('Force Update', Icons.system_update_rounded, const Color(0xFFEF4444), const Color(0xFFFCA5A5), 'App version control', const ForceUpdateSettingsScreen()),
     ]),
   ];
 

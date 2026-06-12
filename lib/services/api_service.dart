@@ -1826,6 +1826,34 @@ class ApiService {
     return _dio.delete(endpoint);
   }
 
+  // ─── Force Update ───
+
+  /// GET /app/version-config
+  Future<Response> getVersionConfig() async =>
+      _dio.get('/app/version-config');
+
+  /// POST /app/version-config
+  Future<Response> saveVersionConfig({
+    required bool forceUpdateEnabled,
+    required int minAndroidBuild,
+    required int minIosBuild,
+    required String updateMessage,
+    required String androidStoreUrl,
+    required String iosStoreUrl,
+  }) async {
+    return _dio.post(
+      '/app/version-config',
+      data: {
+        'forceUpdateEnabled': forceUpdateEnabled,
+        'minAndroidBuild': minAndroidBuild,
+        'minIosBuild': minIosBuild,
+        'updateMessage': updateMessage,
+        'androidStoreUrl': androidStoreUrl,
+        'iosStoreUrl': iosStoreUrl,
+      },
+    );
+  }
+
   // ─── Modules ───
 
   Future<Response> getModules() async => _dio.get('/modules');
