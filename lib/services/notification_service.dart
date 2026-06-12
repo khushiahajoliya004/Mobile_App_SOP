@@ -1,18 +1,26 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../firebase_options.dart';
 import 'api_service.dart';
+import '../utils/navigator_key.dart';
+import '../screens/crm/crm_leads_screen.dart';
+import '../screens/crm/crm_screen.dart';
 
 /// Top-level handler for background messages (must be top-level function)
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   debugPrint('[FCM] Background message: ${message.messageId}');
-  // Show local notification for background messages
-  await NotificationService._showLocalNotification(message);
+  // iOS: system shows background notifications automatically from FCM payload
+  // Android: show local notification manually
+  if (Platform.isAndroid) {
+    await NotificationService._showLocalNotification(message);
+  }
 }
 
 class NotificationService {
@@ -42,25 +50,45 @@ class NotificationService {
     const androidSettings = AndroidInitializationSettings(
       '@mipmap/ic_launcher',
     );
-    const initSettings = InitializationSettings(android: androidSettings);
+    const darwinSettings = DarwinInitializationSettings(
+      requestAlertPermission: false,
+      requestBadgePermission: false,
+      requestSoundPermission: false,
+    );
+    const initSettings = InitializationSettings(
+      android: androidSettings,
+      iOS: darwinSettings,
+    );
     await _localNotifications.initialize(
       initSettings,
       onDidReceiveNotificationResponse: _onNotificationTap,
     );
 
     // Create notification channel for Android
-    const channel = AndroidNotificationChannel(
-      'mystery_mentor_channel',
-      'MysteryMentor Notifications',
-      description: 'Notifications from MysteryMentor app',
-      importance: Importance.high,
-      playSound: true,
-    );
-    await _localNotifications
-        .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >()
-        ?.createNotificationChannel(channel);
+    if (Platform.isAndroid) {
+      const channel = AndroidNotificationChannel(
+        'mystery_mentor_channel',
+        'MysteryMentor Notifications',
+        description: 'Notifications from MysteryMentor app',
+        importance: Importance.high,
+        playSound: true,
+      );
+      await _localNotifications
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >()
+          ?.createNotificationChannel(channel);
+    }
+
+    // iOS: show foreground notifications
+    if (Platform.isIOS) {
+      await FirebaseMessaging.instance
+          .setForegroundNotificationPresentationOptions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+    }
 
     // Get FCM token
     final token = await _messaging.getToken();
@@ -127,7 +155,11 @@ class NotificationService {
   /// Handle foreground messages — show local notification
   void _handleForegroundMessage(RemoteMessage message) {
     debugPrint('[FCM] Foreground message: ${message.notification?.title}');
-    _showLocalNotification(message);
+    // iOS: setForegroundNotificationPresentationOptions + AppDelegate willPresent
+    //      already handle display — calling show() here would duplicate the banner
+    if (Platform.isAndroid) {
+      _showLocalNotification(message);
+    }
   }
 
   /// Show a local notification from a RemoteMessage
@@ -145,7 +177,15 @@ class NotificationService {
       showWhen: true,
       icon: '@mipmap/ic_launcher',
     );
-    const details = NotificationDetails(android: androidDetails);
+    const darwinDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+    const details = NotificationDetails(
+      android: androidDetails,
+      iOS: darwinDetails,
+    );
 
     await plugin.show(
       message.hashCode,
@@ -156,23 +196,39 @@ class NotificationService {
     );
   }
 
-  /// Handle notification tap
+  /// Handle notification tap (foreground local notification)
   static void _onNotificationTap(NotificationResponse response) {
     debugPrint('[FCM] Notification tapped: ${response.payload}');
-    // Navigation can be handled here based on payload data
     if (response.payload != null) {
       try {
-        final data = jsonDecode(response.payload!);
-        debugPrint('[FCM] Payload data: $data');
-        // TODO: Navigate based on data['type'] — e.g., 'call_analyzed', 'manager_review', etc.
+        final data = jsonDecode(response.payload!) as Map<String, dynamic>;
+        _navigateFromData(data);
       } catch (_) {}
     }
   }
 
-  /// Handle when user taps notification and app opens
+  /// Handle when user taps FCM notification (background/terminated)
   void _handleNotificationOpen(RemoteMessage message) {
     debugPrint('[FCM] Notification opened: ${message.data}');
-    // TODO: Navigate based on message.data['type']
+    _navigateFromData(message.data);
+  }
+
+  /// Navigate based on notification data payload
+  static void _navigateFromData(Map<String, dynamic> data) {
+    final type = data['type']?.toString();
+    final dealId = data['dealId']?.toString();
+    if (type == 'LEAD_ASSIGNED' && dealId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        navigatorKey.currentState?.push(
+          MaterialPageRoute(
+            builder: (_) => CrmSubWrapper(
+              title: 'Leads',
+              child: CrmLeadsScreen(highlightDealId: dealId),
+            ),
+          ),
+        );
+      });
+    }
   }
 
   /// Unregister token (on logout)

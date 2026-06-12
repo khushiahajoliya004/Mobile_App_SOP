@@ -8,7 +8,8 @@ import '../call_upload_screen.dart';
 import 'crm_lead_detail_screen.dart';
 
 class CrmLeadsScreen extends StatefulWidget {
-  const CrmLeadsScreen({super.key});
+  final String? highlightDealId;
+  const CrmLeadsScreen({super.key, this.highlightDealId});
 
   @override
   State<CrmLeadsScreen> createState() => _CrmLeadsScreenState();
@@ -24,10 +25,13 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
   List<Map<String, dynamic>> _branches = [];
   List<Map<String, dynamic>> _pipelines = [];
   final _searchController = TextEditingController();
+  final _scrollController = ScrollController();
+  String? _highlightedId;
 
   @override
   void initState() {
     super.initState();
+    _highlightedId = widget.highlightDealId;
     _loadCurrentUser();
     _load();
     _loadFormData();
@@ -41,6 +45,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -67,6 +72,21 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
     }
   }
 
+  void _scrollToHighlight() {
+    if (_highlightedId == null) return;
+    final idx = _leads.indexWhere((l) => (l['id'] ?? l['leadId'] ?? '').toString() == _highlightedId);
+    if (idx < 0) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          idx * 140.0,
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
+  }
+
   List<Map<String, dynamic>> _toList(dynamic raw) {
     final list = raw is List ? raw : (raw is Map ? (raw['data'] ?? []) as List : []);
     return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
@@ -86,6 +106,12 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
         _leads = safeList.map((e) => Map<String, dynamic>.from(e as Map)).toList();
         _loading = false;
       });
+      if (_highlightedId != null) {
+        _scrollToHighlight();
+        Future.delayed(const Duration(seconds: 3), () {
+          if (mounted) setState(() => _highlightedId = null);
+        });
+      }
     } catch (e) {
       setState(() => _loading = false);
     }
@@ -472,7 +498,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                 ),
                 onTap: () async {
                   try {
-                    await _api.assignLead((lead['id'] ?? lead['leadId']).toString(), user['id']);
+                    await _api.updateCrmDeal((lead['id'] ?? lead['leadId']).toString(), {'ownerUserId': user['id']});
                     if (ctx.mounted) Navigator.pop(ctx);
                     _load();
                   } catch (e) {
@@ -809,6 +835,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                         color: AppColors.primary,
                         onRefresh: _load,
                         child: ListView.builder(
+                          controller: _scrollController,
                           padding: const EdgeInsets.all(16),
                           itemCount: _leads.length,
                           itemBuilder: (_, i) => _buildLeadCard(_leads[i]),
@@ -857,17 +884,22 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                 : (lead['assignedToName'] ?? '')));
     final displayAssigned = assignedTo.isNotEmpty ? assignedTo : 'Unassigned';
 
+    final isHighlighted = _highlightedId != null && leadId == _highlightedId;
     return GestureDetector(
       onTap: () => _showLeadActionSheet(leadId, customerName, phone),
-      child: Container(
+      child: AnimatedContainer(
+      duration: const Duration(milliseconds: 400),
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isHighlighted ? const Color(0xFFECFDF5) : Colors.white,
         borderRadius: BorderRadius.circular(16),
+        border: isHighlighted ? Border.all(color: const Color(0xFF10B981), width: 2) : null,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
+            color: isHighlighted
+                ? const Color(0xFF10B981).withValues(alpha: 0.2)
+                : Colors.black.withValues(alpha: 0.04),
+            blurRadius: isHighlighted ? 12 : 8,
             offset: const Offset(0, 2),
           ),
         ],

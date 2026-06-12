@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'auth_service.dart';
@@ -1765,7 +1766,7 @@ class ApiService {
   Future<Response> registerFcmToken(String token) async {
     return _dio.post(
       '/notifications/register-token',
-      data: {'token': token, 'platform': 'android'},
+      data: {'token': token, 'platform': Platform.isIOS ? 'ios' : 'android'},
     );
   }
 

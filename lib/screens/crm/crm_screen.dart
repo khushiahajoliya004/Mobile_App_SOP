@@ -234,7 +234,7 @@ class _CrmScreenState extends State<CrmScreen> {
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => _CrmSubWrapper(title: module.label, child: module.screen),
+          builder: (_) => CrmSubWrapper(title: module.label, child: module.screen),
         ),
       ),
       child: Container(
@@ -317,10 +317,10 @@ class _CrmScreenState extends State<CrmScreen> {
   }
 }
 
-class _CrmSubWrapper extends StatelessWidget {
+class CrmSubWrapper extends StatelessWidget {
   final String title;
   final Widget child;
-  const _CrmSubWrapper({required this.title, required this.child});
+  const CrmSubWrapper({super.key, required this.title, required this.child});
 
   @override
   Widget build(BuildContext context) {

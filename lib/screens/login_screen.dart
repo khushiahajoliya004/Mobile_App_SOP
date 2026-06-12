@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../main.dart';
 import '../services/auth_service.dart';
 import '../services/api_service.dart';
+import '../services/notification_service.dart';
 import '../models/user_model.dart';
 import 'home_screen.dart';
 
@@ -86,6 +87,10 @@ class _LoginScreenState extends State<LoginScreen>
         await _auth.saveUser(user);
         await _auth.saveAllowedModules(user.allowedModules);
       }
+      // Initialize FCM after login so token gets registered for this user
+      NotificationService().initialize().catchError((e) {
+        debugPrint('[FCM] Init after login failed: $e');
+      });
       if (_rememberMe) {
         await _auth.setRememberMe(true);
         await _auth.saveCredentials(_emailCtrl.text.trim(), _passCtrl.text);

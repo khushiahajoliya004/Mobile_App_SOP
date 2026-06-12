@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../main.dart';
 import '../services/auth_service.dart';
+import '../services/notification_service.dart';
 import '../models/user_model.dart';
 import 'login_screen.dart';
 import 'dashboard/dashboard_screen.dart';
@@ -193,6 +194,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _logout() async {
+    await NotificationService().unregisterToken();
     await _auth.logout();
     if (mounted) {
       Navigator.pushReplacement(
