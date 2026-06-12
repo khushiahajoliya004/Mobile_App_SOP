@@ -668,45 +668,51 @@ class _CallQuickSummarySheetState extends State<_CallQuickSummarySheet> {
 
   Widget _buildSummary() {
     final ai = _detail['aiAnalysis'] as Map<String, dynamic>? ?? {};
-    final summary = ai['summary'] ?? ai['callSummary'] ?? '';
-    if (summary.toString().isEmpty) return const SizedBox.shrink();
+    final rawSummary = ai['summary'] ?? ai['callSummary'] ?? '';
+    final isEmpty = rawSummary is List ? rawSummary.isEmpty : rawSummary.toString().isEmpty;
+    if (isEmpty) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            const Icon(
-              Icons.summarize_rounded,
-              size: 14,
-              color: AppColors.primary,
-            ),
+            const Icon(Icons.summarize_rounded, size: 14, color: AppColors.primary),
             const SizedBox(width: 6),
             const Text(
               'Quick Summary',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
-              ),
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
             ),
           ],
         ),
         const SizedBox(height: 8),
         Container(
           padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: AppColors.primarySurface,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(
-            summary.toString(),
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.textSecondary,
-              height: 1.5,
-            ),
-          ),
+          decoration: BoxDecoration(color: AppColors.primarySurface, borderRadius: BorderRadius.circular(12)),
+          child: rawSummary is List
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: rawSummary.asMap().entries.map((e) {
+                    final item = e.value is Map ? Map<String, dynamic>.from(e.value as Map) : <String, dynamic>{};
+                    final answer = item['answer']?.toString() ?? '';
+                    final question = item['question']?.toString() ?? '';
+                    if (answer.isEmpty) return const SizedBox.shrink();
+                    return Padding(
+                      padding: EdgeInsets.only(bottom: e.key < rawSummary.length - 1 ? 8 : 0),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        if (question.isNotEmpty) ...[
+                          Text(question, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                          const SizedBox(height: 2),
+                        ],
+                        Text(answer, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.5)),
+                      ]),
+                    );
+                  }).toList(),
+                )
+              : Text(
+                  rawSummary.toString(),
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.5),
+                ),
         ),
       ],
     );

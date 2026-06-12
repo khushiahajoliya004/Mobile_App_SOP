@@ -53,7 +53,15 @@ class _SalesPerformanceScreenState extends State<SalesPerformanceScreen> with Si
           break;
         case 1:
           final res = await _api.getSalesPerformanceFunnel(fromDate: from, toDate: to, branchId: _selectedBranchId);
-          _funnel = res.data is Map ? Map<String, dynamic>.from(res.data['data'] ?? res.data) : null;
+          final fRaw = res.data;
+          if (fRaw is Map) {
+            final inner = fRaw['data'] ?? fRaw;
+            _funnel = inner is List
+                ? {'stages': inner}
+                : Map<String, dynamic>.from(inner as Map);
+          } else if (fRaw is List) {
+            _funnel = {'stages': fRaw};
+          }
           break;
         case 2:
           final res = await _api.getSalesPerformanceCallMetrics(fromDate: from, toDate: to, branchId: _selectedBranchId);
@@ -156,11 +164,14 @@ class _SalesPerformanceScreenState extends State<SalesPerformanceScreen> with Si
       itemCount: _summary.length,
       itemBuilder: (_, i) {
         final emp = _summary[i];
-        final name = '${emp['firstName'] ?? ''} ${emp['lastName'] ?? ''}'.trim();
-        final totalLeads = (emp['totalLeadsAssigned'] as num?)?.toInt() ?? 0;
-        final converted = (emp['leadsConverted'] as num?)?.toInt() ?? 0;
-        final convRate = (emp['conversionRate'] as num?)?.toDouble() ?? 0.0;
-        final avgScore = (emp['avgCallScore'] as num?)?.toDouble() ?? 0.0;
+        final firstName = emp['firstName'] ?? emp['user']?['firstName'] ?? '';
+        final lastName = emp['lastName'] ?? emp['user']?['lastName'] ?? '';
+        final name = '$firstName $lastName'.trim();
+        final email = emp['email'] ?? emp['user']?['email'] ?? '';
+        final totalLeads = (emp['totalLeadsAssigned'] ?? emp['totalLeads'] ?? emp['leads'] as num?)?.toInt() ?? 0;
+        final converted = (emp['leadsConverted'] ?? emp['converted'] ?? emp['convertedLeads'] as num?)?.toInt() ?? 0;
+        final convRate = (emp['conversionRate'] ?? emp['conversion'] as num?)?.toDouble() ?? 0.0;
+        final avgScore = (emp['avgCallScore'] ?? emp['averageScore'] ?? emp['avgScore'] as num?)?.toDouble() ?? 0.0;
         final scoreColor = avgScore >= 80 ? AppColors.success : avgScore >= 50 ? AppColors.warning : AppColors.error;
         return Container(
           margin: const EdgeInsets.only(bottom: 10),
@@ -172,7 +183,7 @@ class _SalesPerformanceScreenState extends State<SalesPerformanceScreen> with Si
               const SizedBox(width: 10),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-                Text('${emp['email'] ?? ''}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                Text(email, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
               ])),
               Text(avgScore.toStringAsFixed(1), style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: scoreColor)),
             ]),

@@ -15,7 +15,12 @@ class _CrmDailyTranscriptsScreenState extends State<CrmDailyTranscriptsScreen> {
   Map<String, List<Map<String, dynamic>>> _grouped = {};
   List<String> _dates = [];
   Set<String> _expandedDates = {};
-  Set<String> _expandedCalls = {};
+  String? _selectedCallId;
+  Map<String, dynamic>? _selectedCallData;
+  int _detailTab = 0;
+  final Set<String> _fetchingCalls = {};
+  final Set<String> _failedFetches = {};
+  final Map<String, Map<String, dynamic>> _callDetails = {};
 
   @override
   void initState() {
@@ -92,8 +97,42 @@ class _CrmDailyTranscriptsScreenState extends State<CrmDailyTranscriptsScreen> {
     return '${m}m ${rem}s';
   }
 
+  Future<void> _fetchCallDetail(String callId) async {
+    if (callId.isEmpty ||
+        _fetchingCalls.contains(callId) ||
+        _callDetails.containsKey(callId) ||
+        _failedFetches.contains(callId)) return;
+    if (mounted) setState(() => _fetchingCalls.add(callId));
+    try {
+      final res = await _api.getCall(callId);
+      final raw = res.data;
+      final detail = raw is Map ? Map<String, dynamic>.from(raw['data'] ?? raw) : null;
+      if (detail != null && mounted) {
+        setState(() {
+          _callDetails[callId] = detail;
+          _fetchingCalls.remove(callId);
+        });
+        return;
+      }
+    } catch (_) {}
+    // Fallback: AI insight
+    try {
+      final res = await _api.getAiInsightDetail(callId);
+      final raw = res.data;
+      final detail = raw is Map ? Map<String, dynamic>.from(raw['data'] ?? raw) : null;
+      if (detail != null && mounted) {
+        setState(() => _callDetails[callId] = detail);
+      }
+    } catch (_) {}
+    if (mounted) setState(() {
+      _fetchingCalls.remove(callId);
+      if (!_callDetails.containsKey(callId)) _failedFetches.add(callId);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_selectedCallId != null) return _detailView();
     return Container(
       color: AppColors.scaffoldBg,
       child: _loading
@@ -262,190 +301,240 @@ class _CrmDailyTranscriptsScreenState extends State<CrmDailyTranscriptsScreen> {
 
   Widget _buildCallItem(Map<String, dynamic> call, bool isLast) {
     final callId = call['id']?.toString() ?? '';
-    final expanded = _expandedCalls.contains(callId);
     final customerName = call['customerName']?.toString() ?? 'Unknown';
     final duration = _formatDuration(call['durationSeconds']);
     final sopScore = call['sopScore'];
     final analysisStatus = call['analysisStatus']?.toString() ?? '';
-    final transcription = call['transcription']?.toString() ?? '';
-    final summary = call['callSummary'];
 
     return Container(
       margin: EdgeInsets.fromLTRB(12, 0, 12, isLast ? 12 : 0),
-      child: Column(
-        children: [
-          Container(
-            height: 1,
-            color: AppColors.surfaceLight,
-            margin: const EdgeInsets.symmetric(vertical: 6),
-          ),
-          GestureDetector(
-            onTap: () => setState(() {
-              if (expanded) {
-                _expandedCalls.remove(callId);
-              } else {
-                _expandedCalls.add(callId);
-              }
-            }),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: _scoreColor(sopScore).withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      Icons.phone_rounded,
-                      size: 18,
-                      color: _scoreColor(sopScore),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          customerName,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        Row(
-                          children: [
-                            if (duration.isNotEmpty) ...[
-                              const Icon(Icons.timer_outlined, size: 12, color: AppColors.textHint),
-                              const SizedBox(width: 3),
-                              Text(
-                                duration,
-                                style: const TextStyle(fontSize: 11, color: AppColors.textHint),
-                              ),
-                              const SizedBox(width: 8),
-                            ],
-                            if (sopScore != null) ...[
-                              Text(
-                                'Score: ${double.tryParse(sopScore.toString())?.toStringAsFixed(0) ?? sopScore}%',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: _scoreColor(sopScore),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  _statusChip(analysisStatus),
-                  const SizedBox(width: 8),
-                  Icon(
-                    expanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
-                    color: AppColors.textHint,
-                    size: 20,
-                  ),
-                ],
+      child: Column(children: [
+        Container(height: 1, color: AppColors.surfaceLight, margin: const EdgeInsets.symmetric(vertical: 6)),
+        GestureDetector(
+          onTap: callId.isEmpty ? null : () {
+            setState(() {
+              _selectedCallId = callId;
+              _selectedCallData = call;
+              _detailTab = 0;
+            });
+            _fetchCallDetail(callId);
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: _scoreColor(sopScore).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.phone_rounded, size: 18, color: _scoreColor(sopScore)),
               ),
-            ),
+              const SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(customerName, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                Row(children: [
+                  if (duration.isNotEmpty) ...[
+                    const Icon(Icons.timer_outlined, size: 12, color: AppColors.textHint),
+                    const SizedBox(width: 3),
+                    Text(duration, style: const TextStyle(fontSize: 11, color: AppColors.textHint)),
+                    const SizedBox(width: 8),
+                  ],
+                  if (sopScore != null)
+                    Text(
+                      'Score: ${double.tryParse(sopScore.toString())?.toStringAsFixed(0) ?? sopScore}%',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _scoreColor(sopScore)),
+                    ),
+                ]),
+              ])),
+              _statusChip(analysisStatus),
+              const SizedBox(width: 8),
+              const Icon(Icons.chevron_right_rounded, color: AppColors.textHint, size: 20),
+            ]),
           ),
-          if (expanded) _buildTranscriptPanel(transcription, summary),
-        ],
-      ),
+        ),
+      ]),
     );
   }
 
-  Widget _buildTranscriptPanel(String transcription, dynamic summary) {
+  Widget _detailView() {
+    final callId = _selectedCallId!;
+    final base = _selectedCallData ?? {};
+    final detail = _callDetails[callId];
+    final isFetching = _fetchingCalls.contains(callId);
+    final customerName = base['customerName']?.toString() ?? 'Call Detail';
+
+    final transcription = detail?['transcription']?.toString() ??
+        detail?['transcript']?.toString() ??
+        (base['transcription']?.toString() ?? '');
+    final summary = detail?['callSummary'] ?? base['callSummary'];
+    final sections = ((detail?['sectionScores'] ?? detail?['aiAnalysis']?['sectionScores'] ?? []) as List);
+    final overallScore = detail?['sopScore'] ?? base['sopScore'];
+
+    const tabs = ['Transcription', 'Summary', 'Score'];
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.primarySurface,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Summary
-          if (summary != null && summary is Map) ...[
-            const Text(
-              'AI Summary',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: AppColors.primary,
+      color: AppColors.scaffoldBg,
+      child: Column(children: [
+        Container(
+          color: Colors.white,
+          padding: const EdgeInsets.fromLTRB(4, 8, 16, 0),
+          child: Column(children: [
+            Row(children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back_rounded),
+                onPressed: () => setState(() {
+                  _selectedCallId = null;
+                  _selectedCallData = null;
+                  _detailTab = 0;
+                }),
               ),
-            ),
-            const SizedBox(height: 6),
-            if (summary['overview'] != null)
-              Text(
-                summary['overview'].toString(),
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
-                  height: 1.4,
+              Expanded(child: Text(customerName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700))),
+            ]),
+            Row(children: tabs.asMap().entries.map((e) {
+              final selected = _detailTab == e.key;
+              return GestureDetector(
+                onTap: () => setState(() => _detailTab = e.key),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    border: Border(bottom: BorderSide(
+                      color: selected ? AppColors.primary : Colors.transparent,
+                      width: 2,
+                    )),
+                  ),
+                  child: Text(e.value, style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: selected ? AppColors.primary : AppColors.textSecondary,
+                  )),
+                ),
+              );
+            }).toList()),
+          ]),
+        ),
+        Expanded(
+          child: isFetching
+              ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: _detailTab == 0
+                      ? _transcriptionContent(transcription)
+                      : _detailTab == 1
+                          ? _summaryContent(summary)
+                          : _scoreContent(overallScore, sections),
+                ),
+        ),
+      ]),
+    );
+  }
+
+  Widget _transcriptionContent(String transcription) {
+    if (transcription.isEmpty) {
+      return const Center(child: Padding(
+        padding: EdgeInsets.all(32),
+        child: Text('No transcription available', style: TextStyle(color: AppColors.textHint)),
+      ));
+    }
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.surfaceLight)),
+      child: Text(transcription, style: const TextStyle(fontSize: 13, height: 1.6, color: AppColors.textPrimary)),
+    );
+  }
+
+  Widget _summaryContent(dynamic summary) {
+    if (summary is List && summary.isNotEmpty) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        ...summary.map((item) {
+          final m = item is Map ? Map<String, dynamic>.from(item) : <String, dynamic>{};
+          final q = m['question']?.toString() ?? '';
+          final a = m['answer']?.toString() ?? '';
+          if (a.isEmpty) return const SizedBox.shrink();
+          return Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.surfaceLight)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              if (q.isNotEmpty) ...[
+                Text(q, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                const SizedBox(height: 4),
+              ],
+              Text(a, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.5)),
+            ]),
+          );
+        }),
+      ]);
+    }
+    if (summary is Map) {
+      final overview = summary['overview']?.toString() ?? '';
+      if (overview.isNotEmpty) {
+        return Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.surfaceLight)),
+          child: Text(overview, style: const TextStyle(fontSize: 13, height: 1.6)),
+        );
+      }
+    }
+    return const Center(child: Padding(
+      padding: EdgeInsets.all(32),
+      child: Text('No summary available', style: TextStyle(color: AppColors.textHint)),
+    ));
+  }
+
+  Widget _scoreContent(dynamic overallScore, List sections) {
+    final score = num.tryParse(overallScore?.toString() ?? '') ?? 0;
+    final scoreColor = score >= 75 ? AppColors.success : score >= 50 ? AppColors.warning : AppColors.error;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: scoreColor.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: scoreColor.withValues(alpha: 0.2)),
+        ),
+        child: Row(children: [
+          Text('${score.toStringAsFixed(0)}%', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: scoreColor)),
+          const SizedBox(width: 12),
+          const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Overall SOP Score', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+            Text('Based on evaluation criteria', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+          ])),
+        ]),
+      ),
+      if (sections.isNotEmpty) ...[
+        const SizedBox(height: 16),
+        ...sections.map((s) {
+          final sec = s is Map ? Map<String, dynamic>.from(s) : <String, dynamic>{};
+          final name = sec['sectionName'] ?? sec['name'] ?? '';
+          final secScore = num.tryParse((sec['score'] ?? sec['percentage'] ?? 0).toString()) ?? 0;
+          final c = secScore >= 75 ? AppColors.success : secScore >= 50 ? AppColors.warning : AppColors.error;
+          return Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.surfaceLight)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Expanded(child: Text('$name', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
+                Text('${secScore.toStringAsFixed(0)}%', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c)),
+              ]),
+              const SizedBox(height: 6),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: (secScore / 100).clamp(0.0, 1.0),
+                  minHeight: 6,
+                  backgroundColor: AppColors.surfaceLight,
+                  valueColor: AlwaysStoppedAnimation<Color>(c),
                 ),
               ),
-            if (summary['keyPoints'] is List) ...[
-              const SizedBox(height: 8),
-              ...((summary['keyPoints'] as List).take(3).map((p) => Padding(
-                    padding: const EdgeInsets.only(bottom: 3),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('• ', style: TextStyle(color: AppColors.primary)),
-                        Expanded(
-                          child: Text(
-                            p.toString(),
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ))),
-            ],
-            const Divider(height: 16),
-          ],
-          // Transcription
-          if (transcription.isNotEmpty) ...[
-            const Text(
-              'Transcription',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              transcription.length > 600
-                  ? '${transcription.substring(0, 600)}...'
-                  : transcription,
-              style: const TextStyle(
-                fontSize: 12,
-                color: AppColors.textSecondary,
-                height: 1.5,
-              ),
-            ),
-          ] else ...[
-            const Center(
-              child: Text(
-                'No transcription available',
-                style: TextStyle(fontSize: 12, color: AppColors.textHint),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
+            ]),
+          );
+        }),
+      ] else
+        const Padding(padding: EdgeInsets.all(32), child: Center(child: Text('No score breakdown available', style: TextStyle(color: AppColors.textHint)))),
+    ]);
   }
 
   Color _scoreColor(dynamic score) {

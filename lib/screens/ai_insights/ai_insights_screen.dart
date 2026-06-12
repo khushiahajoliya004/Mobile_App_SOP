@@ -683,10 +683,8 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
                           ? ListView.builder(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 16),
-                              itemCount: _groupByCustomer().length,
-                              itemBuilder: (_, i) =>
-                                  _callsGroupTile(
-                                      _groupByCustomer()[i]),
+                              itemCount: _calls.length,
+                              itemBuilder: (_, i) => _callTile(_calls[i]),
                             )
                           : ListView.builder(
                               padding: const EdgeInsets.symmetric(

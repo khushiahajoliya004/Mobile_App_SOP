@@ -196,7 +196,10 @@ class _SalesmanSopScreenState extends State<SalesmanSopScreen> {
                           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             const Icon(Icons.check_circle_outline_rounded, size: 14, color: AppColors.primary),
                             const SizedBox(width: 6),
-                            Expanded(child: Text('$q', style: const TextStyle(fontSize: 12))),
+                            Expanded(child: Text(
+                              q is Map ? (q['question'] ?? q['text'] ?? q['extractionPoint'] ?? '') : '$q',
+                              style: const TextStyle(fontSize: 12),
+                            )),
                           ]),
                         )),
                       ],
@@ -208,7 +211,10 @@ class _SalesmanSopScreenState extends State<SalesmanSopScreen> {
                           padding: const EdgeInsets.only(bottom: 4),
                           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             const Icon(Icons.arrow_right_rounded, size: 16, color: AppColors.accent),
-                            Expanded(child: Text('$a', style: const TextStyle(fontSize: 12))),
+                            Expanded(child: Text(
+                              a is Map ? (a['action'] ?? a['text'] ?? a['description'] ?? '') : '$a',
+                              style: const TextStyle(fontSize: 12),
+                            )),
                           ]),
                         )),
                       ],
