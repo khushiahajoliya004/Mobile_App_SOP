@@ -145,11 +145,9 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
     final nameCtrl = TextEditingController();
     final phoneCtrl = TextEditingController();
     final emailCtrl = TextEditingController();
-    final modelCtrl = TextEditingController();
+    final notesCtrl = TextEditingController();
     final expectedValueCtrl = TextEditingController();
     String source = 'Walk-in';
-    String buyerType = '';
-    String priority = 'MEDIUM';
     // Auto-select branch from user profile, matching web frontend logic
     String? branchId = _currentUser?.branchId;
     final bool branchLocked = branchId != null;
@@ -298,12 +296,13 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                   ),
                   const SizedBox(height: 12),
 
-                  // ── Phone ──
+                  // ── Phone * ──
                   TextField(
                     controller: phoneCtrl,
                     keyboardType: TextInputType.phone,
                     maxLength: 15,
-                    decoration: const InputDecoration(labelText: 'Mobile Number', prefixIcon: Icon(Icons.phone_outlined), counterText: ''),
+                    decoration: const InputDecoration(labelText: 'Phone Number *', prefixIcon: Icon(Icons.phone_outlined), counterText: ''),
+                    onChanged: (_) => setSheetState(() {}),
                   ),
                   const SizedBox(height: 12),
 
@@ -315,18 +314,6 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                   ),
                   const SizedBox(height: 12),
 
-                  // ── Expected Value ──
-                  TextField(
-                    controller: expectedValueCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
-                      labelText: 'Expected Value',
-                      prefixIcon: Icon(Icons.currency_rupee_rounded),
-                      hintText: 'e.g. 500000',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
                   // ── Source ──
                   DropdownButtonFormField<String>(
                     value: source,
@@ -334,28 +321,6 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                     items: ['Walk-in', 'Call', 'Website', 'Facebook', 'Instagram', 'Google Ads', 'Reference', 'Event', 'Other']
                         .map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
                     onChanged: (v) => setSheetState(() => source = v!),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // ── Priority ──
-                  DropdownButtonFormField<String>(
-                    value: priority,
-                    decoration: const InputDecoration(labelText: 'Priority', prefixIcon: Icon(Icons.flag_outlined)),
-                    items: [
-                      DropdownMenuItem(value: 'HOT', child: Row(children: [Icon(Icons.local_fire_department, size: 16, color: Colors.red.shade600), const SizedBox(width: 6), const Text('Hot')])),
-                      DropdownMenuItem(value: 'WARM', child: Row(children: [Icon(Icons.wb_sunny, size: 16, color: Colors.orange.shade600), const SizedBox(width: 6), const Text('Warm')])),
-                      DropdownMenuItem(value: 'MEDIUM', child: Row(children: [Icon(Icons.remove_circle_outline, size: 16, color: Colors.blue.shade600), const SizedBox(width: 6), const Text('Medium')])),
-                      DropdownMenuItem(value: 'COLD', child: Row(children: [Icon(Icons.ac_unit, size: 16, color: Colors.blueGrey.shade600), const SizedBox(width: 6), const Text('Cold')])),
-                    ],
-                    onChanged: (v) => setSheetState(() => priority = v!),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // ── Interested Model ──
-                  TextField(
-                    controller: modelCtrl,
-                    textCapitalization: TextCapitalization.words,
-                    decoration: const InputDecoration(labelText: 'Interested Model', prefixIcon: Icon(Icons.directions_car_outlined)),
                   ),
                   const SizedBox(height: 12),
 
@@ -371,10 +336,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                       hint: const Text('Select branch'),
                       items: [
                         if (!branchLocked)
-                          const DropdownMenuItem<String>(
-                            value: null,
-                            child: Text('All Branches'),
-                          ),
+                          const DropdownMenuItem<String>(value: null, child: Text('All Branches')),
                         ..._branches.map((b) => DropdownMenuItem<String>(
                           value: b['id']?.toString(),
                           child: Text(b['name']?.toString() ?? ''),
@@ -384,14 +346,12 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                     ),
                     if (branchLocked) ...[
                       const SizedBox(height: 4),
-                      const Row(
-                        children: [
-                          SizedBox(width: 4),
-                          Icon(Icons.info_outline, size: 12, color: AppColors.primary),
-                          SizedBox(width: 4),
-                          Text('Auto-assigned from your branch', style: TextStyle(fontSize: 11, color: AppColors.primary)),
-                        ],
-                      ),
+                      const Row(children: [
+                        SizedBox(width: 4),
+                        Icon(Icons.info_outline, size: 12, color: AppColors.primary),
+                        SizedBox(width: 4),
+                        Text('Auto-assigned from your branch', style: TextStyle(fontSize: 11, color: AppColors.primary)),
+                      ]),
                     ],
                     const SizedBox(height: 12),
                   ],
@@ -410,6 +370,18 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                     ),
                     const SizedBox(height: 12),
                   ],
+
+                  // ── Expected Value ──
+                  TextField(
+                    controller: expectedValueCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Expected Value (₹)',
+                      prefixIcon: Icon(Icons.currency_rupee_rounded),
+                      hintText: 'e.g. 500000',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
 
                   // ── Assign Salesperson ──
                   Row(children: [
@@ -460,11 +432,24 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                       ]),
                     ),
                   ),
+                  const SizedBox(height: 12),
+
+                  // ── Notes ──
+                  TextField(
+                    controller: notesCtrl,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Notes',
+                      prefixIcon: Icon(Icons.notes_rounded),
+                      hintText: 'Any initial notes...',
+                      alignLabelWithHint: true,
+                    ),
+                  ),
                   const SizedBox(height: 20),
 
                   // ── Submit ──
                   FilledButton(
-                    onPressed: (nameCtrl.text.trim().isEmpty || (_pipelines.isNotEmpty && pipelineId == null)) ? null : () async {
+                    onPressed: (nameCtrl.text.trim().isEmpty || phoneCtrl.text.trim().isEmpty || (_pipelines.isNotEmpty && pipelineId == null)) ? null : () async {
                       final name = nameCtrl.text.trim();
                       final phone = phoneCtrl.text.trim();
 
@@ -500,6 +485,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
 
                       try {
                         final evText = expectedValueCtrl.text.trim();
+                        final notes = notesCtrl.text.trim();
                         final res = await _api.createCrmQuickLead(
                           name: name,
                           phone: phone.isEmpty ? null : phone,
@@ -509,6 +495,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                           pipelineId: pipelineId,
                           ownerUserId: assignedUser?['id']?.toString(),
                           expectedValue: evText.isNotEmpty ? double.tryParse(evText) : null,
+                          notes: notes.isNotEmpty ? notes : null,
                         );
                         // Extract new lead ID from response
                         String? newLeadId;
