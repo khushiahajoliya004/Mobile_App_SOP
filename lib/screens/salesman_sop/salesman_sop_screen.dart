@@ -127,7 +127,7 @@ class _SalesmanSopScreenState extends State<SalesmanSopScreen> {
   }
 
   Widget _detailView() {
-    if (_loading) return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+    if (_loading) return const Material(color: Colors.white, child: Center(child: CircularProgressIndicator(color: AppColors.primary)));
     final sop = _selectedSop!;
     final sections = (sop['sections'] as List?)?.map((s) => Map<String, dynamic>.from(s)).toList() ?? [];
     final name = sop['name'] ?? 'SOP';

@@ -67,6 +67,8 @@ class _DailyTranscriptsScreenState extends State<DailyTranscriptsScreen> {
     if (mounted) setState(() => _loadingDetail = false);
   }
 
+  num _toNum(dynamic v) => v is num ? v : num.tryParse(v?.toString() ?? '') ?? 0;
+
   String _fmtDate(String d) {
     try {
       final dt = DateTime.parse(d);
@@ -108,7 +110,7 @@ class _DailyTranscriptsScreenState extends State<DailyTranscriptsScreen> {
                 itemBuilder: (_, i) {
                   final d = _dates[i];
                   final date = d['date'] as String? ?? '';
-                  final count = (d['callCount'] ?? d['count'] ?? d['total'] ?? 0) as num;
+                  final count = _toNum(d['callCount'] ?? d['count'] ?? d['total'] ?? 0);
                   return GestureDetector(
                     onTap: () => _loadCallsForDate(date),
                     child: Container(
@@ -159,8 +161,8 @@ class _DailyTranscriptsScreenState extends State<DailyTranscriptsScreen> {
                   final c = _calls[i];
                   final id = c['id'] ?? c['callId'] ?? '';
                   final customer = c['customerName'] ?? c['customer'] ?? 'Unknown';
-                  final duration = (c['duration'] ?? c['durationMinutes'] ?? 0) as num;
-                  final score = (c['sopScore'] ?? c['score'] ?? c['overallScore'] ?? 0) as num;
+                  final duration = _toNum(c['duration'] ?? c['durationMinutes'] ?? 0);
+                  final score = _toNum(c['sopScore'] ?? c['score'] ?? c['overallScore'] ?? 0);
                   final scoreColor = score >= 80 ? AppColors.success : score >= 50 ? AppColors.warning : AppColors.error;
                   return GestureDetector(
                     onTap: () => id.isNotEmpty ? _loadInsight(id.toString()) : null,
@@ -193,7 +195,7 @@ class _DailyTranscriptsScreenState extends State<DailyTranscriptsScreen> {
   }
 
   Widget _detailView() {
-    if (_loadingDetail) return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+    if (_loadingDetail) return const Material(color: Colors.white, child: Center(child: CircularProgressIndicator(color: AppColors.primary)));
     final insight = _selectedInsight!;
     final tabs = ['Transcription', 'Summary', 'Score'];
     return Column(children: [
@@ -318,7 +320,7 @@ class _DailyTranscriptsScreenState extends State<DailyTranscriptsScreen> {
         insight['sopSections'] ??
         insight['evaluation']?['sections'] ??
         []) as List;
-    final overallScore = (insight['overallScore'] ?? insight['sopScore'] ?? insight['score'] ?? 0) as num;
+    final overallScore = _toNum(insight['overallScore'] ?? insight['sopScore'] ?? insight['score'] ?? 0);
     final scoreColor = overallScore >= 80 ? AppColors.success : overallScore >= 50 ? AppColors.warning : AppColors.error;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Container(
@@ -340,7 +342,7 @@ class _DailyTranscriptsScreenState extends State<DailyTranscriptsScreen> {
         ...sections.map((s) {
           final sec = s is Map ? Map<String, dynamic>.from(s) : <String, dynamic>{};
           final name = sec['title'] ?? sec['name'] ?? sec['sectionName'] ?? '';
-          final score = (sec['score'] ?? sec['percentage'] ?? 0) as num;
+          final score = _toNum(sec['score'] ?? sec['percentage'] ?? 0);
           final c = score >= 80 ? AppColors.success : score >= 50 ? AppColors.warning : AppColors.error;
           return Container(
             margin: const EdgeInsets.only(bottom: 8),

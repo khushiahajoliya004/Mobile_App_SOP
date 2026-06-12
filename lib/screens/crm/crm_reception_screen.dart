@@ -408,7 +408,7 @@ class _CrmReceptionScreenState extends State<CrmReceptionScreen> {
                 child: FilledButton.icon(
                   onPressed: () {
                     Navigator.push(context, PageRouteBuilder(
-                      opaque: true,
+                      opaque: false,
                       pageBuilder: (_, __, ___) => CrmLeadDetailScreen(
                         leadId: lead['id'].toString(),
                         leadName: lead['customerName']?.toString() ?? 'Lead',
@@ -526,7 +526,7 @@ class _CrmReceptionScreenState extends State<CrmReceptionScreen> {
               onPressed: () {
                 if (_createdLead?['id'] != null) {
                   Navigator.push(context, PageRouteBuilder(
-                    opaque: true,
+                    opaque: false,
                     pageBuilder: (_, __, ___) => CrmLeadDetailScreen(
                       leadId: _createdLead!['id'].toString(),
                       leadName: _createdLead!['customerName']?.toString() ?? 'Lead',

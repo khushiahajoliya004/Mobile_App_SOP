@@ -920,8 +920,6 @@ class ApiService {
     String? branchId,
     String? notes,
     double? expectedValue,
-    String? priority,
-    String? interestedModel,
   }) async {
     return _dio.post(
       '/crm/contacts/quick-lead',
@@ -938,9 +936,6 @@ class ApiService {
         if (branchId != null && branchId.isNotEmpty) 'branchId': branchId,
         if (notes != null && notes.isNotEmpty) 'notes': notes,
         if (expectedValue != null) 'expectedValue': expectedValue,
-        if (priority != null && priority.isNotEmpty) 'priority': priority,
-        if (interestedModel != null && interestedModel.isNotEmpty)
-          'interestedModel': interestedModel,
       },
     );
   }
@@ -2226,6 +2221,9 @@ class ApiService {
 
   Future<Response> getCrmPipeline(String id) async =>
       _dio.get('/crm/pipelines/$id');
+
+  Future<Response> checkDuplicateCrmContact(String phone) async =>
+      _dio.get('/crm/contacts', queryParameters: {'phone': phone});
 
   // ─── CRM v2 Activities ───
 

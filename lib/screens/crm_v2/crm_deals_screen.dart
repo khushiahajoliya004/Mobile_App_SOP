@@ -445,11 +445,13 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
   }
 
   Widget _dealTile(Map<String, dynamic> deal) {
-    final name = '${deal['name'] ?? ''}';
+    final rawName = '${deal['name'] ?? ''}';
     final status = deal['status'] as String?;
     final rawValue = deal['expectedValue'] ?? deal['value'];
     final value = rawValue == null ? null : double.tryParse('$rawValue');
     final contactName = deal['contact']?['name'] ?? deal['contactName'] ?? '';
+    // Prefer contactName; strip " - <date>" suffix from deal name as fallback
+    final name = contactName.isNotEmpty ? contactName : rawName.split(' - ').first.trim();
     final stageName = deal['stage']?['name'] ?? deal['stageName'] ?? '';
     final statusColor = _statusColor(status);
     return GestureDetector(
@@ -471,7 +473,7 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
             const SizedBox(width: 12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-              if (contactName.isNotEmpty) Text(contactName, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+              if ((deal['contact']?['phone'] ?? deal['phone'] ?? '').toString().isNotEmpty) Text((deal['contact']?['phone'] ?? deal['phone'] ?? '').toString(), style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
             ])),
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
               if (status != null) Container(

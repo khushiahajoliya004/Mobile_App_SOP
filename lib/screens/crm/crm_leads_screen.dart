@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../main.dart';
 import '../../services/api_service.dart';
@@ -24,6 +25,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
   List<Map<String, dynamic>> _assignableUsers = [];
   List<Map<String, dynamic>> _branches = [];
   List<Map<String, dynamic>> _pipelines = [];
+  String? _selectedPipelineId;
   final _searchController = TextEditingController();
   final _scrollController = ScrollController();
   String? _highlightedId;
@@ -32,14 +34,32 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
   void initState() {
     super.initState();
     _highlightedId = widget.highlightDealId;
-    _loadCurrentUser();
-    _load();
-    _loadFormData();
+    _init();
   }
 
-  Future<void> _loadCurrentUser() async {
+  Future<void> _init() async {
     final user = await _auth.getUser();
     if (mounted) setState(() => _currentUser = user);
+
+    // Load pipelines first — backend requires pipelineId to return deals
+    try {
+      final res = await _api.getCrmPipelines();
+      final raw = res.data;
+      final pipelines = raw is List
+          ? raw.map((e) => Map<String, dynamic>.from(e)).toList()
+          : ((raw is Map ? (raw['data'] ?? []) : []) as List)
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+      if (mounted) {
+        setState(() {
+          _pipelines = pipelines;
+          if (pipelines.isNotEmpty) _selectedPipelineId = pipelines.first['id']?.toString();
+        });
+      }
+    } catch (_) {}
+
+    await _load();
+    _loadFormData();
   }
 
   @override
@@ -56,20 +76,16 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
 
       final results = await Future.wait([
         _api.getBranches(),
-        _api.getLeadPipelines(),
         // Team leaders see only their direct salesmen in the assignee dropdown
         isTeamLeader && user?.id != null
             ? _api.getUsersByReportingTo(user!.id)
             : _api.getAssignableUsers(),
       ]);
       final bRaw = results[0].data;
-      final pRaw = results[1].data;
-      final uRaw = results[2].data;
-      debugPrint('branches raw: $bRaw');
+      final uRaw = results[1].data;
       if (mounted) {
         setState(() {
           _branches = _toList(bRaw);
-          _pipelines = _toList(pRaw);
           _assignableUsers = _toList(uRaw);
         });
       }
@@ -101,6 +117,8 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
   Future<void> _load() async {
     try {
       final res = await _api.getCrmDeals(
+        pipelineId: _selectedPipelineId,
+        branchId: _currentUser?.branchId,
         search: _searchController.text.isEmpty ? null : _searchController.text,
       );
       final raw = res.data;
@@ -135,7 +153,8 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
     // Auto-select branch from user profile, matching web frontend logic
     String? branchId = _currentUser?.branchId;
     final bool branchLocked = branchId != null;
-    String? pipelineId;
+    // Auto-select first pipeline — backend requires pipelineId when createDeal=true
+    String? pipelineId = _pipelines.isNotEmpty ? _pipelines.first['id']?.toString() : null;
     Map<String, dynamic>? assignedUser;
     List<Map<String, dynamic>> sheetUsers = List.from(_assignableUsers);
     bool sheetUsersLoading = false;
@@ -445,18 +464,19 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
 
                   // ── Submit ──
                   FilledButton(
-                    onPressed: nameCtrl.text.trim().isEmpty ? null : () async {
+                    onPressed: (nameCtrl.text.trim().isEmpty || (_pipelines.isNotEmpty && pipelineId == null)) ? null : () async {
                       final name = nameCtrl.text.trim();
                       final phone = phoneCtrl.text.trim();
 
                       if (phone.isNotEmpty) {
                         try {
-                          final dupRes = await _api.checkDuplicateLead(phone);
+                          final dupRes = await _api.checkDuplicateCrmContact(phone);
                           final raw = dupRes.data;
-                          final data = raw is Map ? (raw['data'] ?? raw) : {};
-                          final isDuplicate = data['isDuplicate'] == true || data['exists'] == true;
+                          final list = raw is List ? raw : (raw is Map ? (raw['data'] ?? raw['contacts'] ?? []) : []);
+                          final isDuplicate = list is List && (list as List).isNotEmpty;
                           if (isDuplicate && ctx.mounted) {
-                            final existingName = (data['lead'] ?? data['existingLead'] ?? {})['customerName'] ?? 'another lead';
+                            final first = (list as List).first;
+                            final existingName = first is Map ? (first['name'] ?? 'another contact') : 'another contact';
                             final proceed = await showDialog<bool>(
                               context: ctx,
                               builder: (dlgCtx) => AlertDialog(
@@ -488,10 +508,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                           branchId: branchId,
                           pipelineId: pipelineId,
                           ownerUserId: assignedUser?['id']?.toString(),
-                          notes: null,
                           expectedValue: evText.isNotEmpty ? double.tryParse(evText) : null,
-                          priority: priority,
-                          interestedModel: modelCtrl.text.trim().isEmpty ? null : modelCtrl.text.trim(),
                         );
                         // Extract new lead ID from response
                         String? newLeadId;
@@ -509,8 +526,16 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                         }
                       } catch (e) {
                         if (ctx.mounted) {
+                          String msg = 'Failed to create lead';
+                          if (e is DioException) {
+                            final body = e.response?.data;
+                            final serverMsg = body is Map
+                                ? (body['message'] ?? body['error'] ?? body['msg'])?.toString()
+                                : null;
+                            msg = serverMsg ?? msg;
+                          }
                           ScaffoldMessenger.of(ctx).showSnackBar(
-                            SnackBar(content: Text('Failed to create lead: $e')),
+                            SnackBar(content: Text(msg)),
                           );
                         }
                       }
@@ -572,7 +597,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
 
   void _markLost(Map<String, dynamic> lead) async {
     try {
-      await _api.updateLeadStatus((lead['id'] ?? lead['leadId']).toString(), {'status': 'LOST'});
+      await _api.markDealLost((lead['id'] ?? lead['leadId']).toString());
       _load();
     } catch (e) {
       if (mounted) {
@@ -654,7 +679,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
     Navigator.push(
       context,
       PageRouteBuilder(
-        opaque: true,
+        opaque: false,
         pageBuilder: (_, __, ___) => CrmLeadDetailScreen(
           leadId: leadId,
           leadName: leadName,

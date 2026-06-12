@@ -1,8 +1,6 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../../main.dart';
 import '../../services/api_service.dart';
-import '../../services/auth_service.dart';
-import '../../models/user_model.dart';
 
 class TeamScreen extends StatefulWidget {
   const TeamScreen({super.key});
@@ -12,89 +10,124 @@ class TeamScreen extends StatefulWidget {
 
 class _TeamScreenState extends State<TeamScreen> {
   final _api = ApiService();
-  final _auth = AuthService();
   bool _loading = true;
-  UserModel? _currentUser;
-  List<Map<String, dynamic>> _teamMembers = [];
+
+  // Hierarchy tree from /employee-performance/team-report
+  List<Map<String, dynamic>> _hierarchy = [];
+
+  // Summary stats
+  int _totalMembers = 0;
+  int _totalCalls = 0;
+  double _avgScore = 0;
+  double _totalMinutes = 0;
+
+  // Which team leaders are expanded
+  final Set<String> _expandedIds = {};
+
+  // Member calls view
   Map<String, dynamic>? _selectedMember;
   List<Map<String, dynamic>> _memberCalls = [];
   bool _callsLoading = false;
+  int _memberCallCount = 0;
+  int _memberAnalyzedCount = 0;
+  int _memberAvgScore = 0;
+
+  // Call detail view
   Map<String, dynamic>? _selectedCall;
   bool _detailLoading = false;
-
-  // Stats
-  int _totalMembers = 0;
-  int _totalCalls = 0;
-  int _analyzedCalls = 0;
-  int _avgScore = 0;
 
   @override
   void initState() {
     super.initState();
-    _init();
-  }
-
-  Future<void> _init() async {
-    _currentUser = await _auth.getUser();
     _loadTeam();
   }
 
   Future<void> _loadTeam() async {
     setState(() => _loading = true);
     try {
-      final userId = _currentUser?.id ?? '';
-      final res = await _api.getTeamUnderSenior(userId);
+      final res = await _api.getTeamReport();
       final raw = res.data;
       if (raw is Map && raw['data'] != null) {
-        _teamMembers = (raw['data'] as List)
-            .map((e) => Map<String, dynamic>.from(e))
+        final d = raw['data'] as Map;
+        final hierarchyList = (d['hierarchy'] as List?) ?? [];
+        _hierarchy = hierarchyList
+            .map((e) => Map<String, dynamic>.from(e as Map))
             .toList();
+        final sum = (d['summary'] as Map?) ?? {};
+        _totalMembers = (sum['totalMembers'] ?? 0) as int;
+        _totalCalls = (sum['totalCalls'] ?? 0) as int;
+        _avgScore =
+            double.tryParse((sum['avgScore'] ?? 0).toString()) ?? 0;
+        _totalMinutes =
+            double.tryParse((sum['totalMinutes'] ?? 0).toString()) ?? 0;
       }
-      _totalMembers = _teamMembers.length;
     } catch (_) {
-      _teamMembers = [];
+      _hierarchy = [];
     }
     if (mounted) setState(() => _loading = false);
   }
 
+  // Flatten hierarchy tree for ListView, each entry carries its depth
+  List<(Map<String, dynamic>, int)> _buildDisplayList() {
+    final result = <(Map<String, dynamic>, int)>[];
+
+    void visit(dynamic rawNode, int depth) {
+      final node = Map<String, dynamic>.from(rawNode as Map);
+      result.add((node, depth));
+      final children = (rawNode['children'] as List?) ?? [];
+      final uid = (rawNode['userId'] as String?) ?? '';
+      if (children.isNotEmpty && _expandedIds.contains(uid)) {
+        for (final child in children) {
+          visit(child, depth + 1);
+        }
+      }
+    }
+
+    for (final root in _hierarchy) {
+      visit(root, 0);
+    }
+    return result;
+  }
+
   Future<void> _loadMemberCalls(Map<String, dynamic> member) async {
+    final memberId = (member['userId'] ?? member['id'] ?? '') as String;
     setState(() {
-      _selectedMember = member;
+      _selectedMember = {...member, 'id': memberId};
       _callsLoading = true;
       _selectedCall = null;
       _memberCalls = [];
     });
     try {
-      final res = await _api.getTeamMemberCalls(
-        member['id'],
-        page: 1,
-        limit: 50,
-      );
+      final res = await _api.getTeamMemberCalls(memberId, page: 1, limit: 50);
       final raw = res.data;
       if (raw is Map && raw['data'] != null) {
         _memberCalls = (raw['data'] as List)
-            .map((e) => Map<String, dynamic>.from(e))
+            .map((e) => Map<String, dynamic>.from(e as Map))
             .toList();
       }
-      _computeStats();
+      _computeMemberStats();
     } catch (_) {
       _memberCalls = [];
     }
     if (mounted) setState(() => _callsLoading = false);
   }
 
-  void _computeStats() {
-    _totalCalls = _memberCalls.length;
-    _analyzedCalls = _memberCalls
+  void _computeMemberStats() {
+    _memberCallCount = _memberCalls.length;
+    _memberAnalyzedCount = _memberCalls
         .where((c) => c['analysisStatus'] == 'COMPLETED')
         .length;
-    final scored = _memberCalls.where((c) => c['sopScore'] != null).toList();
-    _avgScore = scored.isNotEmpty
+    final scored =
+        _memberCalls.where((c) => c['sopScore'] != null).toList();
+    _memberAvgScore = scored.isNotEmpty
         ? (scored
-                      .map((c) => double.tryParse(c['sopScore'].toString()) ?? 0.0)
-                      .reduce((a, b) => a + b) /
-                  scored.length)
-              .round()
+                  .map(
+                    (c) =>
+                        double.tryParse(c['sopScore'].toString()) ?? 0.0,
+                  )
+                  .reduce((a, b) => a + b) /
+              scored.length)
+          .round()
         : 0;
   }
 
@@ -118,23 +151,28 @@ class _TeamScreenState extends State<TeamScreen> {
     }
   }
 
-  String _formatDate(dynamic date) {
+  // Short date for "last call" column (e.g. "11 Jun")
+  String _shortDate(dynamic date) {
+    if (date == null) return '-';
+    try {
+      final d = DateTime.parse('$date').toLocal();
+      const m = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      ];
+      return '${d.day} ${m[d.month - 1]}';
+    } catch (_) {
+      return '-';
+    }
+  }
+
+  String _fullDate(dynamic date) {
     if (date == null) return '';
     try {
       final d = DateTime.parse('$date').toLocal();
       const m = [
-        'Jan',
-        'Feb',
-        'Mar',
-        'Apr',
-        'May',
-        'Jun',
-        'Jul',
-        'Aug',
-        'Sep',
-        'Oct',
-        'Nov',
-        'Dec',
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
       ];
       return '${d.day} ${m[d.month - 1]} ${d.year}';
     } catch (_) {
@@ -155,6 +193,47 @@ class _TeamScreenState extends State<TeamScreen> {
     return 'Poor';
   }
 
+  Color _roleColor(String role) {
+    switch (role.toUpperCase()) {
+      case 'TEAM_LEADER':
+        return const Color(0xFF6366F1);
+      case 'SALES_MANAGER':
+        return const Color(0xFF8B5CF6);
+      case 'BRANCH_MANAGER':
+        return const Color(0xFF0EA5E9);
+      case 'RECEPTION':
+        return const Color(0xFFF97316);
+      default:
+        return AppColors.success;
+    }
+  }
+
+  String _roleName(String role) {
+    switch (role.toUpperCase()) {
+      case 'TEAM_LEADER':
+        return 'Team Leader';
+      case 'SALES_MANAGER':
+        return 'Sales Manager';
+      case 'BRANCH_MANAGER':
+        return 'Branch Manager';
+      case 'RECEPTION':
+        return 'Reception';
+      case 'SALES':
+        return 'Sales';
+      default:
+        return role;
+    }
+  }
+
+  Color _avatarColor(int index) {
+    const colors = [
+      Color(0xFF6366F1), Color(0xFF10B981), Color(0xFFF59E0B),
+      Color(0xFFEC4899), Color(0xFF0EA5E9), Color(0xFF8B5CF6),
+      Color(0xFFF97316), Color(0xFF14B8A6),
+    ];
+    return colors[index % colors.length];
+  }
+
   // ─── Build ─────────────────────────────────────────────────────────────
 
   @override
@@ -164,12 +243,12 @@ class _TeamScreenState extends State<TeamScreen> {
     return _teamListView();
   }
 
-  // ─── Team Members List ─────────────────────────────────────────────────
+  // ─── Team Hierarchy List ───────────────────────────────────────────────
 
   Widget _teamListView() {
     return Column(
       children: [
-        // Header stats
+        // Header card
         Container(
           margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
           padding: const EdgeInsets.all(16),
@@ -197,7 +276,7 @@ class _TeamScreenState extends State<TeamScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'My Team',
+                      'Team Performance',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
@@ -205,9 +284,9 @@ class _TeamScreenState extends State<TeamScreen> {
                       ),
                     ),
                     Text(
-                      '$_totalMembers members',
+                      'Hierarchy-based performance report',
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 11,
                         color: Colors.white.withValues(alpha: 0.7),
                       ),
                     ),
@@ -232,144 +311,107 @@ class _TeamScreenState extends State<TeamScreen> {
             ],
           ),
         ),
-        // Team list
+        // Summary stat cards
+        if (!_loading) _summaryStats(),
+        // Expand / Collapse All
+        if (!_loading && _hierarchy.isNotEmpty) _expandControls(),
+        // Hierarchy list
         Expanded(
           child: _loading
               ? const Center(
                   child: CircularProgressIndicator(color: AppColors.primary),
                 )
-              : _teamMembers.isEmpty
-              ? _emptyState('No team members found', Icons.group_off_rounded)
+              : _hierarchy.isEmpty
+              ? _emptyState(
+                  'No team members found',
+                  Icons.group_off_rounded,
+                )
               : RefreshIndicator(
                   color: AppColors.primary,
                   onRefresh: _loadTeam,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: _teamMembers.length,
-                    itemBuilder: (_, i) => _memberTile(_teamMembers[i], i),
-                  ),
+                  child: _hierarchyListView(),
                 ),
         ),
       ],
     );
   }
 
-  Widget _memberTile(Map<String, dynamic> member, int index) {
-    final name = '${member['firstName'] ?? ''} ${member['lastName'] ?? ''}'
-        .trim();
-    final email = member['email'] ?? '';
-    final phone = member['phone'] ?? '';
-    final status = member['status'] ?? 'ACTIVE';
+  Widget _summaryStats() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Row(
+        children: [
+          _summaryCard(
+            Icons.people_alt_rounded,
+            '$_totalMembers',
+            'Members',
+            AppColors.primary,
+          ),
+          const SizedBox(width: 8),
+          _summaryCard(
+            Icons.phone_rounded,
+            '$_totalCalls',
+            'Total Calls',
+            AppColors.success,
+          ),
+          const SizedBox(width: 8),
+          _summaryCard(
+            Icons.bar_chart_rounded,
+            '${_avgScore.toStringAsFixed(0)}%',
+            'Avg Score',
+            AppColors.warning,
+          ),
+          const SizedBox(width: 8),
+          _summaryCard(
+            Icons.timer_rounded,
+            _totalMinutes.toStringAsFixed(0),
+            'Minutes',
+            const Color(0xFF0EA5E9),
+          ),
+        ],
+      ),
+    );
+  }
 
-    return GestureDetector(
-      onTap: () => _loadMemberCalls(member),
+  Widget _summaryCard(
+    IconData icon,
+    String value,
+    String label,
+    Color color,
+  ) {
+    return Expanded(
       child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
             ),
           ],
         ),
-        child: Row(
+        child: Column(
           children: [
-            // Avatar
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    _avatarColor(index),
-                    _avatarColor(index).withValues(alpha: 0.7),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Center(
-                child: Text(
-                  name.isNotEmpty ? name[0].toUpperCase() : '?',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                  ),
-                ),
+            Icon(icon, size: 16, color: color),
+            const SizedBox(height: 3),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: color,
               ),
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    name,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  if (phone.isNotEmpty)
-                    Text(
-                      phone,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  if (email.isNotEmpty)
-                    Text(
-                      email,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: AppColors.textHint,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                ],
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 8,
+                color: AppColors.textHint,
               ),
-            ),
-            // Status + Arrow
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: status == 'ACTIVE'
-                        ? AppColors.success.withValues(alpha: 0.1)
-                        : AppColors.error.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    status,
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      color: status == 'ACTIVE'
-                          ? AppColors.success
-                          : AppColors.error,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                const Icon(
-                  Icons.arrow_forward_ios_rounded,
-                  size: 12,
-                  color: AppColors.textHint,
-                ),
-              ],
+              textAlign: TextAlign.center,
             ),
           ],
         ),
@@ -377,26 +419,331 @@ class _TeamScreenState extends State<TeamScreen> {
     );
   }
 
-  Color _avatarColor(int index) {
-    const colors = [
-      Color(0xFF6366F1),
-      Color(0xFF10B981),
-      Color(0xFFF59E0B),
-      Color(0xFFEC4899),
-      Color(0xFF0EA5E9),
-      Color(0xFF8B5CF6),
-      Color(0xFFF97316),
-      Color(0xFF14B8A6),
-    ];
-    return colors[index % colors.length];
+  Widget _expandControls() {
+    // Collect IDs of nodes that have children
+    final withChildren = <String>[];
+    void collect(dynamic node) {
+      final children = (node['children'] as List?) ?? [];
+      if (children.isNotEmpty) {
+        withChildren.add((node['userId'] as String?) ?? '');
+        for (final c in children) {
+          collect(c);
+        }
+      }
+    }
+    for (final r in _hierarchy) {
+      collect(r);
+    }
+    if (withChildren.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () => setState(() => _expandedIds.addAll(withChildren)),
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.unfold_more_rounded,
+                      size: 14, color: AppColors.primary),
+                  const SizedBox(width: 4),
+                  const Text(
+                    'Expand All',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: () => setState(() => _expandedIds.clear()),
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceLight,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.unfold_less_rounded,
+                      size: 14, color: AppColors.textSecondary),
+                  const SizedBox(width: 4),
+                  const Text(
+                    'Collapse All',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _hierarchyListView() {
+    final items = _buildDisplayList();
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      itemCount: items.length,
+      itemBuilder: (_, i) {
+        final (node, depth) = items[i];
+        return _memberCard(node, depth, i);
+      },
+    );
+  }
+
+  Widget _memberCard(Map<String, dynamic> member, int depth, int index) {
+    final name = (member['name'] as String?) ?? '';
+    final role = (member['branchRole'] as String?) ?? 'SALES';
+    final userId = (member['userId'] as String?) ?? '';
+    final children = (member['children'] as List?) ?? [];
+    final hasChildren = children.isNotEmpty;
+    final isExpanded = _expandedIds.contains(userId);
+
+    final metrics = (member['metrics'] as Map?) ?? {};
+    final totalCalls = (metrics['totalCalls'] ?? 0) as int;
+    final avgScore =
+        double.tryParse((metrics['avgScore'] ?? 0).toString()) ?? 0;
+    final totalMinutes =
+        double.tryParse((metrics['totalMinutes'] ?? 0).toString()) ?? 0;
+    final excellentCalls = (metrics['excellentCalls'] ?? 0) as int;
+    final goodCalls = (metrics['goodCalls'] ?? 0) as int;
+    final poorCalls = (metrics['poorCalls'] ?? 0) as int;
+    final lastCallDate = metrics['lastCallDate'];
+
+    final roleColor = _roleColor(role);
+    final roleName = _roleName(role);
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
+
+    return Padding(
+      padding: EdgeInsets.only(left: depth * 14.0, bottom: 8),
+      child: GestureDetector(
+        onTap: () => _loadMemberCalls(member),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: depth > 0
+                ? Border.all(color: AppColors.surfaceLight)
+                : null,
+            boxShadow: depth == 0
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Name row
+                Row(
+                  children: [
+                    // Expand / collapse toggle
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: hasChildren
+                          ? () {
+                              setState(() {
+                                if (isExpanded) {
+                                  _expandedIds.remove(userId);
+                                } else {
+                                  _expandedIds.add(userId);
+                                }
+                              });
+                            }
+                          : null,
+                      child: SizedBox(
+                        width: 22,
+                        child: hasChildren
+                            ? Icon(
+                                isExpanded
+                                    ? Icons.keyboard_arrow_down_rounded
+                                    : Icons.keyboard_arrow_right_rounded,
+                                size: 18,
+                                color: AppColors.textSecondary,
+                              )
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    // Avatar
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: _avatarColor(index),
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: Center(
+                        child: Text(
+                          initial,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color:
+                                  roleColor.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(5),
+                            ),
+                            child: Text(
+                              roleName,
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                                color: roleColor,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Total calls badge
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          '$totalCalls',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: totalCalls > 0
+                                ? AppColors.primary
+                                : AppColors.textHint,
+                          ),
+                        ),
+                        const Text(
+                          'calls',
+                          style: TextStyle(
+                            fontSize: 9,
+                            color: AppColors.textHint,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                // Metrics row
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    const SizedBox(width: 26),
+                    _metricBox(
+                      '${avgScore.toStringAsFixed(0)}%',
+                      'Score',
+                      avgScore > 0 ? _scoreColor(avgScore) : AppColors.textHint,
+                    ),
+                    _metricBox(
+                      totalMinutes.toStringAsFixed(1),
+                      'Min',
+                      const Color(0xFF0EA5E9),
+                    ),
+                    _metricBox(
+                      '$excellentCalls',
+                      'Exc',
+                      AppColors.success,
+                    ),
+                    _metricBox(
+                      '$goodCalls',
+                      'Good',
+                      AppColors.warning,
+                    ),
+                    _metricBox(
+                      '$poorCalls',
+                      'Poor',
+                      AppColors.error,
+                    ),
+                    _metricBox(
+                      _shortDate(lastCallDate),
+                      'Last',
+                      AppColors.textSecondary,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _metricBox(String value, String label, Color color) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 8, color: AppColors.textHint),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
   }
 
   // ─── Member Calls View ─────────────────────────────────────────────────
 
   Widget _memberCallsView() {
     final member = _selectedMember!;
-    final name = '${member['firstName'] ?? ''} ${member['lastName'] ?? ''}'
-        .trim();
+    final name = (member['name'] as String?) ??
+        '${member['firstName'] ?? ''} ${member['lastName'] ?? ''}'.trim();
 
     return Column(
       children: [
@@ -457,19 +804,19 @@ class _TeamScreenState extends State<TeamScreen> {
             children: [
               _statChip(
                 Icons.phone_rounded,
-                '$_totalCalls',
+                '$_memberCallCount',
                 'Calls',
                 AppColors.primary,
               ),
               _statChip(
                 Icons.check_circle_rounded,
-                '$_analyzedCalls',
+                '$_memberAnalyzedCount',
                 'Analyzed',
                 AppColors.success,
               ),
               _statChip(
                 Icons.bar_chart_rounded,
-                '$_avgScore%',
+                '$_memberAvgScore%',
                 'Avg Score',
                 AppColors.warning,
               ),
@@ -498,7 +845,12 @@ class _TeamScreenState extends State<TeamScreen> {
     );
   }
 
-  Widget _statChip(IconData icon, String value, String label, Color color) {
+  Widget _statChip(
+    IconData icon,
+    String value,
+    String label,
+    Color color,
+  ) {
     return Expanded(
       child: Column(
         children: [
@@ -514,7 +866,10 @@ class _TeamScreenState extends State<TeamScreen> {
           ),
           Text(
             label,
-            style: const TextStyle(fontSize: 10, color: AppColors.textHint),
+            style: const TextStyle(
+              fontSize: 10,
+              color: AppColors.textHint,
+            ),
           ),
         ],
       ),
@@ -529,7 +884,7 @@ class _TeamScreenState extends State<TeamScreen> {
         call['customerName'] ??
         'Unknown';
     final category = call['category']?['name'] ?? '';
-    final date = _formatDate(call['createdAt']);
+    final date = _fullDate(call['createdAt']);
 
     return GestureDetector(
       onTap: () => _loadCallDetail(call),
@@ -642,7 +997,11 @@ class _TeamScreenState extends State<TeamScreen> {
       ),
       child: Text(
         status,
-        style: TextStyle(fontSize: 8, fontWeight: FontWeight.w700, color: fg),
+        style: TextStyle(
+          fontSize: 8,
+          fontWeight: FontWeight.w700,
+          color: fg,
+        ),
       ),
     );
   }
@@ -654,7 +1013,9 @@ class _TeamScreenState extends State<TeamScreen> {
     final score = c['sopScore'];
     final status = c['analysisStatus'] ?? '';
     final name =
-        c['aiAnalysis']?['customerName'] ?? c['customerName'] ?? 'Unknown';
+        c['aiAnalysis']?['customerName'] ??
+        c['customerName'] ??
+        'Unknown';
     final category = c['category']?['name'] ?? '';
     final stage = c['salesStage']?['name'] ?? '';
 
@@ -732,7 +1093,6 @@ class _TeamScreenState extends State<TeamScreen> {
             ],
           ),
         ),
-        // Status banner
         if (status == 'PROCESSING')
           _banner(
             Icons.hourglass_top,
@@ -740,10 +1100,13 @@ class _TeamScreenState extends State<TeamScreen> {
             AppColors.primary,
           ),
         if (status == 'PENDING')
-          _banner(Icons.schedule, 'Waiting to be analyzed', AppColors.warning),
+          _banner(
+            Icons.schedule,
+            'Waiting to be analyzed',
+            AppColors.warning,
+          ),
         if (status == 'FAILED')
           _banner(Icons.error_outline, 'Analysis failed', AppColors.error),
-        // Content
         if (_detailLoading)
           const Expanded(
             child: Center(
@@ -790,7 +1153,8 @@ class _TeamScreenState extends State<TeamScreen> {
 
   Widget _insightContent(Map<String, dynamic> c) {
     final ai = c['aiAnalysis'] as Map<String, dynamic>? ?? {};
-    final sections = (c['sectionScores'] ?? ai['sectionScores'] ?? []) as List;
+    final sections =
+        (c['sectionScores'] ?? ai['sectionScores'] ?? []) as List;
     final summary = ai['summary'] ?? ai['callSummary'] ?? '';
     final keyPoints =
         (ai['keyDiscussionPoints'] ?? ai['keyPoints'] ?? []) as List;
@@ -802,7 +1166,6 @@ class _TeamScreenState extends State<TeamScreen> {
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       children: [
-        // Summary
         if (summary.toString().isNotEmpty) ...[
           _sectionHeader(
             Icons.summarize_rounded,
@@ -827,7 +1190,6 @@ class _TeamScreenState extends State<TeamScreen> {
           ),
           const SizedBox(height: 14),
         ],
-        // Key Discussion Points
         if (keyPoints.isNotEmpty) ...[
           _sectionHeader(
             Icons.list_alt_rounded,
@@ -869,7 +1231,6 @@ class _TeamScreenState extends State<TeamScreen> {
           ),
           const SizedBox(height: 14),
         ],
-        // SOP Section Scores
         if (sections.isNotEmpty) ...[
           _sectionHeader(
             Icons.pie_chart_outline,
@@ -878,7 +1239,8 @@ class _TeamScreenState extends State<TeamScreen> {
           ),
           ...sections.map((s) {
             final sec = Map<String, dynamic>.from(s);
-            final secScore = double.tryParse((sec['score'] ?? 0).toString()) ?? 0.0;
+            final secScore =
+                double.tryParse((sec['score'] ?? 0).toString()) ?? 0.0;
             final secName = sec['sectionName'] ?? sec['name'] ?? '';
             return Container(
               margin: const EdgeInsets.only(bottom: 8),
@@ -929,7 +1291,6 @@ class _TeamScreenState extends State<TeamScreen> {
           }),
           const SizedBox(height: 14),
         ],
-        // Mistakes / What Went Wrong
         if (mistakes.isNotEmpty) ...[
           _sectionHeader(
             Icons.warning_amber_rounded,
@@ -977,7 +1338,6 @@ class _TeamScreenState extends State<TeamScreen> {
           }),
           const SizedBox(height: 14),
         ],
-        // Suggestion
         if (suggestion.toString().isNotEmpty) ...[
           _sectionHeader(
             Icons.lightbulb_outline,
@@ -1004,7 +1364,6 @@ class _TeamScreenState extends State<TeamScreen> {
           ),
           const SizedBox(height: 14),
         ],
-        // Next Action
         if (nextAction.toString().isNotEmpty) ...[
           _sectionHeader(
             Icons.next_plan_outlined,
@@ -1031,7 +1390,6 @@ class _TeamScreenState extends State<TeamScreen> {
           ),
           const SizedBox(height: 14),
         ],
-        // Conversion Probability
         if (conversionProb != null) ...[
           Container(
             padding: const EdgeInsets.all(14),
@@ -1054,7 +1412,10 @@ class _TeamScreenState extends State<TeamScreen> {
                 const SizedBox(width: 10),
                 const Text(
                   'Conversion Probability',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const Spacer(),
                 Text(
@@ -1107,7 +1468,10 @@ class _TeamScreenState extends State<TeamScreen> {
           const SizedBox(height: 12),
           Text(
             text,
-            style: const TextStyle(fontSize: 14, color: AppColors.textHint),
+            style: const TextStyle(
+              fontSize: 14,
+              color: AppColors.textHint,
+            ),
           ),
         ],
       ),

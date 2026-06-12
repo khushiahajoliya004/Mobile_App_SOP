@@ -183,7 +183,19 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
           final categoryName = call['category']?['name'] ?? '';
           final stageName = call['salesStage']?['name'] ?? '';
           final analysisStatus = call['analysisStatus'] ?? 'PENDING';
-          final sopScore = call['sopScore'];
+          // Parse sopScore — backend may return decimal string e.g. "37.00"
+          num? sopScore = call['sopScore'] != null
+              ? num.tryParse(call['sopScore'].toString())
+              : null;
+          // Fallback to nested aiAnalysis if score is missing or zero
+          if (sopScore == null || sopScore == 0) {
+            final ai = call['aiAnalysis'];
+            if (ai is Map) {
+              final nested = ai['overallScore'] ?? ai['sopScore'] ?? ai['score'];
+              if (nested != null) sopScore = num.tryParse(nested.toString());
+            }
+          }
+          if (sopScore == 0) sopScore = null;
           final date = call['createdAt'] ?? '';
           final userName = call['user'] != null
               ? '${call['user']['firstName'] ?? ''} ${call['user']['lastName'] ?? ''}'
@@ -309,7 +321,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
   }
 
   Widget _buildScoreBadge(dynamic score) {
-    final numScore = score is num ? score.toInt() : int.tryParse('$score') ?? 0;
+    final numScore = score is num ? score.toInt() : (num.tryParse('$score')?.toInt() ?? 0);
     Color color;
     if (numScore >= 80) {
       color = AppColors.success;

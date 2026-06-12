@@ -215,7 +215,7 @@ class _AnalyticsCompareScreenState extends State<AnalyticsCompareScreen> {
   }
 
   Widget _buildResults() {
-    if (_loadingData) return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+    if (_loadingData) return const Material(color: Colors.white, child: Center(child: CircularProgressIndicator(color: AppColors.primary)));
     if (_data == null) {
       return const Center(child: Padding(
         padding: EdgeInsets.all(24),

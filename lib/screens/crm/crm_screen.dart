@@ -32,6 +32,7 @@ class _CrmScreenState extends State<CrmScreen> {
 
   Future<void> _init() async {
     _user = await _auth.getUser();
+    debugPrint('[CrmScreen] userType=${_user?.userType} modules=${_user?.allowedModules} permissions=${_user?.permissions}');
     try {
       final res = await _api.getCrmDashboard();
       final raw = res.data is Map ? res.data['data'] ?? res.data : {};
@@ -43,6 +44,7 @@ class _CrmScreenState extends State<CrmScreen> {
   bool _can(String permPrefix) {
     if (_user == null) return false;
     if (_user!.isSuperAdmin || _user!.isCompanyAdmin) return true;
+    if (_user!.hasModule(permPrefix)) return true;
     return _user!.hasPermission('${permPrefix}_MENU_VIEW') ||
         _user!.hasPermission('${permPrefix}_VIEW') ||
         _user!.hasPermission('${permPrefix}_LIST') ||
@@ -88,7 +90,9 @@ class _CrmScreenState extends State<CrmScreen> {
           '${_stats['openDeals'] ?? 0} open deals',
           const CrmDashboardSubScreen(),
         ),
-      if (_can('LEAD'))
+      // Leads & Follow-ups: always visible for regular users (matches web /crm-v2/deals behaviour),
+      // permission-gated only for non-USER roles (admin/distributor have explicit permissions).
+      if (_user?.userType == 'USER' || _can('LEAD'))
         _CrmModule(
           'Leads',
           Icons.people_rounded,
@@ -105,7 +109,7 @@ class _CrmScreenState extends State<CrmScreen> {
         'Day-wise call transcripts',
         const CrmDailyTranscriptsScreen(),
       ),
-      if (_can('FOLLOW_UP'))
+      if (_user?.userType == 'USER' || _can('FOLLOW_UP'))
         _CrmModule(
           'Follow-ups',
           Icons.calendar_today_rounded,

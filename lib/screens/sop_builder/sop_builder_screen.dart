@@ -39,7 +39,7 @@ class _SopBuilderScreenState extends State<SopBuilderScreen> {
   Future<void> _init() async {
     final user = await _auth.getUser();
     _companyId = user?.companyId ?? '';
-    _loadDropdowns();
+    await _loadDropdowns();
     if (_isEdit) {
       _loadSop();
     } else {
@@ -395,6 +395,9 @@ class _SopBuilderScreenState extends State<SopBuilderScreen> {
     List<Map<String, dynamic>> items,
     ValueChanged<String?> onChanged,
   ) {
+    final validItems = items.where((i) => i['id'] is String).toList();
+    final effectiveValue =
+        validItems.any((i) => i['id'] == value) ? value : null;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
@@ -404,7 +407,7 @@ class _SopBuilderScreenState extends State<SopBuilderScreen> {
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
-          value: value,
+          value: effectiveValue,
           isExpanded: true,
           hint: Text(
             label,
@@ -418,7 +421,7 @@ class _SopBuilderScreenState extends State<SopBuilderScreen> {
                 style: const TextStyle(color: AppColors.textHint),
               ),
             ),
-            ...items.map(
+            ...validItems.map(
               (i) => DropdownMenuItem(
                 value: i['id'] as String,
                 child: Text(

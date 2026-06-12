@@ -236,57 +236,82 @@ class _CrmDealDetailScreenState extends State<CrmDealDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+    if (_loading) return const Material(color: Colors.white, child: Center(child: CircularProgressIndicator(color: AppColors.primary)));
     final deal = _deal ?? {};
-    final name = deal['name'] ?? widget.dealName;
+    final dealRawName = deal['name'] ?? widget.dealName;
     final status = deal['status'] as String?;
     final value = num.tryParse((deal['expectedValue'] ?? deal['value'] ?? '').toString())?.toDouble();
     final contactName = deal['contact']?['name'] ?? deal['contactName'] ?? '';
     final contactPhone = deal['contact']?['phone'] ?? '';
+    // Prefer contactName as display title; strip " - <date>" suffix from deal name as fallback
+    final name = contactName.isNotEmpty ? contactName : dealRawName.toString().split(' - ').first.trim();
     final stageName = deal['stage']?['name'] ?? deal['stageName'] ?? '';
     final currentStageId = deal['stageId'] as String?;
     final statusColor = status == 'WON' ? AppColors.success : status == 'LOST' ? AppColors.error : AppColors.primary;
 
     return Material(
       color: Colors.white,
-      child: Column(children: [
+      child: SafeArea(
+        child: Column(children: [
       Container(
         color: Colors.white,
-        padding: const EdgeInsets.all(16),
-        child: Column(children: [
+        padding: const EdgeInsets.fromLTRB(8, 8, 16, 12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Back button + title row
           Row(children: [
-            Container(
-              width: 44, height: 44,
-              decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
-              child: Icon(status == 'WON' ? Icons.emoji_events_rounded : status == 'LOST' ? Icons.cancel_rounded : Icons.handshake_rounded, color: statusColor, size: 22),
+            IconButton(
+              icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
+              onPressed: () => Navigator.pop(context),
             ),
-            const SizedBox(width: 12),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('$name', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-              if (contactName.isNotEmpty) Text('$contactName${contactPhone.isNotEmpty ? ' • $contactPhone' : ''}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-            ])),
-            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              if (status != null) Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)), child: Text(status, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: statusColor))),
-              if (value != null) Text('₹${value.toStringAsFixed(0)}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.success)),
-            ]),
+            Expanded(child: Text(name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16), maxLines: 1, overflow: TextOverflow.ellipsis)),
+            if (status != null) Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)), child: Text(status, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: statusColor))),
+            if (value != null) ...[
+              const SizedBox(width: 8),
+              Text('₹${value.toStringAsFixed(0)}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.success)),
+            ],
           ]),
-          if (stageName.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: AppColors.surfaceLight, borderRadius: BorderRadius.circular(8)), child: Text('Stage: $stageName', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary))),
-          ],
+          // Contact phone + stage label
+          if (contactPhone.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(left: 16, bottom: 4),
+              child: Row(children: [
+                const Icon(Icons.phone_rounded, size: 12, color: AppColors.textHint),
+                const SizedBox(width: 4),
+                Text(contactPhone, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+              ]),
+            ),
+          if (stageName.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(left: 16, bottom: 8),
+              child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: AppColors.surfaceLight, borderRadius: BorderRadius.circular(8)), child: Text('Stage: $stageName', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary))),
+            ),
           if (_pipelineStages.isNotEmpty) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: 4),
             SizedBox(
-              height: 30,
+              height: 32,
               child: ListView(
+                padding: const EdgeInsets.only(left: 8),
                 scrollDirection: Axis.horizontal,
                 children: _pipelineStages.map((s) {
                   final isActive = s['id'] == currentStageId;
-                  return Container(
-                    margin: const EdgeInsets.only(right: 4),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(color: isActive ? AppColors.primary : AppColors.surfaceLight, borderRadius: BorderRadius.circular(16)),
-                    child: Text('${s['name']}', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: isActive ? Colors.white : AppColors.textSecondary)),
+                  return GestureDetector(
+                    onTap: isActive ? null : () async {
+                      try {
+                        await _api.moveCrmDealStage(widget.dealId, s['id'].toString());
+                        _msg('Moved to ${s['name']}');
+                        _load();
+                      } catch (e) { _msg('Failed: $e', error: true); }
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: isActive ? AppColors.primary : AppColors.surfaceLight,
+                        borderRadius: BorderRadius.circular(16),
+                        border: isActive ? null : Border.all(color: AppColors.surfaceLight),
+                      ),
+                      child: Text('${s['name']}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: isActive ? Colors.white : AppColors.textSecondary)),
+                    ),
                   );
                 }).toList(),
               ),
@@ -326,6 +351,7 @@ class _CrmDealDetailScreenState extends State<CrmDealDetailScreen> {
         child: _tab == 0 ? _timelineTab() : _tab == 1 ? _followUpsTab() : _stageHistoryTab(),
       )),
     ]),
+      ),
     );
   }
 
@@ -368,7 +394,7 @@ class _CrmDealDetailScreenState extends State<CrmDealDetailScreen> {
             const SizedBox(width: 10),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
-                Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)), child: Text(type ?? 'Activity', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: color))),
+                Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)), child: Text((type ?? 'Activity').replaceAll('_', ' ').split(' ').map((w) => w.isEmpty ? '' : '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}').join(' '), style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: color))),
                 const Spacer(),
                 Text(dateStr, style: const TextStyle(fontSize: 10, color: AppColors.textHint)),
               ]),

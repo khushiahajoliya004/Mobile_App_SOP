@@ -107,7 +107,7 @@ class _SalesPerformanceScreenState extends State<SalesPerformanceScreen> with Si
                   child: Row(children: [
                     const Icon(Icons.date_range_rounded, size: 16, color: AppColors.primary),
                     const SizedBox(width: 6),
-                    Text('${_fmtDate(_fromDate)} — ${_fmtDate(_toDate)}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    Flexible(child: Text('${_fmtDate(_fromDate)} — ${_fmtDate(_toDate)}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
                   ]),
                 ),
               ),
@@ -166,12 +166,16 @@ class _SalesPerformanceScreenState extends State<SalesPerformanceScreen> with Si
         final emp = _summary[i];
         final firstName = emp['firstName'] ?? emp['user']?['firstName'] ?? '';
         final lastName = emp['lastName'] ?? emp['user']?['lastName'] ?? '';
-        final name = '$firstName $lastName'.trim();
-        final email = emp['email'] ?? emp['user']?['email'] ?? '';
-        final totalLeads = (emp['totalLeadsAssigned'] ?? emp['totalLeads'] ?? emp['leads'] as num?)?.toInt() ?? 0;
+        final email = emp['email'] ?? emp['user']?['email'] ?? emp['userEmail'] ?? '';
+        final name = '$firstName $lastName'.trim().isNotEmpty
+            ? '$firstName $lastName'.trim()
+            : (emp['userName'] ?? '').toString().trim().isNotEmpty
+                ? (emp['userName'] ?? '').toString().trim()
+                : email.isNotEmpty ? email.split('@').first : 'U';
+        final totalLeads = (emp['totalLeadsAssigned'] ?? emp['totalLeads'] ?? emp['leadsAssigned'] ?? emp['leads'] as num?)?.toInt() ?? 0;
         final converted = (emp['leadsConverted'] ?? emp['converted'] ?? emp['convertedLeads'] as num?)?.toInt() ?? 0;
         final convRate = (emp['conversionRate'] ?? emp['conversion'] as num?)?.toDouble() ?? 0.0;
-        final avgScore = (emp['avgCallScore'] ?? emp['averageScore'] ?? emp['avgScore'] as num?)?.toDouble() ?? 0.0;
+        final avgScore = (emp['avgCallScore'] ?? emp['averageCallScore'] ?? emp['averageScore'] ?? emp['avgScore'] as num?)?.toDouble() ?? 0.0;
         final scoreColor = avgScore >= 80 ? AppColors.success : avgScore >= 50 ? AppColors.warning : AppColors.error;
         return Container(
           margin: const EdgeInsets.only(bottom: 10),
@@ -179,7 +183,7 @@ class _SalesPerformanceScreenState extends State<SalesPerformanceScreen> with Si
           decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.surfaceLight)),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              CircleAvatar(radius: 18, backgroundColor: AppColors.primarySurface, child: Text(name.isNotEmpty ? name[0] : '?', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700))),
+              CircleAvatar(radius: 18, backgroundColor: AppColors.primarySurface, child: Text(name[0].toUpperCase(), style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700))),
               const SizedBox(width: 10),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
