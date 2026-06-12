@@ -2,23 +2,16 @@
 
     <!-- Network -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
 
     <!-- Audio Recording - REQUIRED -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
-    
-    <!-- CRASH FIX: Removed CAPTURE_AUDIO_OUTPUT - not needed for microphone recording
-         and causes issues on Android 10+ -->
-    <!-- <uses-permission android:name="android.permission.CAPTURE_AUDIO_OUTPUT"/> -->
-    
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
 
-    <!-- Phone State (for call detection) -->
-    <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
-    <uses-permission android:name="android.permission.READ_CALL_LOG"/>
-
-    <!-- Storage -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+    <!-- Storage (Android 12 and below) -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
+    <!-- Storage (Android 13+) -->
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
 
     <!-- Foreground Service - CRITICAL for background recording -->
@@ -27,14 +20,11 @@
 
     <!-- Wake Lock - keeps CPU awake during recording when screen turns off -->
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
-    
-    <!-- CRASH FIX: Removed FOREGROUND_SERVICE_SPECIAL_USE - not needed for microphone recording -->
-    <!-- <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/> -->
 
     <!-- Overlay (Draw over other apps) -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
 
-    <!-- Notifications -->
+    <!-- Notifications (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <!-- Boot (auto-start monitoring) -->
@@ -42,6 +32,12 @@
 
     <!-- Vibrate for haptic feedback -->
     <uses-permission android:name="android.permission.VIBRATE"/>
+
+    <!-- Camera (for document upload if needed) -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+
+    <!-- Disable battery optimization prompt -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
 
     <application
         android:label="MysteryMentor"
@@ -77,14 +73,7 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
-        <!-- Call Monitor Service: detects call state, auto-records -->
-        <service
-            android:name="com.callrecorder.call_recorder_app.CallMonitorService"
-            android:exported="false"
-            android:foregroundServiceType="microphone" />
-
         <!-- Floating Button Service: Optional overlay -->
-        <!-- CRASH FIX: Use microphone type instead of specialUse -->
         <service
             android:name="com.callrecorder.call_recorder_app.FloatingButtonService"
             android:exported="false"
@@ -109,17 +98,6 @@
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED"/>
                 <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
-            </intent-filter>
-        </receiver>
-
-        <!-- Static phone state receiver — works even if service is killed by battery optimizer -->
-        <receiver
-            android:name="com.callrecorder.call_recorder_app.CallDetectionReceiver"
-            android:exported="true"
-            android:enabled="true">
-            <intent-filter>
-                <action android:name="android.intent.action.PHONE_STATE"/>
-                <action android:name="android.intent.action.NEW_OUTGOING_CALL"/>
             </intent-filter>
         </receiver>
 

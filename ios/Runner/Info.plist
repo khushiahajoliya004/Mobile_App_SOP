@@ -28,6 +28,8 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>This app needs microphone access to record calls.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>This app uses speech recognition to transcribe recorded audio for analysis.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>This app needs access to pick audio files for upload.</string>
 	<key>NSUserNotificationUsageDescription</key>
@@ -57,17 +59,10 @@
 	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
-		<string>voip</string>
-		<string>nearby-interaction</string>
-		<string>bluetooth-central</string>
-		<string>remote-notification</string>
-		<string>push-to-talk</string>
-		<string>external-accessory</string>
-		<string>location</string>
-		<string>bluetooth-peripheral</string>
 		<string>audio</string>
 		<string>processing</string>
 		<string>fetch</string>
+		<string>remote-notification</string>
 	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
