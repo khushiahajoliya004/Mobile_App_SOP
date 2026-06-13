@@ -20,35 +20,53 @@ class AudioRecorderPlugin: NSObject, FlutterPlugin {
         recorder.onRecordingStateChanged = { [weak self] isRecording in
             self?.channel?.invokeMethod("onRecordingStateChanged", arguments: isRecording)
         }
+        
         recorder.onDurationUpdate = { [weak self] duration in
             self?.channel?.invokeMethod("onDurationUpdate", arguments: Int(duration))
         }
+        
         recorder.onError = { [weak self] error in
             self?.channel?.invokeMethod("onError", arguments: error)
         }
+        
         recorder.onRecordingFinished = { [weak self] url, duration in
-            self?.channel?.invokeMethod("onRecordingFinished", arguments: ["path": url.path, "duration": Int(duration)])
+            self?.channel?.invokeMethod("onRecordingFinished", arguments: [
+                "path": url.path,
+                "duration": Int(duration)
+            ])
         }
     }
     
     func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         switch call.method {
+            
         case "checkPermission":
-            result(recorder.checkPermissionStatus().rawValue)
+            let status = recorder.checkPermissionStatus()
+            switch status {
+            case .granted: result("granted")
+            case .denied: result("denied")
+            case .undetermined: result("undetermined")
+            }
             
         case "requestPermission":
-            recorder.requestPermission { granted in result(granted) }
+            recorder.requestPermission { granted in
+                result(granted)
+            }
             
         case "openSettings":
             recorder.openAppSettings()
             result(nil)
             
         case "startRecording":
-            result(recorder.startRecording())
+            let started = recorder.startRecording()
+            result(started)
             
         case "stopRecording":
             let (url, duration) = recorder.stopRecording()
-            result(["path": url?.path ?? "", "duration": Int(duration)])
+            result([
+                "path": url?.path ?? "",
+                "duration": Int(duration)
+            ])
             
         case "pauseRecording":
             recorder.pauseRecording()
@@ -68,26 +86,31 @@ class AudioRecorderPlugin: NSObject, FlutterPlugin {
             result(recorder.recordingFileURL?.path)
             
         case "queryAudioFiles":
+            // Return recorded files from documents directory
             let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             do {
                 let files = try FileManager.default.contentsOfDirectory(at: documentsPath, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey])
-                let audioFiles: [[String: Any]] = files
-                    .filter { ["m4a", "wav", "mp3", "aac"].contains($0.pathExtension.lowercased()) }
+                let audioFiles = files.filter { $0.pathExtension == "m4a" || $0.pathExtension == "wav" || $0.pathExtension == "mp3" }
                     .sorted { (a, b) in
                         let dateA = (try? a.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date.distantPast
                         let dateB = (try? b.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date.distantPast
                         return dateA > dateB
                     }
-                    .compactMap { url -> [String: Any]? in
+                    .map { url -> [String: Any] in
                         let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
                         let size = (attrs?[.size] as? Int) ?? 0
                         let date = (attrs?[.modificationDate] as? Date) ?? Date()
+                        
+                        // Try to get duration
                         var durationMs = 0
-                        if let audioFile = try? AVAudioFile(forReading: url) {
-                            let frames = audioFile.length
-                            let sampleRate = audioFile.processingFormat.sampleRate
-                            if sampleRate > 0 { durationMs = Int((Double(frames) / sampleRate) * 1000) }
+                        if let asset = try? AVAudioFile(forReading: url) {
+                            let frames = asset.length
+                            let sampleRate = asset.processingFormat.sampleRate
+                            if sampleRate > 0 {
+                                durationMs = Int((Double(frames) / sampleRate) * 1000)
+                            }
                         }
+                        
                         return [
                             "name": url.lastPathComponent,
                             "path": url.path,

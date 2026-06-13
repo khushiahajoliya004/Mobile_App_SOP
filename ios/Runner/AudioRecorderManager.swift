@@ -2,7 +2,7 @@ import Foundation
 import AVFoundation
 import UIKit
 
-/// Production-level Audio Recorder Manager for iOS 13+
+/// Production-level Audio Recorder Manager for iOS
 /// Supports background recording, interruption handling, and app lifecycle management.
 class AudioRecorderManager: NSObject, AVAudioRecorderDelegate {
     
@@ -25,7 +25,7 @@ class AudioRecorderManager: NSObject, AVAudioRecorderDelegate {
     
     // MARK: - Permission
     
-    enum PermissionStatus: String {
+    enum PermissionStatus {
         case granted
         case denied
         case undetermined
@@ -50,11 +50,15 @@ class AudioRecorderManager: NSObject, AVAudioRecorderDelegate {
     func requestPermission(completion: @escaping (Bool) -> Void) {
         if #available(iOS 17.0, *) {
             AVAudioApplication.requestRecordPermission { granted in
-                DispatchQueue.main.async { completion(granted) }
+                DispatchQueue.main.async {
+                    completion(granted)
+                }
             }
         } else {
             AVAudioSession.sharedInstance().requestRecordPermission { granted in
-                DispatchQueue.main.async { completion(granted) }
+                DispatchQueue.main.async {
+                    completion(granted)
+                }
             }
         }
     }
@@ -71,26 +75,52 @@ class AudioRecorderManager: NSObject, AVAudioRecorderDelegate {
         let session = AVAudioSession.sharedInstance()
         recordingSession = session
         
-        // playAndRecord keeps audio session alive in background
+        // Use playAndRecord to keep audio session alive in background
         try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
         try session.setActive(true, options: .notifyOthersOnDeactivation)
         
         // Register for interruption notifications
         NotificationCenter.default.removeObserver(self, name: AVAudioSession.interruptionNotification, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(handleInterruption), name: AVAudioSession.interruptionNotification, object: session)
-        NotificationCenter.default.addObserver(self, selector: #selector(handleRouteChange), name: AVAudioSession.routeChangeNotification, object: session)
-        NotificationCenter.default.addObserver(self, selector: #selector(appDidEnterBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(appWillEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleInterruption),
+            name: AVAudioSession.interruptionNotification,
+            object: session
+        )
+        
+        // Register for route change notifications
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleRouteChange),
+            name: AVAudioSession.routeChangeNotification,
+            object: session
+        )
+        
+        // App lifecycle
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidEnterBackground),
+            name: UIApplication.didEnterBackgroundNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillEnterForeground),
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil
+        )
     }
     
     // MARK: - Recording Control
     
     func startRecording() -> Bool {
+        // Check permission
         guard checkPermissionStatus() == .granted else {
             onError?("Microphone permission not granted")
             return false
         }
         
+        // Configure session
         do {
             try configureAudioSession()
         } catch {
@@ -146,9 +176,12 @@ class AudioRecorderManager: NSObject, AVAudioRecorderDelegate {
         recorder.stop()
         stopTimer()
         
+        // Deactivate session
         do {
             try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-        } catch { }
+        } catch {
+            // Non-critical
+        }
         
         isPaused = false
         onRecordingStateChanged?(false)
@@ -157,6 +190,7 @@ class AudioRecorderManager: NSObject, AVAudioRecorderDelegate {
             onRecordingFinished?(url, duration)
             return (url, duration)
         }
+        
         return (nil, duration)
     }
     
@@ -177,13 +211,20 @@ class AudioRecorderManager: NSObject, AVAudioRecorderDelegate {
     }
     
     func getCurrentDuration() -> TimeInterval {
-        if isPaused { return accumulatedDuration }
+        if isPaused {
+            return accumulatedDuration
+        }
         guard let start = recordingStartTime else { return accumulatedDuration }
         return accumulatedDuration + Date().timeIntervalSince(start)
     }
     
-    var isRecording: Bool { return audioRecorder?.isRecording ?? false }
-    var recordingFileURL: URL? { return currentFileURL }
+    var isRecording: Bool {
+        return audioRecorder?.isRecording ?? false
+    }
+    
+    var recordingFileURL: URL? {
+        return currentFileURL
+    }
     
     // MARK: - Timer
     
@@ -191,7 +232,8 @@ class AudioRecorderManager: NSObject, AVAudioRecorderDelegate {
         stopTimer()
         recordingTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             guard let self = self else { return }
-            self.onDurationUpdate?(self.getCurrentDuration())
+            let duration = self.getCurrentDuration()
+            self.onDurationUpdate?(duration)
         }
     }
     
@@ -200,7 +242,7 @@ class AudioRecorderManager: NSObject, AVAudioRecorderDelegate {
         recordingTimer = nil
     }
     
-    // MARK: - Interruption Handling (incoming calls, Siri, etc.)
+    // MARK: - Interruption Handling
     
     @objc private func handleInterruption(_ notification: Notification) {
         guard let userInfo = notification.userInfo,
@@ -209,8 +251,13 @@ class AudioRecorderManager: NSObject, AVAudioRecorderDelegate {
         
         switch type {
         case .began:
-            if isRecording { pauseRecording() }
+            // Incoming call or Siri — pause recording
+            if isRecording {
+                pauseRecording()
+            }
+            
         case .ended:
+            // Interruption ended — try to resume
             guard let optionsValue = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt else { return }
             let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
             if options.contains(.shouldResume) {
@@ -221,28 +268,36 @@ class AudioRecorderManager: NSObject, AVAudioRecorderDelegate {
                     onError?("Failed to resume after interruption: \(error.localizedDescription)")
                 }
             }
-        @unknown default: break
+            
+        @unknown default:
+            break
         }
     }
     
     @objc private func handleRouteChange(_ notification: Notification) {
-        // Recording continues regardless of route change
+        // Handle headphone disconnect etc. — recording continues
     }
     
-    // MARK: - App Lifecycle (background recording continues via audio background mode)
+    // MARK: - App Lifecycle
     
     @objc private func appDidEnterBackground() {
-        // No action needed — AVAudioRecorder continues in background with audio mode
+        // Recording continues in background due to audio background mode
+        // No action needed — AVAudioRecorder keeps recording
     }
     
     @objc private func appWillEnterForeground() {
-        if isRecording { startTimer() }
+        // Refresh timer when returning to foreground
+        if isRecording {
+            startTimer()
+        }
     }
     
     // MARK: - AVAudioRecorderDelegate
     
     func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
-        if !flag { onError?("Recording finished with error") }
+        if !flag {
+            onError?("Recording finished with error")
+        }
         stopTimer()
         onRecordingStateChanged?(false)
     }
@@ -252,6 +307,8 @@ class AudioRecorderManager: NSObject, AVAudioRecorderDelegate {
         stopTimer()
         onRecordingStateChanged?(false)
     }
+    
+    // MARK: - Cleanup
     
     deinit {
         NotificationCenter.default.removeObserver(self)
