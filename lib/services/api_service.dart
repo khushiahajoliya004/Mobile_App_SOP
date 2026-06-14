@@ -660,6 +660,30 @@ class ApiService {
     return _dio.get('/analytics/trend', queryParameters: {'period': period});
   }
 
+  Future<Response> getAnalyticsCategoryBreakdown({String period = '30d'}) async {
+    return _dio.get('/analytics/category-breakdown', queryParameters: {'period': period});
+  }
+
+  Future<Response> getAnalyticsSalesStageBreakdown({String period = '30d'}) async {
+    return _dio.get('/analytics/sales-stage-breakdown', queryParameters: {'period': period});
+  }
+
+  Future<Response> getAnalyticsScoreDistribution({String period = '30d'}) async {
+    return _dio.get('/analytics/score-distribution', queryParameters: {'period': period});
+  }
+
+  Future<Response> getAnalyticsUserCallAnalysis({String period = '30d'}) async {
+    return _dio.get('/analytics/user-call-analysis', queryParameters: {'period': period});
+  }
+
+  Future<Response> getAnalyticsSopMatrix({String period = '30d'}) async {
+    return _dio.get('/analytics/sop-matrix', queryParameters: {'period': period});
+  }
+
+  Future<Response> getAnalyticsUserSopMatrix({String period = '30d'}) async {
+    return _dio.get('/analytics/user-sop-matrix', queryParameters: {'period': period});
+  }
+
   // ─── AI Insights (additional) ───
 
   Future<Response> evaluateTranscript({
