@@ -124,14 +124,18 @@ class _CrmReceptionScreenState extends State<CrmReceptionScreen> {
     if (name.isEmpty || phone.isEmpty) return;
     setState(() => _submitting = true);
     try {
-      final res = await _api.createCrmQuickLead(
-        name: name,
-        phone: phone,
-        email: _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
-        source: _source,
-        branchId: _currentUser?.branchId,
-        notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-      );
+      final res = await _api.createEnquiry({
+        'customerName': name,
+        'phone': phone,
+        if (_emailCtrl.text.trim().isNotEmpty) 'email': _emailCtrl.text.trim(),
+        if (_altMobileCtrl.text.trim().isNotEmpty) 'alternateMobile': _altMobileCtrl.text.trim(),
+        'source': _source,
+        'priority': _priority,
+        if (_currentUser?.branchId != null) 'branchId': _currentUser!.branchId,
+        if (_modelCtrl.text.trim().isNotEmpty) 'interestedModel': _modelCtrl.text.trim(),
+        if (_budgetCtrl.text.trim().isNotEmpty) 'budgetRange': _budgetCtrl.text.trim(),
+        if (_notesCtrl.text.trim().isNotEmpty) 'notes': _notesCtrl.text.trim(),
+      });
       final raw = res.data;
       final data = raw is Map ? (raw['data'] ?? raw) : {};
       if (mounted) {
@@ -217,7 +221,7 @@ class _CrmReceptionScreenState extends State<CrmReceptionScreen> {
     if (_selectedDseId == null || _assigningLead == null) return;
     setDialogState(() => _assignLoading = true);
     try {
-      await _api.updateCrmDeal(_assigningLead!['id'].toString(), {'ownerUserId': _selectedDseId});
+      await _api.assignLead(_assigningLead!['id'].toString(), _selectedDseId!);
       if (mounted) {
         setDialogState(() { _assignLoading = false; _assignSuccess = true; });
         await Future.delayed(const Duration(milliseconds: 1500));
