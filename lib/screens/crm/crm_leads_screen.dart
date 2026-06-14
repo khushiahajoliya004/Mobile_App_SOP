@@ -148,16 +148,13 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
     final notesCtrl = TextEditingController();
     final expectedValueCtrl = TextEditingController();
     String source = 'Walk-in';
-    // Auto-select branch from user profile, matching web frontend logic
     String? branchId = _currentUser?.branchId;
     final bool branchLocked = branchId != null;
-    // Auto-select first pipeline — backend requires pipelineId when createDeal=true
     String? pipelineId = _pipelines.isNotEmpty ? _pipelines.first['id']?.toString() : null;
     Map<String, dynamic>? assignedUser;
     List<Map<String, dynamic>> sheetUsers = List.from(_assignableUsers);
     bool sheetUsersLoading = false;
 
-    // Pre-fetch branch team if user has a branch (same as web onBranchChange on init)
     if (branchId != null) {
       try {
         final res = await _api.getCrmUsersByBranch(branchId);
@@ -182,7 +179,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
           Future<void> onBranchChanged(String? selectedBranchId) async {
             setSheetState(() {
               branchId = selectedBranchId;
-              assignedUser = null; // reset selected user when branch changes
+              assignedUser = null;
               sheetUsersLoading = selectedBranchId != null;
               if (selectedBranchId == null) sheetUsers = List.from(_assignableUsers);
             });
@@ -193,7 +190,6 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
               final list = raw is List ? raw : (raw is Map ? (raw['data'] ?? []) as List : []);
               final users = list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
               setSheetState(() {
-                // getCrmUsersByBranch returns userId field, normalize to also have id
                 sheetUsers = users.map((u) => {...u, 'id': u['userId'] ?? u['id']}).toList();
                 sheetUsersLoading = false;
               });
@@ -272,7 +268,6 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // ── Header ──
                   Row(children: [
                     Container(
                       padding: const EdgeInsets.all(10),
@@ -286,8 +281,6 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                     const Text('Create New Lead', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
                   ]),
                   const SizedBox(height: 20),
-
-                  // ── Customer Name ──
                   TextField(
                     controller: nameCtrl,
                     textCapitalization: TextCapitalization.words,
@@ -295,8 +288,6 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                     onChanged: (_) => setSheetState(() {}),
                   ),
                   const SizedBox(height: 12),
-
-                  // ── Phone * ──
                   TextField(
                     controller: phoneCtrl,
                     keyboardType: TextInputType.phone,
@@ -305,16 +296,12 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                     onChanged: (_) => setSheetState(() {}),
                   ),
                   const SizedBox(height: 12),
-
-                  // ── Email ──
                   TextField(
                     controller: emailCtrl,
                     keyboardType: TextInputType.emailAddress,
                     decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.email_outlined)),
                   ),
                   const SizedBox(height: 12),
-
-                  // ── Source ──
                   DropdownButtonFormField<String>(
                     value: source,
                     decoration: const InputDecoration(labelText: 'Source', prefixIcon: Icon(Icons.source_outlined)),
@@ -323,8 +310,6 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                     onChanged: (v) => setSheetState(() => source = v!),
                   ),
                   const SizedBox(height: 12),
-
-                  // ── Branch ──
                   if (_branches.isNotEmpty) ...[
                     DropdownButtonFormField<String>(
                       value: branchId,
@@ -355,8 +340,6 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                     ],
                     const SizedBox(height: 12),
                   ],
-
-                  // ── Pipeline ──
                   if (_pipelines.isNotEmpty) ...[
                     DropdownButtonFormField<String>(
                       value: pipelineId,
@@ -370,8 +353,6 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                     ),
                     const SizedBox(height: 12),
                   ],
-
-                  // ── Expected Value ──
                   TextField(
                     controller: expectedValueCtrl,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -382,8 +363,6 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-
-                  // ── Assign Salesperson ──
                   Row(children: [
                     const Text('Assign Salesperson', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
                     if (branchId != null) ...[
@@ -433,8 +412,6 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-
-                  // ── Notes ──
                   TextField(
                     controller: notesCtrl,
                     maxLines: 3,
@@ -446,13 +423,10 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                     ),
                   ),
                   const SizedBox(height: 20),
-
-                  // ── Submit ──
                   FilledButton(
                     onPressed: (nameCtrl.text.trim().isEmpty || phoneCtrl.text.trim().isEmpty || (_pipelines.isNotEmpty && pipelineId == null)) ? null : () async {
                       final name = nameCtrl.text.trim();
                       final phone = phoneCtrl.text.trim();
-
                       if (phone.isNotEmpty) {
                         try {
                           final dupRes = await _api.checkDuplicateCrmContact(phone);
@@ -482,7 +456,6 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                           }
                         } catch (_) {}
                       }
-
                       try {
                         final evText = expectedValueCtrl.text.trim();
                         final notes = notesCtrl.text.trim();
@@ -497,7 +470,6 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                           expectedValue: evText.isNotEmpty ? double.tryParse(evText) : null,
                           notes: notes.isNotEmpty ? notes : null,
                         );
-                        // Extract new lead ID from response
                         String? newLeadId;
                         final resData = res.data;
                         if (resData is Map) {
@@ -521,9 +493,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                                 : null;
                             msg = serverMsg ?? msg;
                           }
-                          ScaffoldMessenger.of(ctx).showSnackBar(
-                            SnackBar(content: Text(msg)),
-                          );
+                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(msg)));
                         }
                       }
                     },
@@ -539,6 +509,55 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  void _showNewLeadRecordingSheet(String leadId, String leadName, String phone) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Lead created!', style: const TextStyle(fontSize: 13, color: AppColors.textHint)),
+              Text(leadName, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 4),
+              const Text('Do you want to start a recording?', style: TextStyle(fontSize: 15, color: AppColors.textSecondary)),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () { Navigator.pop(ctx); _navigateToUpload(leadId, leadName, phone); },
+                      icon: const Icon(Icons.upload_file_rounded, size: 18),
+                      label: const Text('Upload Call'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () { Navigator.pop(ctx); _navigateToRecorder(leadId, leadName, phone); },
+                      icon: const Icon(Icons.mic_rounded, size: 18),
+                      label: const Text('Start Recording'),
+                      style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+                    ),
+                  ),
+                ],
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Center(child: Text('Skip for now', style: TextStyle(color: AppColors.textHint))),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -676,75 +695,6 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
             FadeTransition(opacity: animation, child: child),
       ),
     ).then((_) => _load());
-  }
-
-  // Shown after a new lead is created
-  void _showNewLeadRecordingSheet(String leadId, String leadName, String phone) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Lead created!',
-                style: const TextStyle(fontSize: 13, color: AppColors.textHint),
-              ),
-              Text(
-                leadName,
-                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'Do you want to start a recording?',
-                style: TextStyle(fontSize: 15, color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        _navigateToUpload(leadId, leadName, phone);
-                      },
-                      icon: const Icon(Icons.upload_file_rounded, size: 18),
-                      label: const Text('Upload Call'),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        _navigateToRecorder(leadId, leadName, phone);
-                      },
-                      icon: const Icon(Icons.mic_rounded, size: 18),
-                      label: const Text('Start Recording'),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Center(
-                  child: Text('Skip for now', style: TextStyle(color: AppColors.textHint)),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   // Shown when tapping an existing lead

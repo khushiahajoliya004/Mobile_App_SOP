@@ -898,11 +898,25 @@ class ApiService {
   Future<Response> updateCrmDeal(String id, Map<String, dynamic> data) async =>
       _dio.patch('/crm/deals/$id', data: data);
 
-  Future<Response> getCrmContacts({String? search}) async {
+  Future<Response> getCrmContacts({
+    String? search,
+    int page = 1,
+    int limit = 20,
+    String? lifecycleStage,
+    String? source,
+    String? ownerUserId,
+  }) async {
     return _dio.get(
       '/crm/contacts',
       queryParameters: {
+        'page': page,
+        'limit': limit,
         if (search != null && search.isNotEmpty) 'search': search,
+        if (lifecycleStage != null && lifecycleStage.isNotEmpty)
+          'lifecycleStage': lifecycleStage,
+        if (source != null && source.isNotEmpty) 'source': source,
+        if (ownerUserId != null && ownerUserId.isNotEmpty)
+          'ownerUserId': ownerUserId,
       },
     );
   }

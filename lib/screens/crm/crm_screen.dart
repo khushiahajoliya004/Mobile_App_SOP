@@ -4,11 +4,15 @@ import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../models/user_model.dart';
 import 'crm_leads_screen.dart';
-import 'crm_reception_screen.dart';
 import 'crm_daily_transcripts_screen.dart';
 import 'crm_followups_screen.dart';
 import 'crm_dashboard_screen.dart';
+import 'crm_contacts_screen.dart';
 import 'my_tasks_screen.dart';
+import '../crm_v2/crm_activities_screen.dart';
+import '../crm_v2/crm_pipeline_settings_screen.dart';
+import '../crm_v2/crm_custom_properties_screen.dart';
+import '../crm_v2/crm_master_data_screen.dart';
 
 /// CRM Hub — shows sub-modules as a menu grid (permission-based)
 class CrmScreen extends StatefulWidget {
@@ -117,6 +121,50 @@ class _CrmScreenState extends State<CrmScreen> {
           const Color(0xFFFBBF24),
           'Scheduled follow-ups',
           const CrmFollowUpsScreen(),
+        ),
+      if (_user?.userType == 'USER' || _can('CRM_CONTACT') || _can('CONTACT'))
+        _CrmModule(
+          'Contacts',
+          Icons.contacts_rounded,
+          const Color(0xFF0EA5E9),
+          const Color(0xFF38BDF8),
+          '${_stats['totalContacts'] ?? 0} total contacts',
+          const CrmContactsScreen(),
+        ),
+      _CrmModule(
+        'Activities',
+        Icons.bolt_rounded,
+        const Color(0xFFF59E0B),
+        const Color(0xFFFBBF24),
+        'Calls, emails, meetings & tasks',
+        const CrmActivitiesScreen(),
+      ),
+      if (_user?.isSuperAdmin == true || _user?.isCompanyAdmin == true || _can('CRM_PIPELINE'))
+        _CrmModule(
+          'Pipelines',
+          Icons.account_tree_rounded,
+          const Color(0xFF8B5CF6),
+          const Color(0xFFA78BFA),
+          'Manage deal pipelines & stages',
+          const CrmPipelineSettingsScreen(),
+        ),
+      if (_user?.isSuperAdmin == true || _user?.isCompanyAdmin == true || _can('CRM_PROPERTY'))
+        _CrmModule(
+          'Customer Fields',
+          Icons.tune_rounded,
+          const Color(0xFF06B6D4),
+          const Color(0xFF22D3EE),
+          'Custom contact & deal properties',
+          const CrmCustomPropertiesScreen(),
+        ),
+      if (_user?.isSuperAdmin == true || _user?.isCompanyAdmin == true || _can('CRM_MASTER'))
+        _CrmModule(
+          'Master Data',
+          Icons.dataset_rounded,
+          const Color(0xFF64748B),
+          const Color(0xFF94A3B8),
+          'Sources, stages & lookup values',
+          const CrmMasterDataScreen(),
         ),
     ];
 
