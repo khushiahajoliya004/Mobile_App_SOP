@@ -36,6 +36,7 @@ import 'daily_transcripts/daily_transcripts_screen.dart';
 import 'salesman_sop/salesman_sop_screen.dart';
 import 'analytics/analytics_compare_screen.dart';
 import 'force_update/force_update_settings_screen.dart';
+import 'crm/quick_lead_sheet.dart';
 
 class MenuScreen extends StatelessWidget {
   final UserModel? user;
@@ -56,12 +57,15 @@ class MenuScreen extends StatelessWidget {
       (s, sec) => s + sec.items.length,
     );
 
+    final canCreateLead = _can('LEAD') || user?.isSuperAdmin == true || user?.isCompanyAdmin == true;
+
     return Container(
       color: AppColors.scaffoldBg,
       child: SafeArea(
         child: Column(
           children: [
             _buildHeader(context, totalModules),
+            if (canCreateLead) _buildQuickActions(context),
             Expanded(
               child: ListView.builder(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
@@ -374,6 +378,49 @@ class MenuScreen extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildQuickActions(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: GestureDetector(
+        onTap: () => QuickLeadSheet.show(context),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF10B981), Color(0xFF34D399)],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF10B981).withValues(alpha: 0.25),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: const Row(
+            children: [
+              Icon(Icons.person_add_rounded, color: Colors.white, size: 20),
+              SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('New Lead', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
+                    Text('Quickly create a lead without entering CRM', style: TextStyle(fontSize: 11, color: Colors.white70)),
+                  ],
+                ),
+              ),
+              Icon(Icons.add_circle_outline_rounded, color: Colors.white, size: 22),
+            ],
+          ),
+        ),
       ),
     );
   }

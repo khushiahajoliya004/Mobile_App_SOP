@@ -40,7 +40,8 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
   String? _filterOwnerUserId;
   DateTime? _filterFromDate;
   DateTime? _filterToDate;
-  bool get _hasActiveFilters => _filterBranchId != null || _filterOwnerUserId != null || _filterFromDate != null || _filterToDate != null;
+  String _datePreset = 'today'; // 'all','today','yesterday','week','month','custom'
+  bool get _hasActiveFilters => _filterBranchId != null || _filterOwnerUserId != null || _datePreset != 'all';
 
   @override
   void initState() {
@@ -84,8 +85,51 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
     await _load();
   }
 
+  String _fmt(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  (String?, String?) get _resolvedDates {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    switch (_datePreset) {
+      case 'today':
+        return (_fmt(today), _fmt(today));
+      case 'yesterday':
+        final y = today.subtract(const Duration(days: 1));
+        return (_fmt(y), _fmt(y));
+      case 'week':
+        final start = today.subtract(Duration(days: today.weekday - 1));
+        return (_fmt(start), _fmt(today));
+      case 'month':
+        return (_fmt(DateTime(now.year, now.month, 1)), _fmt(today));
+      case 'custom':
+        return (
+          _filterFromDate != null ? _fmt(_filterFromDate!) : null,
+          _filterToDate != null ? _fmt(_filterToDate!) : null,
+        );
+      default:
+        return (null, null);
+    }
+  }
+
+  String get _presetLabel {
+    switch (_datePreset) {
+      case 'today': return 'Today';
+      case 'yesterday': return 'Yesterday';
+      case 'week': return 'This Week';
+      case 'month': return 'This Month';
+      case 'custom':
+        if (_filterFromDate != null && _filterToDate != null) {
+          return '${_filterFromDate!.day}/${_filterFromDate!.month} – ${_filterToDate!.day}/${_filterToDate!.month}';
+        }
+        return 'Custom';
+      default: return 'All Time';
+    }
+  }
+
   Future<void> _load() async {
     setState(() => _loading = true);
+    final (fromDate, toDate) = _resolvedDates;
     try {
       // Team leaders must NOT pass branchId — backend uses reportingToUserId hierarchy to scope deals.
       // Passing branchId would bypass team-leader visibility and show all branch deals instead.
@@ -96,8 +140,8 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
         search: _search.isNotEmpty ? _search : null,
         branchId: _filterBranchId ?? (isTeamLeader ? null : _currentUser?.branchId),
         ownerUserId: _filterOwnerUserId,
-        fromDate: _filterFromDate != null ? '${_filterFromDate!.year}-${_filterFromDate!.month.toString().padLeft(2, '0')}-${_filterFromDate!.day.toString().padLeft(2, '0')}' : null,
-        toDate: _filterToDate != null ? '${_filterToDate!.year}-${_filterToDate!.month.toString().padLeft(2, '0')}-${_filterToDate!.day.toString().padLeft(2, '0')}' : null,
+        fromDate: fromDate,
+        toDate: toDate,
       );
       final raw = res.data;
       _deals = raw is List
@@ -687,6 +731,94 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
     );
   }
 
+  void _showDatePresetSheet() {
+    const presets = [
+      ('all', 'All Time', Icons.all_inclusive_rounded),
+      ('today', 'Today', Icons.today_rounded),
+      ('yesterday', 'Yesterday', Icons.history_rounded),
+      ('week', 'This Week', Icons.view_week_rounded),
+      ('month', 'This Month', Icons.calendar_month_rounded),
+    ];
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)))),
+              const SizedBox(height: 14),
+              const Text('Filter by Date', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+              const SizedBox(height: 8),
+              ...presets.map((p) {
+                final sel = _datePreset == p.$1;
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    width: 36, height: 36,
+                    decoration: BoxDecoration(color: sel ? AppColors.primary : AppColors.surfaceLight, borderRadius: BorderRadius.circular(10)),
+                    child: Icon(p.$3, size: 17, color: sel ? Colors.white : AppColors.textHint),
+                  ),
+                  title: Text(p.$2, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: sel ? AppColors.primary : AppColors.textPrimary)),
+                  trailing: sel ? const Icon(Icons.check_rounded, color: AppColors.primary, size: 18) : null,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    setState(() { _datePreset = p.$1; _filterFromDate = null; _filterToDate = null; });
+                    _load();
+                  },
+                );
+              }),
+              // Custom range
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  width: 36, height: 36,
+                  decoration: BoxDecoration(color: _datePreset == 'custom' ? AppColors.primary : AppColors.surfaceLight, borderRadius: BorderRadius.circular(10)),
+                  child: Icon(Icons.date_range_rounded, size: 17, color: _datePreset == 'custom' ? Colors.white : AppColors.textHint),
+                ),
+                title: Text(
+                  _datePreset == 'custom' && _filterFromDate != null && _filterToDate != null
+                      ? '${_filterFromDate!.day}/${_filterFromDate!.month}/${_filterFromDate!.year} – ${_filterToDate!.day}/${_filterToDate!.month}/${_filterToDate!.year}'
+                      : 'Custom Range',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _datePreset == 'custom' ? AppColors.primary : AppColors.textPrimary),
+                ),
+                trailing: _datePreset == 'custom' ? const Icon(Icons.check_rounded, color: AppColors.primary, size: 18) : null,
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final now = DateTime.now();
+                  final from = await showDatePicker(
+                    context: context,
+                    initialDate: _filterFromDate ?? now,
+                    firstDate: DateTime(2020),
+                    lastDate: now,
+                    helpText: 'Select start date',
+                    builder: (c, child) => Theme(data: Theme.of(c).copyWith(colorScheme: const ColorScheme.light(primary: AppColors.primary)), child: child!),
+                  );
+                  if (from == null || !mounted) return;
+                  final to = await showDatePicker(
+                    context: context,
+                    initialDate: _filterToDate ?? from,
+                    firstDate: from,
+                    lastDate: now,
+                    helpText: 'Select end date',
+                    builder: (c, child) => Theme(data: Theme.of(c).copyWith(colorScheme: const ColorScheme.light(primary: AppColors.primary)), child: child!),
+                  );
+                  if (to == null || !mounted) return;
+                  setState(() { _datePreset = 'custom'; _filterFromDate = from; _filterToDate = to; });
+                  _load();
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildFilterChip({required String label, required bool active, required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
@@ -871,44 +1003,26 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
               onTap: _showOwnerFilter,
             ),
             const SizedBox(width: 8),
-            // From date
+            // Date preset dropdown
             _buildFilterChip(
-              label: _filterFromDate != null
-                  ? 'From: ${_filterFromDate!.day}/${_filterFromDate!.month}'
-                  : 'From Date',
-              active: _filterFromDate != null,
-              onTap: () async {
-                final picked = await showDatePicker(
-                  context: context,
-                  initialDate: _filterFromDate ?? DateTime.now(),
-                  firstDate: DateTime(2020),
-                  lastDate: DateTime.now().add(const Duration(days: 365)),
-                );
-                if (picked != null) { setState(() => _filterFromDate = picked); _load(); }
-              },
-            ),
-            const SizedBox(width: 8),
-            // To date
-            _buildFilterChip(
-              label: _filterToDate != null
-                  ? 'To: ${_filterToDate!.day}/${_filterToDate!.month}'
-                  : 'To Date',
-              active: _filterToDate != null,
-              onTap: () async {
-                final picked = await showDatePicker(
-                  context: context,
-                  initialDate: _filterToDate ?? DateTime.now(),
-                  firstDate: DateTime(2020),
-                  lastDate: DateTime.now().add(const Duration(days: 365)),
-                );
-                if (picked != null) { setState(() => _filterToDate = picked); _load(); }
-              },
+              label: _presetLabel,
+              active: _datePreset != 'all',
+              onTap: _showDatePresetSheet,
             ),
             // Clear all filters
             if (_hasActiveFilters) ...[
               const SizedBox(width: 8),
               GestureDetector(
-                onTap: () { setState(() { _filterBranchId = null; _filterOwnerUserId = null; _filterFromDate = null; _filterToDate = null; }); _load(); },
+                onTap: () {
+                  setState(() {
+                    _filterBranchId = null;
+                    _filterOwnerUserId = null;
+                    _filterFromDate = null;
+                    _filterToDate = null;
+                    _datePreset = 'all';
+                  });
+                  _load();
+                },
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
