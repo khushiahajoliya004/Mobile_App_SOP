@@ -44,12 +44,16 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
   late String _datePreset; // 'all','today','yesterday','week','month','custom'
   late String _statusFilter; // 'OPEN','WON','LOST'
   bool get _hasActiveFilters => _filterBranchId != null || _filterOwnerUserId != null || _datePreset != 'all';
+  // Pagination
+  int _page = 1;
+  int _total = 0;
+  bool _loadingMore = false;
 
   @override
   void initState() {
     super.initState();
-    _datePreset = widget.initialDatePreset ?? 'today';
-    _statusFilter = widget.initialStatus ?? 'OPEN';
+    _datePreset = widget.initialDatePreset ?? 'all';
+    _statusFilter = widget.initialStatus ?? 'ALL';
     _init();
   }
 
@@ -69,10 +73,18 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
     } catch (_) {}
     try {
       final res = await _api.getBranches();
-      final raw = res.data;
-      _branches = raw is List
-          ? raw.map((e) => Map<String, dynamic>.from(e)).toList()
-          : ((raw is Map ? (raw['data'] ?? []) : []) as List).map((e) => Map<String, dynamic>.from(e)).toList();
+      final allBranches = (res.data is List
+          ? res.data as List
+          : ((res.data is Map ? (res.data['data'] ?? []) : []) as List))
+          .map((e) => Map<String, dynamic>.from(e)).toList();
+      // Match web: show only the user's own branches in the branch filter
+      final userBranchId = user?.branchId;
+      if (userBranchId != null && userBranchId.isNotEmpty) {
+        _branches = allBranches.where((b) => b['id'] == userBranchId).toList();
+        if (_branches.isEmpty) _branches = allBranches; // fallback
+      } else {
+        _branches = allBranches; // company-level user sees all branches
+      }
     } catch (_) {}
     // Load users: branch team if user has a branch, otherwise all assignable users
     if (user?.branchId != null && user!.branchId!.isNotEmpty) {
@@ -131,29 +143,48 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
     }
   }
 
-  Future<void> _load() async {
-    setState(() => _loading = true);
+  Future<void> _load({bool loadMore = false}) async {
+    if (loadMore) {
+      setState(() => _loadingMore = true);
+    } else {
+      setState(() { _loading = true; _page = 1; });
+    }
     final (fromDate, toDate) = _resolvedDates;
+    final currentPage = loadMore ? _page + 1 : 1;
     try {
-      // Team leaders must NOT pass branchId — backend uses reportingToUserId hierarchy to scope deals.
-      // Passing branchId would bypass team-leader visibility and show all branch deals instead.
-      final isTeamLeader = _currentUser?.branchRole == 'TEAM_LEADER';
-      debugPrint('[CrmDeals] calling getCrmDeals isTeamLeader=$isTeamLeader branchId=${isTeamLeader ? 'skipped' : _currentUser?.branchId}, pipelineId=$_selectedPipelineId');
+      // Only send branchId when user explicitly picks one from the filter UI.
+      // Backend JWT scoping handles visibility automatically — sending branchId
+      // bypasses the branch-member-or logic and can show fewer deals than expected.
       final res = await _api.getCrmDeals(
         pipelineId: _selectedPipelineId,
         search: _search.isNotEmpty ? _search : null,
         status: _statusFilter,
-        branchId: _filterBranchId ?? (isTeamLeader ? null : _currentUser?.branchId),
+        branchId: _filterBranchId, // only explicit UI filter, never auto-injected
         ownerUserId: _filterOwnerUserId,
         fromDate: fromDate,
         toDate: toDate,
+        page: currentPage,
+        limit: 50,
       );
       final raw = res.data;
-      _deals = raw is List
+      final newDeals = raw is List
           ? raw.map((e) => Map<String, dynamic>.from(e)).toList()
           : ((raw is Map ? (raw['data'] ?? []) : []) as List).map((e) => Map<String, dynamic>.from(e)).toList();
-    } catch (_) { _deals = []; }
-    if (mounted) setState(() => _loading = false);
+      final pagination = raw is Map ? (raw['pagination'] as Map?) : null;
+      if (mounted) setState(() {
+        if (loadMore) {
+          _deals.addAll(newDeals);
+          _page = currentPage;
+        } else {
+          _deals = newDeals;
+          _page = 1;
+        }
+        _total = (pagination?['total'] as num?)?.toInt() ?? newDeals.length;
+      });
+    } catch (_) {
+      if (!loadMore && mounted) setState(() => _deals = []);
+    }
+    if (mounted) setState(() { _loading = false; _loadingMore = false; });
   }
 
   List<Map<String, dynamic>> _normalizeBranchTeam(dynamic raw) {
@@ -777,6 +808,31 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
     );
   }
 
+  Widget _statusTab(String value, String label) {
+    final selected = _statusFilter == value;
+    Color color;
+    switch (value) {
+      case 'WON': color = AppColors.success; break;
+      case 'LOST': color = AppColors.error; break;
+      default: color = AppColors.primary;
+    }
+    return Expanded(
+      child: GestureDetector(
+        onTap: () { setState(() => _statusFilter = value); _load(); },
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 7),
+          decoration: BoxDecoration(
+            color: selected ? color : AppColors.surfaceLight,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(label, textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
+                  color: selected ? Colors.white : AppColors.textSecondary)),
+        ),
+      ),
+    );
+  }
+
   void _navigateToRecorder(String dealId, String dealName, String phone) {
     Navigator.push(
       context,
@@ -915,6 +971,19 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
             }).toList(),
           ),
         ),
+      // Status tabs: All / Open / Won / Lost
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 4),
+        child: Row(children: [
+          _statusTab('ALL', 'All'),
+          const SizedBox(width: 6),
+          _statusTab('OPEN', 'Open'),
+          const SizedBox(width: 6),
+          _statusTab('WON', 'Won'),
+          const SizedBox(width: 6),
+          _statusTab('LOST', 'Lost'),
+        ]),
+      ),
       // Filter row
       SizedBox(
         height: 36,
@@ -983,7 +1052,10 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
         child: Row(children: [
-          Text('${_deals.length} deals', style: const TextStyle(fontSize: 12, color: AppColors.textHint)),
+          Text(
+            _total > _deals.length ? '${_deals.length} of $_total deals' : '${_deals.length} deals',
+            style: const TextStyle(fontSize: 12, color: AppColors.textHint),
+          ),
           const Spacer(),
           GestureDetector(onTap: _load, child: const Icon(Icons.refresh, size: 16, color: AppColors.primary)),
         ]),
@@ -997,9 +1069,34 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
                 color: AppColors.primary,
                 onRefresh: _load,
                 child: ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: _deals.length,
-                  itemBuilder: (_, i) => _dealTile(_deals[i]),
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  itemCount: _deals.length + (_deals.length < _total ? 1 : 0),
+                  itemBuilder: (_, i) {
+                    if (i == _deals.length) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: _loadingMore
+                            ? const Center(child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2))
+                            : GestureDetector(
+                                onTap: () => _load(loadMore: true),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primarySurface,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      'Load more (${_total - _deals.length} remaining)',
+                                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                      );
+                    }
+                    return _dealTile(_deals[i]);
+                  },
                 ),
               ),
       ),
@@ -1027,6 +1124,12 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
     final phone = (deal['contact']?['phone'] ?? deal['phone'] ?? '').toString();
     final stageName = deal['stage']?['name'] ?? deal['stageName'] ?? '';
     final callCount = (deal['callCount'] ?? deal['totalCalls'] ?? (deal['calls'] is List ? (deal['calls'] as List).length : null) ?? 0) as num;
+    final ownerFirstName = deal['owner']?['firstName'] ?? '';
+    final ownerLastName = deal['owner']?['lastName'] ?? '';
+    final ownerName = '$ownerFirstName $ownerLastName'.trim();
+    final aiScore = deal['aiScore'] != null ? (deal['aiScore'] as num).toInt() : 0;
+    final stageEnteredAt = deal['stageEnteredAt'] != null ? DateTime.tryParse(deal['stageEnteredAt'].toString()) : null;
+    final daysInStage = stageEnteredAt != null ? DateTime.now().difference(stageEnteredAt).inDays : null;
     final initials = name.trim().isEmpty ? '?' : name.trim().split(' ').map((w) => w.isNotEmpty ? w[0] : '').take(2).join().toUpperCase();
     final avatarColor = _avatarColor(name);
     final stageColor = _stageColor(status);
@@ -1068,9 +1171,9 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 5),
-                  Row(children: [
-                    if (stageName.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Wrap(spacing: 6, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                    if (stageName.isNotEmpty)
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                         decoration: BoxDecoration(
@@ -1079,12 +1182,35 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
                         ),
                         child: Text(stageName, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: stageColor)),
                       ),
-                      const SizedBox(width: 8),
-                    ],
-                    Icon(Icons.call_rounded, size: 11, color: AppColors.textHint),
-                    const SizedBox(width: 3),
-                    Text('${callCount.toInt()} calls', style: const TextStyle(fontSize: 11, color: AppColors.textHint)),
+                    if (aiScore > 0)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.warning.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(5),
+                        ),
+                        child: Text('AI $aiScore', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.warning)),
+                      ),
+                    Row(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(Icons.call_rounded, size: 11, color: AppColors.textHint),
+                      const SizedBox(width: 3),
+                      Text('${callCount.toInt()} calls', style: const TextStyle(fontSize: 11, color: AppColors.textHint)),
+                    ]),
+                    if (daysInStage != null)
+                      Row(mainAxisSize: MainAxisSize.min, children: [
+                        const Icon(Icons.schedule_rounded, size: 11, color: AppColors.textHint),
+                        const SizedBox(width: 3),
+                        Text('${daysInStage}d in stage', style: const TextStyle(fontSize: 11, color: AppColors.textHint)),
+                      ]),
                   ]),
+                  if (ownerName.isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Row(children: [
+                      const Icon(Icons.person_outline_rounded, size: 11, color: AppColors.textHint),
+                      const SizedBox(width: 3),
+                      Flexible(child: Text(ownerName, style: const TextStyle(fontSize: 11, color: AppColors.textHint), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                    ]),
+                  ],
                 ]),
               ),
               const SizedBox(width: 8),

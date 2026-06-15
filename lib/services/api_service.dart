@@ -216,6 +216,7 @@ class ApiService {
     String? duration,
     String? fromDate,
     String? toDate,
+    String? leadId,
     int page = 1,
     int limit = 20,
   }) async {
@@ -224,6 +225,7 @@ class ApiService {
     if (duration != null && duration.isNotEmpty && duration != 'all') params['duration'] = duration;
     if (fromDate != null) params['fromDate'] = fromDate;
     if (toDate != null) params['toDate'] = toDate;
+    if (leadId != null && leadId.isNotEmpty) params['leadId'] = leadId;
     return _dio.get('/calls', queryParameters: params);
   }
 
@@ -922,10 +924,14 @@ class ApiService {
     String? ownerUserId,
     String? fromDate,
     String? toDate,
+    int page = 1,
+    int limit = 50,
   }) async {
     return _dio.get(
       '/crm/deals',
       queryParameters: {
+        'page': page,
+        'limit': limit,
         if (search != null && search.isNotEmpty) 'search': search,
         if (status != null) 'status': status,
         if (pipelineId != null) 'pipelineId': pipelineId,
