@@ -533,72 +533,6 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
     );
   }
 
-  void _showDealActions(Map<String, dynamic> deal) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('${deal['name']}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 16),
-            _actionTile(ctx, Icons.mic_rounded, 'Start Recording', AppColors.primary, () {
-              final phone = deal['contact']?['phone']?.toString() ?? '';
-              final name = deal['contact']?['name']?.toString() ?? deal['name']?.toString() ?? '';
-              _showRecordingSheet(deal['id'].toString(), name, phone);
-            }),
-            _actionTile(ctx, Icons.upload_file_rounded, 'Upload Call', const Color(0xFF0EA5E9), () {
-              final phone = deal['contact']?['phone']?.toString() ?? '';
-              final name = deal['contact']?['name']?.toString() ?? deal['name']?.toString() ?? '';
-              _navigateToUpload(deal['id'].toString(), name, phone);
-            }),
-            _actionTile(ctx, Icons.swap_horiz_rounded, 'Move Stage', AppColors.primary, () => _showMoveStage(deal)),
-            _actionTile(ctx, Icons.check_circle_outline_rounded, 'Mark Won', AppColors.success, () async {
-              try { await _api.markDealWon(deal['id'] as String); _msg('Deal marked as won'); _load(); } catch (e) { _msg('Failed: $e', error: true); }
-            }),
-            _actionTile(ctx, Icons.cancel_outlined, 'Mark Lost', AppColors.error, () {
-              Navigator.pop(ctx);
-              _showMarkLost(deal);
-            }),
-            _actionTile(ctx, Icons.delete_outline, 'Delete Deal', AppColors.error, () async {
-              Navigator.pop(ctx);
-              showDialog(
-                context: context,
-                builder: (d) => AlertDialog(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                  title: const Text('Delete Deal', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
-                  content: Text('Delete "${deal['name']}"?'),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(d), child: const Text('Cancel')),
-                    FilledButton(
-                      onPressed: () async {
-                        Navigator.pop(d);
-                        try { await _api.deleteCrmDeal(deal['id'] as String); _msg('Deal deleted'); _load(); } catch (e) { _msg('Failed: $e', error: true); }
-                      },
-                      style: FilledButton.styleFrom(backgroundColor: AppColors.error),
-                      child: const Text('Delete'),
-                    ),
-                  ],
-                ),
-              );
-            }),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _actionTile(BuildContext ctx, IconData icon, String label, Color color, VoidCallback onTap) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: Container(width: 36, height: 36, decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)), child: Icon(icon, color: color, size: 18)),
-      title: Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: color)),
-      onTap: () { Navigator.pop(ctx); onTap(); },
-    );
-  }
-
   void _showMarkLost(Map<String, dynamic> deal) {
     final reasonCtrl = TextEditingController();
     showModalBottomSheet(
@@ -1073,16 +1007,25 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
     final rawValue = deal['expectedValue'] ?? deal['value'];
     final value = rawValue == null ? null : double.tryParse('$rawValue');
     final contactName = deal['contact']?['name'] ?? deal['contactName'] ?? '';
-    // Prefer contactName; strip " - <date>" suffix from deal name as fallback
     final name = contactName.isNotEmpty ? contactName : rawName.split(' - ').first.trim();
+    final phone = (deal['contact']?['phone'] ?? deal['phone'] ?? '').toString();
     final stageName = deal['stage']?['name'] ?? deal['stageName'] ?? '';
     final statusColor = _statusColor(status);
+    final callCount = (deal['callCount'] ?? deal['totalCalls'] ?? (deal['calls'] is List ? (deal['calls'] as List).length : null) ?? 0) as num;
+
     return GestureDetector(
-      onTap: () => _showDealActions(deal),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => CrmDealDetailScreen(dealId: deal['id'].toString(), dealName: name)),
+      ).then((_) => _load()),
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.surfaceLight)),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.surfaceLight),
+        ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Container(
@@ -1096,41 +1039,99 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
             const SizedBox(width: 12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-              if ((deal['contact']?['phone'] ?? deal['phone'] ?? '').toString().isNotEmpty) Text((deal['contact']?['phone'] ?? deal['phone'] ?? '').toString(), style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+              const SizedBox(height: 4),
+              Row(children: [
+                // Stage pill
+                if (stageName.isNotEmpty) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(6)),
+                    child: Text(stageName, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.primary)),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                // Call count
+                const Icon(Icons.call_rounded, size: 11, color: AppColors.textHint),
+                const SizedBox(width: 3),
+                Text('${callCount.toInt()} calls', style: const TextStyle(fontSize: 11, color: AppColors.textHint, fontWeight: FontWeight.w500)),
+              ]),
             ])),
-            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              if (status != null) Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                child: Text(status, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: statusColor)),
-              ),
-              if (value != null) ...[
-                const SizedBox(height: 4),
-                Text('₹${value.toStringAsFixed(0)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.success)),
-              ],
-            ]),
+            // Value
+            if (value != null)
+              Text('₹${value.toStringAsFixed(0)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.success)),
           ]),
-          if (stageName.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(color: AppColors.surfaceLight, borderRadius: BorderRadius.circular(8)),
-              child: Text(stageName, style: const TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
-            ),
-          ],
-          const SizedBox(height: 8),
-          Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-            GestureDetector(
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CrmDealDetailScreen(dealId: deal['id'].toString(), dealName: name))),
-              child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: AppColors.primarySurface, borderRadius: BorderRadius.circular(8)), child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.open_in_new_rounded, size: 12, color: AppColors.primary), SizedBox(width: 4), Text('Details', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.primary))])),
+          const SizedBox(height: 10),
+          Row(children: [
+            // Start Recording icon
+            _iconAction(
+              icon: Icons.mic_rounded,
+              color: AppColors.primary,
+              tooltip: 'Record',
+              onTap: () => _navigateToRecorder(deal['id'].toString(), name, phone),
             ),
             const SizedBox(width: 8),
-            GestureDetector(
-              onTap: () => _showDealActions(deal),
-              child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: AppColors.surfaceLight, borderRadius: BorderRadius.circular(8)), child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.more_horiz_rounded, size: 14, color: AppColors.textSecondary), SizedBox(width: 4), Text('Manage', style: TextStyle(fontSize: 10, color: AppColors.textSecondary))])),
+            // Upload Call icon
+            _iconAction(
+              icon: Icons.upload_file_rounded,
+              color: const Color(0xFF0EA5E9),
+              tooltip: 'Upload',
+              onTap: () => _navigateToUpload(deal['id'].toString(), name, phone),
+            ),
+            const Spacer(),
+            // Three-dot menu → Move Stage, Mark Lost, Delete
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert_rounded, size: 18, color: AppColors.textHint),
+              padding: EdgeInsets.zero,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              onSelected: (val) {
+                switch (val) {
+                  case 'stage': _showMoveStage(deal); break;
+                  case 'lost': _showMarkLost(deal); break;
+                  case 'delete':
+                    showDialog(
+                      context: context,
+                      builder: (d) => AlertDialog(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                        title: const Text('Delete Deal', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
+                        content: Text('Delete "$name"?'),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(d), child: const Text('Cancel')),
+                          FilledButton(
+                            onPressed: () async {
+                              Navigator.pop(d);
+                              try { await _api.deleteCrmDeal(deal['id'] as String); _msg('Deal deleted'); _load(); } catch (e) { _msg('Failed: $e', error: true); }
+                            },
+                            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+                            child: const Text('Delete'),
+                          ),
+                        ],
+                      ),
+                    );
+                    break;
+                }
+              },
+              itemBuilder: (_) => [
+                const PopupMenuItem(value: 'stage', child: Row(children: [Icon(Icons.swap_horiz_rounded, size: 16, color: AppColors.primary), SizedBox(width: 10), Text('Move Stage')])),
+                const PopupMenuItem(value: 'lost', child: Row(children: [Icon(Icons.cancel_outlined, size: 16, color: AppColors.error), SizedBox(width: 10), Text('Mark Lost')])),
+                const PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline, size: 16, color: AppColors.error), SizedBox(width: 10), Text('Delete Deal', style: TextStyle(color: AppColors.error))])),
+              ],
             ),
           ]),
         ]),
+      ),
+    );
+  }
+
+  Widget _iconAction({required IconData icon, required Color color, required String tooltip, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Tooltip(
+        message: tooltip,
+        child: Container(
+          width: 34, height: 34,
+          decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(9)),
+          child: Icon(icon, size: 17, color: color),
+        ),
       ),
     );
   }
