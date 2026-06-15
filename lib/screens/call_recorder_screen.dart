@@ -15,9 +15,10 @@ import '../models/user_model.dart';
 
 class CallRecorderScreen extends StatefulWidget {
   final String? leadId;
+  final String? dealId;
   final String? leadCustomerName;
   final String? leadPhone;
-  const CallRecorderScreen({super.key, this.leadId, this.leadCustomerName, this.leadPhone});
+  const CallRecorderScreen({super.key, this.leadId, this.dealId, this.leadCustomerName, this.leadPhone});
   @override
   State<CallRecorderScreen> createState() => _CallRecorderScreenState();
 }
@@ -238,6 +239,8 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
         notes: 'Recorded from mobile',
         audioFilePath: path,
         audioFileName: fn,
+        leadId: widget.leadId,
+        dealId: widget.dealId,
       );
       if (mounted) {
         final cd = res.data is Map ? res.data['data'] : null;

@@ -779,7 +779,7 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
         builder: (_) => CrmSubWrapper(
           title: dealName,
           child: CallRecorderScreen(
-            leadId: dealId,
+            dealId: dealId,
             leadCustomerName: dealName,
             leadPhone: phone,
           ),
@@ -795,7 +795,7 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
         builder: (_) => CrmSubWrapper(
           title: 'Upload Call',
           child: CallUploadScreen(
-            leadId: dealId,
+            dealId: dealId,
             leadName: dealName,
             leadPhone: phone,
           ),
@@ -829,7 +829,7 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () { Navigator.pop(ctx); _navigateToUpload(dealId, dealName, phone); },
-                    icon: const Icon(Icons.upload_file_rounded, size: 18),
+                    icon: const Icon(Icons.cloud_upload_rounded, size: 18),
                     label: const Text('Upload Call'),
                   ),
                 ),
@@ -1085,7 +1085,7 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
               const SizedBox(width: 8),
               // Right: value + actions
               Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                if (value != null)
+                if (value != null && value > 0)
                   Text(
                     '₹${_formatValue(value)}',
                     style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.success),
@@ -1101,7 +1101,7 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
                   const SizedBox(width: 6),
                   // Upload
                   _tinyAction(
-                    icon: Icons.upload_file_rounded,
+                    icon: Icons.cloud_upload_rounded,
                     color: const Color(0xFF0EA5E9),
                     onTap: () => _navigateToUpload(deal['id'].toString(), name, phone),
                   ),

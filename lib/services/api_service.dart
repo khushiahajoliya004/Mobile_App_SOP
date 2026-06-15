@@ -182,6 +182,7 @@ class ApiService {
     String? audioFilePath,
     String? audioFileName,
     String? leadId,
+    String? dealId,
     String? phoneNumber,
   }) async {
     final map = <String, dynamic>{
@@ -193,6 +194,7 @@ class ApiService {
         'salesStageId': salesStageId,
       if (notes != null) 'notes': notes,
       if (leadId != null && leadId.isNotEmpty) 'leadId': leadId,
+      if (dealId != null && dealId.isNotEmpty) 'dealId': dealId,
       if (phoneNumber != null && phoneNumber.isNotEmpty)
         'phoneNumber': phoneNumber,
     };
@@ -922,6 +924,9 @@ class ApiService {
   }
 
   Future<Response> getCrmDeal(String id) async => _dio.get('/crm/deals/$id');
+
+  Future<Response> getCallsByDeal(String dealId) async =>
+      _dio.get('/calls', queryParameters: {'dealId': dealId});
 
   Future<Response> updateCrmDeal(String id, Map<String, dynamic> data) async =>
       _dio.patch('/crm/deals/$id', data: data);
