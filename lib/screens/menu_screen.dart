@@ -105,7 +105,7 @@ class MenuScreen extends StatelessWidget {
       _M('Modules', Icons.view_module_rounded, const Color(0xFF3B82F6), const Color(0xFF60A5FA), 'System modules', const ModuleListScreen()),
       _M('Operations', Icons.settings_applications_rounded, const Color(0xFF14B8A6), const Color(0xFF2DD4BF), 'System operations', const OperationListScreen()),
       _M('Permissions', Icons.lock_rounded, const Color(0xFFEC4899), const Color(0xFFF472B6), 'Manage permissions', const PermissionListScreen()),
-      _M('LLM Config', Icons.auto_awesome_rounded, const Color(0xFF8B5CF6), const Color(0xFFA78BFA), 'AI prompt templates', const LlmConfigScreen()),
+      _M('LLM Config', Icons.auto_awesome_rounded, const Color(0xFF8B5CF6), const Color(0xFFA78BFA), 'Prompt templates', const LlmConfigScreen()),
       _M('Force Update', Icons.system_update_rounded, const Color(0xFFEF4444), const Color(0xFFFCA5A5), 'App version control', const ForceUpdateSettingsScreen()),
     ]),
   ];
@@ -131,8 +131,8 @@ class MenuScreen extends StatelessWidget {
       if (_can('CALL')) _M('Upload', Icons.cloud_upload_rounded, const Color(0xFF0EA5E9), const Color(0xFF38BDF8), 'Upload audio files', const CallUploadScreen()),
       if (_can('CALL')) _M('Approvals', Icons.verified_rounded, const Color(0xFF8B5CF6), const Color(0xFFA78BFA), 'Approve or reject', const CallApprovalsScreen()),
     ]),
-    _Section('AI & Insights', Icons.auto_awesome_rounded, const Color(0xFFF59E0B), [
-      if (_can('AI_INSIGHT')) _M('AI Insights', Icons.auto_awesome_rounded, const Color(0xFFF59E0B), const Color(0xFFFBBF24), 'AI call analysis', const AiInsightsScreen()),
+    _Section('Call Insights', Icons.auto_awesome_rounded, const Color(0xFFF59E0B), [
+      if (_can('AI_INSIGHT')) _M('Call Analysis', Icons.auto_awesome_rounded, const Color(0xFFF59E0B), const Color(0xFFFBBF24), 'Call analysis & scores', const AiInsightsScreen()),
       if (_can('AI_INSIGHT')) _M('SOP Evaluator', Icons.quiz_rounded, const Color(0xFF0D9488), const Color(0xFF14B8A6), 'Test against SOP', const SopEvaluatorScreen()),
       if (_can('SOP_BUILDER')) _M('SOP Builder', Icons.build_circle_rounded, const Color(0xFF14B8A6), const Color(0xFF2DD4BF), 'Create & edit SOPs', const SopListScreen()),
       _M('SOP Checklist', Icons.checklist_rounded, const Color(0xFF10B981), const Color(0xFF34D399), 'View assigned SOPs', const SalesmanSopScreen()),
@@ -146,11 +146,11 @@ class MenuScreen extends StatelessWidget {
     _Section('Settings', Icons.settings_rounded, const Color(0xFF64748B), [
       _M('Roles', Icons.shield_rounded, const Color(0xFFF59E0B), const Color(0xFFFBBF24), 'Manage roles', const RolesScreen()),
       if (_can('PERMISSION')) _M('Permissions', Icons.lock_rounded, const Color(0xFFEC4899), const Color(0xFFF472B6), 'Manage permissions', const PermissionListScreen()),
-      _M('AI Prompts', Icons.text_snippet_rounded, const Color(0xFF10B981), const Color(0xFF34D399), 'Master prompt config', const PromptSettingsScreen()),
+      _M('Prompt Templates', Icons.text_snippet_rounded, const Color(0xFF10B981), const Color(0xFF34D399), 'Master prompt config', const PromptSettingsScreen()),
       _M('WhatsApp', Icons.message_rounded, const Color(0xFF25D366), const Color(0xFF128C7E), 'WA audit & auto-send', const WaSettingsScreen()),
       if (_can('CATEGORY')) _M('Categories', Icons.label_rounded, const Color(0xFFEC4899), const Color(0xFFF472B6), 'Manage categories', const CategoriesScreen()),
       if (_can('SALES_STAGE')) _M('Sales Stages', Icons.flag_rounded, const Color(0xFFF97316), const Color(0xFFFB923C), 'Configure stages', const SalesStagesScreen()),
-      if (_can('LLM_CONFIG')) _M('LLM Config', Icons.auto_awesome_rounded, const Color(0xFF8B5CF6), const Color(0xFFA78BFA), 'AI model configuration', const LlmConfigScreen()),
+      if (_can('LLM_CONFIG')) _M('LLM Config', Icons.auto_awesome_rounded, const Color(0xFF8B5CF6), const Color(0xFFA78BFA), 'Model configuration', const LlmConfigScreen()),
       _M('Audio Library', Icons.library_music_rounded, const Color(0xFF06B6D4), const Color(0xFF22D3EE), 'Local recordings', const AudioLibraryScreen()),
     ]),
   ].where((s) => s.items.isNotEmpty).toList();
@@ -170,8 +170,8 @@ class MenuScreen extends StatelessWidget {
       if (_can('CALL')) _M('Calls', Icons.phone_rounded, const Color(0xFF6366F1), const Color(0xFF818CF8), 'View call history', const CallHistoryScreen()),
       if (_can('CALL')) _M('Upload', Icons.cloud_upload_rounded, const Color(0xFF0EA5E9), const Color(0xFF38BDF8), 'Upload audio files', const CallUploadScreen()),
     ]),
-    _Section('AI & Insights', Icons.auto_awesome_rounded, const Color(0xFFF59E0B), [
-      if (_can('AI_INSIGHT')) _M('AI Insights', Icons.auto_awesome_rounded, const Color(0xFFF59E0B), const Color(0xFFFBBF24), 'AI call analysis', const AiInsightsScreen()),
+    _Section('Call Insights', Icons.auto_awesome_rounded, const Color(0xFFF59E0B), [
+      if (_can('AI_INSIGHT')) _M('Call Analysis', Icons.auto_awesome_rounded, const Color(0xFFF59E0B), const Color(0xFFFBBF24), 'Call analysis & scores', const AiInsightsScreen()),
       if (_can('SOP_BUILDER')) _M('SOP Builder', Icons.build_circle_rounded, const Color(0xFF14B8A6), const Color(0xFF2DD4BF), 'Create & edit SOPs', const SopListScreen()),
       _M('SOP Checklist', Icons.checklist_rounded, const Color(0xFF10B981), const Color(0xFF34D399), 'View assigned SOPs', const SalesmanSopScreen()),
     ]),
@@ -193,8 +193,8 @@ class MenuScreen extends StatelessWidget {
       if (_can('CALL')) _M('Calls', Icons.phone_rounded, const Color(0xFF6366F1), const Color(0xFF818CF8), 'View call history', const CallHistoryScreen()),
       if (_can('CALL')) _M('Upload', Icons.cloud_upload_rounded, const Color(0xFF0EA5E9), const Color(0xFF38BDF8), 'Upload audio files', const CallUploadScreen()),
     ]),
-    _Section('AI & Insights', Icons.auto_awesome_rounded, const Color(0xFFF59E0B), [
-      if (_can('AI_INSIGHT')) _M('AI Insights', Icons.auto_awesome_rounded, const Color(0xFFF59E0B), const Color(0xFFFBBF24), 'AI call analysis', const AiInsightsScreen()),
+    _Section('Call Insights', Icons.auto_awesome_rounded, const Color(0xFFF59E0B), [
+      if (_can('AI_INSIGHT')) _M('Call Analysis', Icons.auto_awesome_rounded, const Color(0xFFF59E0B), const Color(0xFFFBBF24), 'Call analysis & scores', const AiInsightsScreen()),
     ]),
     _Section('Analytics', Icons.bar_chart_rounded, const Color(0xFF3B82F6), [
       if (_can('ANALYTICS')) _M('Analytics', Icons.bar_chart_rounded, const Color(0xFF3B82F6), const Color(0xFF60A5FA), 'Performance data', const AnalyticsScreen()),
@@ -282,7 +282,7 @@ class MenuScreen extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      'AI Sales Intelligence Platform',
+                      'Sales Intelligence Platform',
                       style: TextStyle(
                         fontSize: 11,
                         color: Colors.white.withValues(alpha: 0.55),
@@ -372,7 +372,7 @@ class MenuScreen extends StatelessWidget {
             runSpacing: 6,
             children: [
               _featureChip(Icons.mic_rounded, 'Record'),
-              _featureChip(Icons.auto_awesome_rounded, 'AI'),
+              _featureChip(Icons.auto_awesome_rounded, 'Smart Analysis'),
               _featureChip(Icons.insights_rounded, 'Insights'),
               _featureChip(Icons.groups_rounded, 'CRM'),
             ],

@@ -211,8 +211,20 @@ class ApiService {
 
   /// GET /calls
   /// Response: { success, data: [ Call, ... ] }
-  Future<Response> getCalls() async {
-    return _dio.get('/calls');
+  Future<Response> getCalls({
+    String? search,
+    String? duration,
+    String? fromDate,
+    String? toDate,
+    int page = 1,
+    int limit = 20,
+  }) async {
+    final params = <String, dynamic>{'page': page, 'limit': limit};
+    if (search != null && search.isNotEmpty) params['search'] = search;
+    if (duration != null && duration.isNotEmpty && duration != 'all') params['duration'] = duration;
+    if (fromDate != null) params['fromDate'] = fromDate;
+    if (toDate != null) params['toDate'] = toDate;
+    return _dio.get('/calls', queryParameters: params);
   }
 
   /// GET /calls/:id

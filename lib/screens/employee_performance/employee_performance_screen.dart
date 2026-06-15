@@ -379,7 +379,7 @@ class _EmployeePerformanceScreenState extends State<EmployeePerformanceScreen> {
             icon: _loadingAi
                 ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary))
                 : const Icon(Icons.auto_awesome, size: 14, color: AppColors.primary),
-            label: Text(_aiTrend == null ? 'AI Trend' : 'Refresh', style: const TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600)),
+            label: Text(_aiTrend == null ? 'Performance Trend' : 'Refresh', style: const TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600)),
             style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6)),
           ),
         ]),
@@ -620,7 +620,7 @@ class _EmployeePerformanceScreenState extends State<EmployeePerformanceScreen> {
         Row(children: [
           const Icon(Icons.auto_awesome, size: 16, color: AppColors.primary),
           const SizedBox(width: 8),
-          const Text('AI Trend Analysis', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.primary)),
+          const Text('Performance Trend', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.primary)),
           const Spacer(),
           GestureDetector(
             onTap: () => setState(() => _aiTrend = null),

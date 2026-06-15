@@ -647,7 +647,7 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
                         ),
                         SizedBox(height: 2),
                         Text(
-                          'Upload will work but AI analysis needs SOP. Ask admin to assign one.',
+                          'Upload will work but analysis needs SOP. Ask admin to assign one.',
                           style: TextStyle(
                             fontSize: 11,
                             color: AppColors.textSecondary,

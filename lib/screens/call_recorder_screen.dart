@@ -259,7 +259,7 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
         final isAi =
             _user!.aiEnabled && (as2 == 'PENDING' || as2 == 'PROCESSING');
         final msg = isAi
-            ? 'Uploaded! AI analysis started.'
+            ? 'Uploaded! Analysis started.'
             : 'Submitted for approval.';
         setState(() {
           _isSaving = false;
@@ -695,7 +695,7 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
                       const SizedBox(height: 4),
                       Text(
                         _hasSop
-                            ? 'Audio will be analyzed by AI'
+                            ? 'Audio will be analyzed automatically'
                             : 'Audio will be saved locally',
                         style: TextStyle(
                           fontSize: 12,

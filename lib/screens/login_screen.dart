@@ -299,7 +299,7 @@ class _LoginScreenState extends State<LoginScreen>
               ),
               const SizedBox(width: 5),
               Text(
-                'AI Sales Intelligence',
+                'Sales Intelligence',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -578,7 +578,7 @@ class _LoginScreenState extends State<LoginScreen>
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10),
           child: Text(
-            'Powered by AI',
+            'Powered by Smart Analysis',
             style: TextStyle(
               fontSize: 11,
               color: Colors.white.withValues(alpha: 0.35),

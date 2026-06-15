@@ -795,7 +795,7 @@ class _CrmDealDetailScreenState extends State<CrmDealDetailScreen>
                 tabs: [
                   _tab('Timeline', _activities.length),
                   _tab('Follow-ups', _followUps.length),
-                  _tab('Calls & AI', _calls.length),
+                  _tab('Calls & Analysis', _calls.length),
                   _tab('Stage History', _stageHistory.length),
                 ],
               ),

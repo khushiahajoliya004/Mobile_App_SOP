@@ -221,7 +221,7 @@ class _SalesStagesScreenState extends State<SalesStagesScreen> {
                 ),
                 const SizedBox(height: 4),
                 const Text(
-                  'Questions for AI call summary generation',
+                  'Questions for call summary',
                   style: TextStyle(
                     fontSize: 11,
                     color: AppColors.textSecondary,

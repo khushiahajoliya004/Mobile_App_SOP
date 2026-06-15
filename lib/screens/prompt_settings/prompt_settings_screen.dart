@@ -212,7 +212,7 @@ class _PromptSettingsScreenState extends State<PromptSettingsScreen> with Single
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text('Master Prompt', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
         const SizedBox(height: 4),
-        const Text('This prompt is used as the company-level base for AI evaluations.', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        const Text('This prompt is used as the company-level base for call evaluations.', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
         const SizedBox(height: 16),
         _field(_masterName, 'Name'),
         const SizedBox(height: 10),

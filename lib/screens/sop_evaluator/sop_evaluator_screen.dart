@@ -325,7 +325,7 @@ class _SopEvaluatorScreenState extends State<SopEvaluatorScreen> {
                     ),
                   )
                 : const Icon(Icons.auto_awesome, size: 18),
-            label: Text(_evaluating ? 'Evaluating...' : 'Evaluate with AI'),
+            label: Text(_evaluating ? 'Evaluating...' : 'Evaluate Call'),
             style: FilledButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
