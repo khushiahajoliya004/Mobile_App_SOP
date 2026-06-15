@@ -6,7 +6,9 @@ import '../../main.dart';
 import '../../services/api_service.dart';
 
 class AiInsightsScreen extends StatefulWidget {
-  const AiInsightsScreen({super.key});
+  final String? initialStatus;
+  final String? initialUserId;
+  const AiInsightsScreen({super.key, this.initialStatus, this.initialUserId});
   @override
   State<AiInsightsScreen> createState() => _AiInsightsScreenState();
 }
@@ -40,6 +42,7 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
   String _search = '';
   String _userSearch = '';
   String _statusFilter = '';
+  String? _fixedUserId; // locked userId when opened from dashboard
   DateTime? _dateFrom;
   DateTime? _dateTo;
   int _page = 1;
@@ -67,6 +70,12 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialStatus != null && widget.initialStatus!.isNotEmpty) {
+      _statusFilter = widget.initialStatus!;
+    }
+    if (widget.initialUserId != null && widget.initialUserId!.isNotEmpty) {
+      _fixedUserId = widget.initialUserId;
+    }
     _load();
     _loadTranscriptionSetting();
   }
@@ -94,6 +103,7 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
         endDate: _dateTo != null
             ? '${_dateTo!.year}-${_dateTo!.month.toString().padLeft(2, '0')}-${_dateTo!.day.toString().padLeft(2, '0')}'
             : null,
+        userId: _fixedUserId,
       );
       final raw = res.data;
       if (raw is Map) {
@@ -1050,34 +1060,28 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(name,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 13)),
-                  Row(
-                    children: [
-                      if (userName.isNotEmpty)
-                        Text(userName,
-                            style: const TextStyle(
-                                fontSize: 11,
-                                color: AppColors.textSecondary)),
-                      if (category.isNotEmpty)
-                        Text(' · $category',
-                            style: const TextStyle(
-                                fontSize: 11, color: AppColors.textHint)),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            Flexible(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  _statusBadge(status),
-                  const SizedBox(height: 4),
-                  Text(_formatDate(call['createdAt']),
-                      style: const TextStyle(
-                          fontSize: 10, color: AppColors.textHint)),
+                  Row(children: [
+                    Expanded(
+                      child: Text(name,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    ),
+                    const SizedBox(width: 8),
+                    _statusBadge(status),
+                  ]),
+                  const SizedBox(height: 3),
+                  Row(children: [
+                    Expanded(
+                      child: Text(
+                        [if (userName.isNotEmpty) userName, if (category.isNotEmpty) category].join(' · '),
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(_formatDate(call['createdAt']),
+                        style: const TextStyle(fontSize: 10, color: AppColors.textHint)),
+                  ]),
                 ],
               ),
             ),

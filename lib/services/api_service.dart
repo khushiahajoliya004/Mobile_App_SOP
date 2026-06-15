@@ -738,6 +738,7 @@ class ApiService {
     String? status,
     String? startDate,
     String? endDate,
+    String? userId,
   }) async {
     final params = <String, dynamic>{'page': page, 'limit': limit};
     if (search != null && search.isNotEmpty) params['search'] = search;
@@ -746,6 +747,7 @@ class ApiService {
     if (status != null && status.isNotEmpty) params['status'] = status;
     if (startDate != null) params['startDate'] = startDate;
     if (endDate != null) params['endDate'] = endDate;
+    if (userId != null && userId.isNotEmpty) params['userId'] = userId;
     return _dio.get('/ai-insights', queryParameters: params);
   }
 

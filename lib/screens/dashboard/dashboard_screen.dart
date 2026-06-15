@@ -270,12 +270,14 @@ class _DashboardScreenState extends State<DashboardScreen>
                   '${_data['analyzedCalls'] ?? 0}',
                   'Analyzed',
                   Icons.auto_awesome_rounded,
+                  filterStatus: 'COMPLETED',
                 ),
                 _headerDivider(),
                 _headerStat(
                   '${_data['avgScore'] ?? 0}%',
                   'Score',
                   Icons.trending_up_rounded,
+                  filterStatus: 'COMPLETED',
                 ),
               ],
             ),
@@ -285,30 +287,33 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  Widget _headerStat(String value, String label, IconData icon) {
+  Widget _headerStat(String value, String label, IconData icon, {String? filterStatus}) {
     return Expanded(
-      child: Column(
-        children: [
-          Icon(icon, color: Colors.white.withValues(alpha: 0.6), size: 18),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
+      child: GestureDetector(
+        onTap: () => _navigateTo(AiInsightsScreen(initialStatus: filterStatus ?? '', initialUserId: _user?.id), 'AI Insights'),
+        child: Column(
+          children: [
+            Icon(icon, color: Colors.white.withValues(alpha: 0.6), size: 18),
+            const SizedBox(height: 6),
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
             ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              color: Colors.white.withValues(alpha: 0.5),
-              fontWeight: FontWeight.w500,
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                color: Colors.white.withValues(alpha: 0.5),
+                fontWeight: FontWeight.w500,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -335,7 +340,9 @@ class _DashboardScreenState extends State<DashboardScreen>
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
-      child: Container(
+      child: GestureDetector(
+        onTap: () => _navigateTo(AiInsightsScreen(initialStatus: 'COMPLETED', initialUserId: _user?.id), 'AI Insights'),
+        child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: Colors.white,
@@ -457,6 +464,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             ),
           ],
         ),
+      ),
       ),
     );
   }
@@ -1148,10 +1156,12 @@ class _CallDetailSheetState extends State<_CallDetailSheet> {
 
   Future<void> _load() async {
     try {
-      final res = await _api.getAiInsightDetail(widget.callId);
+      final res = await _api.getCall(widget.callId);
       final raw = res.data;
       _detail = raw is Map ? Map<String, dynamic>.from(raw['data'] ?? raw) : {};
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[CallDetailSheet] load error: $e');
+    }
     if (mounted) setState(() => _loading = false);
   }
 
@@ -1304,7 +1314,8 @@ class _CallDetailSheetState extends State<_CallDetailSheet> {
   }
 
   Widget _buildSectionScores() {
-    final sections = (_detail['sectionScores'] ?? []) as List;
+    final ai = _detail['aiAnalysis'] as Map<String, dynamic>? ?? {};
+    final sections = (_detail['sectionScores'] ?? ai['sectionScores'] ?? []) as List;
     if (sections.isEmpty) return const SizedBox.shrink();
 
     return Column(
@@ -1375,7 +1386,10 @@ class _CallDetailSheetState extends State<_CallDetailSheet> {
 
   Widget _buildSummary() {
     final ai = _detail['aiAnalysis'] as Map<String, dynamic>? ?? {};
-    final summary = ai['summary'] ?? ai['callSummary'] ?? '';
+    final summary = ai['summary'] ?? ai['callSummary']
+        ?? _detail['callSummary']?['summary']
+        ?? _detail['callSummary']
+        ?? '';
     if (summary.toString().isEmpty) return const SizedBox.shrink();
 
     return Column(
@@ -1421,8 +1435,9 @@ class _CallDetailSheetState extends State<_CallDetailSheet> {
 
   Widget _buildKeyPoints() {
     final ai = _detail['aiAnalysis'] as Map<String, dynamic>? ?? {};
+    final callSummary = _detail['callSummary'] is Map ? _detail['callSummary'] as Map<String, dynamic> : <String, dynamic>{};
     final keyPoints =
-        (ai['keyDiscussionPoints'] ?? ai['keyPoints'] ?? []) as List;
+        (ai['keyDiscussionPoints'] ?? ai['keyPoints'] ?? callSummary['keyPoints'] ?? []) as List;
     if (keyPoints.isEmpty) return const SizedBox.shrink();
 
     // Handle both list of strings and map format

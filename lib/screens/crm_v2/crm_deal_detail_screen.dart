@@ -1096,7 +1096,7 @@ class _CrmDealDetailScreenState extends State<CrmDealDetailScreen>
             final analysisStatus = (c['analysisStatus'] ?? '').toString();
             final dateStr = _fmtDateTime(c['createdAt']?.toString());
             final customerName = c['customerName'] ?? '';
-            final duration = c['duration'];
+            final duration = c['durationSeconds'] ?? c['duration'];
             final durationStr = duration != null ? _fmtDuration(num.tryParse('$duration')?.toInt() ?? 0) : '';
             final scoreColor = _scoreColor(score);
             return Container(
@@ -1123,19 +1123,19 @@ class _CrmDealDetailScreenState extends State<CrmDealDetailScreen>
                     Text(dateStr, style: const TextStyle(fontSize: 10, color: AppColors.textHint)),
                   ]),
                   const SizedBox(height: 3),
-                  Row(children: [
-                    if (customerName.toString().isNotEmpty) ...[
-                      const Icon(Icons.person_outline_rounded, size: 11, color: AppColors.textHint),
-                      const SizedBox(width: 3),
-                      Text(customerName.toString(), style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                      const SizedBox(width: 8),
-                    ],
-                    if (durationStr.isNotEmpty) ...[
-                      const Icon(Icons.timer_outlined, size: 11, color: AppColors.textHint),
-                      const SizedBox(width: 3),
-                      Text(durationStr, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                      const SizedBox(width: 8),
-                    ],
+                  Wrap(spacing: 6, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                    if (customerName.toString().isNotEmpty)
+                      Row(mainAxisSize: MainAxisSize.min, children: [
+                        const Icon(Icons.person_outline_rounded, size: 11, color: AppColors.textHint),
+                        const SizedBox(width: 3),
+                        Text(customerName.toString(), style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                      ]),
+                    if (durationStr.isNotEmpty)
+                      Row(mainAxisSize: MainAxisSize.min, children: [
+                        const Icon(Icons.timer_outlined, size: 11, color: AppColors.textHint),
+                        const SizedBox(width: 3),
+                        Text(durationStr, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                      ]),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                       decoration: BoxDecoration(color: AppColors.surfaceLight, borderRadius: BorderRadius.circular(4)),
