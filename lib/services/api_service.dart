@@ -958,12 +958,13 @@ class ApiService {
     String? branchId,
     String? notes,
     double? expectedValue,
+    bool createDeal = true,
   }) async {
     return _dio.post(
       '/crm/contacts/quick-lead',
       data: {
         'name': name,
-        'createDeal': true,
+        'createDeal': createDeal,
         if (phone != null && phone.isNotEmpty) 'phone': phone,
         if (email != null && email.isNotEmpty) 'email': email,
         if (source != null && source.isNotEmpty) 'source': source,
