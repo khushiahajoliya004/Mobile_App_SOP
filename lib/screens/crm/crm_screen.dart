@@ -216,10 +216,10 @@ class _CrmScreenState extends State<CrmScreen> {
           const SizedBox(height: 16),
           Row(
             children: [
-              _headerStat('${_stats['leadsToday'] ?? 0}', 'Today'),
-              _headerStat('${_stats['openDeals'] ?? 0}', 'Open'),
-              _headerStat('${_stats['wonThisMonth'] ?? 0}', 'Won'),
-              _headerStat('${_stats['totalContacts'] ?? 0}', 'Contacts'),
+              _headerStat('${_stats['leadsToday'] ?? 0}', 'Today', onTap: () => _goToDeals(datePreset: 'today')),
+              _headerStat('${_stats['openDeals'] ?? 0}', 'Open', onTap: () => _goToDeals(status: 'OPEN')),
+              _headerStat('${_stats['wonThisMonth'] ?? 0}', 'Won', onTap: () => _goToDeals(status: 'WON')),
+              _headerStat('${_stats['totalContacts'] ?? 0}', 'Contacts', onTap: () => _goToDeals()),
             ],
           ),
         ],
@@ -227,27 +227,53 @@ class _CrmScreenState extends State<CrmScreen> {
     );
   }
 
-  Widget _headerStat(String value, String label) {
+  Widget _headerStat(String value, String label, {VoidCallback? onTap}) {
     return Expanded(
-      child: Column(
-        children: [
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Column(
+          children: [
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
             ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              color: Colors.white.withValues(alpha: 0.6),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                color: Colors.white.withValues(alpha: 0.6),
+              ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _goToDeals({String? status, String? datePreset}) {
+    final title = status == 'WON' ? 'Won Deals'
+        : status == 'OPEN' ? 'Open Deals'
+        : datePreset == 'today' ? "Today's Leads"
+        : 'All Leads';
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          appBar: AppBar(
+            title: Text(title),
+            backgroundColor: const Color(0xFF312E81),
+            foregroundColor: Colors.white,
           ),
-        ],
+          body: CrmDealsScreen(
+            initialStatus: status ?? 'OPEN',
+            initialDatePreset: datePreset ?? 'all',
+          ),
+        ),
       ),
     );
   }

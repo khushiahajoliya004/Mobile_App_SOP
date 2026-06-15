@@ -6,7 +6,6 @@ import '../../models/user_model.dart';
 import 'crm_deal_detail_screen.dart';
 import '../call_recorder_screen.dart';
 import '../call_upload_screen.dart';
-import '../crm/crm_screen.dart' show CrmSubWrapper;
 
 const _leadSources = [
   {'value': 'WALK_IN', 'label': 'Walk-in'},
@@ -20,7 +19,9 @@ const _leadSources = [
 ];
 
 class CrmDealsScreen extends StatefulWidget {
-  const CrmDealsScreen({super.key});
+  final String? initialStatus;
+  final String? initialDatePreset;
+  const CrmDealsScreen({super.key, this.initialStatus, this.initialDatePreset});
   @override
   State<CrmDealsScreen> createState() => _CrmDealsScreenState();
 }
@@ -40,12 +41,15 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
   String? _filterOwnerUserId;
   DateTime? _filterFromDate;
   DateTime? _filterToDate;
-  String _datePreset = 'today'; // 'all','today','yesterday','week','month','custom'
+  late String _datePreset; // 'all','today','yesterday','week','month','custom'
+  late String _statusFilter; // 'OPEN','WON','LOST'
   bool get _hasActiveFilters => _filterBranchId != null || _filterOwnerUserId != null || _datePreset != 'all';
 
   @override
   void initState() {
     super.initState();
+    _datePreset = widget.initialDatePreset ?? 'today';
+    _statusFilter = widget.initialStatus ?? 'OPEN';
     _init();
   }
 
@@ -138,6 +142,7 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
       final res = await _api.getCrmDeals(
         pipelineId: _selectedPipelineId,
         search: _search.isNotEmpty ? _search : null,
+        status: _statusFilter,
         branchId: _filterBranchId ?? (isTeamLeader ? null : _currentUser?.branchId),
         ownerUserId: _filterOwnerUserId,
         fromDate: fromDate,
@@ -776,7 +781,7 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => CrmSubWrapper(
+        builder: (_) => _CrmV2Wrapper(
           title: dealName,
           child: CallRecorderScreen(
             dealId: dealId,
@@ -792,7 +797,7 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => CrmSubWrapper(
+        builder: (_) => _CrmV2Wrapper(
           title: 'Upload Call',
           child: CallUploadScreen(
             dealId: dealId,
@@ -1170,6 +1175,42 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
         padding: const EdgeInsets.all(4),
         child: Icon(icon, size: 18, color: color),
       ),
+    );
+  }
+}
+
+class _CrmV2Wrapper extends StatelessWidget {
+  final String title;
+  final Widget child;
+  const _CrmV2Wrapper({required this.title, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.scaffoldBg,
+      child: Column(children: [
+        Container(
+          padding: EdgeInsets.only(
+            top: MediaQuery.of(context).padding.top + 8,
+            left: 4, right: 16, bottom: 14,
+          ),
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF1E1B4B), Color(0xFF312E81), AppColors.primary],
+            ),
+          ),
+          child: Row(children: [
+            IconButton(
+              icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+              onPressed: () => Navigator.pop(context),
+            ),
+            Text(title, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
+          ]),
+        ),
+        Expanded(child: Scaffold(backgroundColor: AppColors.scaffoldBg, body: child)),
+      ]),
     );
   }
 }
