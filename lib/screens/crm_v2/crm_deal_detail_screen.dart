@@ -1049,7 +1049,16 @@ class _CrmDealDetailScreenState extends State<CrmDealDetailScreen>
     );
   }
 
-  // ── Calls & AI tab ─────────────────────────────────────────────────────────
+  // ── Calls & Analysis tab ───────────────────────────────────────────────────
+
+  void _showCallSummary(String callId) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _CallSummarySheet(callId: callId),
+    );
+  }
 
   Widget _callsTab() {
     return ListView(
@@ -1144,6 +1153,18 @@ class _CrmDealDetailScreenState extends State<CrmDealDetailScreen>
                     ),
                   ]),
                 ])),
+                const SizedBox(width: 4),
+                GestureDetector(
+                  onTap: () => _showCallSummary(c['id'].toString()),
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: AppColors.primarySurface,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.summarize_rounded, size: 16, color: AppColors.primary),
+                  ),
+                ),
               ]),
             );
           }),
@@ -1198,5 +1219,274 @@ class _DealSubWrapper extends StatelessWidget {
         Expanded(child: child),
       ]),
     );
+  }
+}
+
+// ── Call Summary Bottom Sheet ──────────────────────────────────────────────
+
+class _CallSummarySheet extends StatefulWidget {
+  final String callId;
+  const _CallSummarySheet({required this.callId});
+  @override
+  State<_CallSummarySheet> createState() => _CallSummarySheetState();
+}
+
+class _CallSummarySheetState extends State<_CallSummarySheet> {
+  final _api = ApiService();
+  bool _loading = true;
+  Map<String, dynamic> _detail = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final res = await _api.getAiInsightDetail(widget.callId);
+      final raw = res.data;
+      _detail = raw is Map ? Map<String, dynamic>.from(raw['data'] ?? raw) : {};
+    } catch (_) {}
+    if (mounted) setState(() => _loading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.65,
+      maxChildSize: 0.92,
+      minChildSize: 0.35,
+      builder: (_, scrollCtrl) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: _loading
+              ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+              : ListView(
+                  controller: scrollCtrl,
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40, height: 4,
+                        decoration: BoxDecoration(color: AppColors.surfaceLight, borderRadius: BorderRadius.circular(2)),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildHeader(),
+                    const SizedBox(height: 16),
+                    _buildSectionScores(),
+                    _buildSummary(),
+                    _buildKeyPoints(),
+                    if (_noContent())
+                      Container(
+                        margin: const EdgeInsets.only(top: 16),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(color: AppColors.surfaceLight, borderRadius: BorderRadius.circular(12)),
+                        child: Column(children: [
+                          const Icon(Icons.hourglass_empty_rounded, size: 32, color: AppColors.textHint),
+                          const SizedBox(height: 8),
+                          Text(
+                            _detail['analysisStatus'] == 'MANUAL' || _detail['analysisStatus'] == 'SKIPPED'
+                                ? 'This call was marked as ${_detail['analysisStatus']?.toString().toLowerCase()}.\nNo summary available.'
+                                : 'Analysis not yet completed.\nStatus: ${_detail['analysisStatus'] ?? 'PENDING'}',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.5),
+                          ),
+                        ]),
+                      ),
+                  ],
+                ),
+        );
+      },
+    );
+  }
+
+  bool _noContent() {
+    final ai = _detail['aiAnalysis'] as Map<String, dynamic>? ?? {};
+    final hasSections = (_detail['sectionScores'] as List? ?? []).isNotEmpty;
+    final rawSummary = _detail['callSummary'] ?? ai['summary'] ?? ai['callSummary'] ?? '';
+    final hasSummary = rawSummary is List ? rawSummary.isNotEmpty : rawSummary.toString().isNotEmpty;
+    final raw = ai['keyDiscussionPoints'] ?? ai['keyPoints'] ?? [];
+    final hasPoints = raw is List ? raw.isNotEmpty : false;
+    return !hasSections && !hasSummary && !hasPoints;
+  }
+
+  Widget _buildHeader() {
+    final score = _detail['sopScore'] != null ? num.tryParse(_detail['sopScore'].toString()) : null;
+    final name = _detail['customerName'] ?? 'Unknown';
+    final status = _detail['analysisStatus'] ?? '';
+    final duration = _detail['durationSeconds'] != null
+        ? '${((_detail['durationSeconds'] as num) / 60).floor()}:${((_detail['durationSeconds'] as num).toInt() % 60).toString().padLeft(2, '0')}'
+        : '';
+    final scoreColor = score != null
+        ? (score >= 70 ? AppColors.success : score >= 40 ? AppColors.warning : AppColors.error)
+        : AppColors.textHint;
+
+    return Row(children: [
+      Container(
+        width: 60, height: 60,
+        decoration: BoxDecoration(
+          color: score != null ? scoreColor.withValues(alpha: 0.1) : AppColors.surfaceLight,
+          shape: BoxShape.circle,
+        ),
+        child: Center(
+          child: score != null
+              ? Column(mainAxisSize: MainAxisSize.min, children: [
+                  Text('${score.round()}',
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: scoreColor)),
+                  Text('%', style: TextStyle(fontSize: 10, color: scoreColor.withValues(alpha: 0.7))),
+                ])
+              : Icon(
+                  status == 'PROCESSING' ? Icons.hourglass_top : Icons.schedule,
+                  size: 24, color: AppColors.textHint,
+                ),
+        ),
+      ),
+      const SizedBox(width: 16),
+      Expanded(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(name,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+          const SizedBox(height: 4),
+          Wrap(spacing: 8, children: [
+            if (duration.isNotEmpty)
+              Text('⏱ $duration', style: const TextStyle(fontSize: 12, color: AppColors.textHint)),
+            if (status.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(color: AppColors.surfaceLight, borderRadius: BorderRadius.circular(6)),
+                child: Text(status, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+              ),
+          ]),
+        ]),
+      ),
+    ]);
+  }
+
+  Widget _buildSectionScores() {
+    final sections = (_detail['sectionScores'] ?? []) as List;
+    if (sections.isEmpty) return const SizedBox.shrink();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('Section Scores',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+      const SizedBox(height: 10),
+      ...sections.map((s) {
+        final sec = Map<String, dynamic>.from(s);
+        final secScore = (sec['score'] ?? 0) as num;
+        final secName = sec['title'] ?? sec['sectionName'] ?? '';
+        final color = secScore >= 70 ? AppColors.success : secScore >= 40 ? AppColors.warning : AppColors.error;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(children: [
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(secName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                const SizedBox(height: 4),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(3),
+                  child: LinearProgressIndicator(
+                    value: secScore / 100,
+                    minHeight: 6,
+                    backgroundColor: color.withValues(alpha: 0.1),
+                    valueColor: AlwaysStoppedAnimation(color),
+                  ),
+                ),
+              ]),
+            ),
+            const SizedBox(width: 12),
+            Text('${secScore.toInt()}%',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
+          ]),
+        );
+      }),
+    ]);
+  }
+
+  Widget _buildSummary() {
+    final ai = _detail['aiAnalysis'] as Map<String, dynamic>? ?? {};
+    // callSummary lives directly on the call OR inside aiAnalysis
+    final rawSummary = _detail['callSummary'] ?? ai['summary'] ?? ai['callSummary'] ?? '';
+    final isEmpty = rawSummary is List ? rawSummary.isEmpty : rawSummary.toString().isEmpty;
+    if (isEmpty) return const SizedBox.shrink();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        const Icon(Icons.summarize_rounded, size: 14, color: AppColors.primary),
+        const SizedBox(width: 6),
+        const Text('Call Summary',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+      ]),
+      const SizedBox(height: 8),
+      Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(color: AppColors.primarySurface, borderRadius: BorderRadius.circular(12)),
+        child: rawSummary is List
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: rawSummary.asMap().entries.map((e) {
+                  final item = e.value is Map ? Map<String, dynamic>.from(e.value as Map) : <String, dynamic>{};
+                  final answer = item['answer']?.toString() ?? '';
+                  final question = item['question']?.toString() ?? '';
+                  if (answer.isEmpty) return const SizedBox.shrink();
+                  return Padding(
+                    padding: EdgeInsets.only(bottom: e.key < rawSummary.length - 1 ? 8 : 0),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      if (question.isNotEmpty) ...[
+                        Text(question,
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                        const SizedBox(height: 2),
+                      ],
+                      Text(answer,
+                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.5)),
+                    ]),
+                  );
+                }).toList(),
+              )
+            : Text(rawSummary.toString(),
+                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.5)),
+      ),
+    ]);
+  }
+
+  Widget _buildKeyPoints() {
+    final ai = _detail['aiAnalysis'] as Map<String, dynamic>? ?? {};
+    final raw = ai['keyDiscussionPoints'] ?? ai['keyPoints'] ?? [];
+    List<String> points = [];
+    if (raw is List) {
+      points = raw.map((e) => e.toString()).toList();
+    } else if (raw is Map) {
+      raw.forEach((key, value) {
+        if (value is List) {
+          points.addAll(value.map((e) => e.toString()));
+        } else if (value is String && value.isNotEmpty && value != 'N/A' && value != 'Not Discussed') {
+          points.add('$key: $value');
+        }
+      });
+    }
+    if (points.isEmpty) return const SizedBox.shrink();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        const Icon(Icons.list_alt_rounded, size: 14, color: AppColors.success),
+        const SizedBox(width: 6),
+        const Text('Key Points',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+      ]),
+      const SizedBox(height: 8),
+      ...points.take(5).map((p) => Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 4),
+            child: Icon(Icons.check_circle_outline, size: 14, color: AppColors.success),
+          ),
+          const SizedBox(width: 8),
+          Expanded(child: Text(p,
+              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4))),
+        ]),
+      )),
+    ]);
   }
 }

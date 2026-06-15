@@ -803,7 +803,8 @@ class _CallQuickSummarySheetState extends State<_CallQuickSummarySheet> {
 
   Widget _buildSummary() {
     final ai = _detail['aiAnalysis'] as Map<String, dynamic>? ?? {};
-    final rawSummary = ai['summary'] ?? ai['callSummary'] ?? '';
+    // callSummary lives directly on the call OR inside aiAnalysis
+    final rawSummary = _detail['callSummary'] ?? ai['summary'] ?? ai['callSummary'] ?? '';
     final isEmpty = rawSummary is List ? rawSummary.isEmpty : rawSummary.toString().isEmpty;
     if (isEmpty) return const SizedBox.shrink();
 
