@@ -32,12 +32,6 @@ import 'sales_performance/sales_performance_screen.dart';
 import 'team_report/team_report_screen.dart';
 import 'prompt_settings/prompt_settings_screen.dart';
 import 'settings/wa_settings_screen.dart';
-import 'crm_v2/crm_contacts_screen.dart';
-import 'crm_v2/crm_deals_screen.dart';
-import 'crm_v2/crm_activities_screen.dart';
-import 'crm_v2/crm_custom_properties_screen.dart';
-import 'crm_v2/crm_pipeline_settings_screen.dart';
-import 'crm_v2/crm_master_data_screen.dart';
 import 'daily_transcripts/daily_transcripts_screen.dart';
 import 'salesman_sop/salesman_sop_screen.dart';
 import 'analytics/analytics_compare_screen.dart';
@@ -128,13 +122,7 @@ class MenuScreen extends StatelessWidget {
       if (_can('ANALYTICS')) _M('360° Compare', Icons.compare_arrows_rounded, const Color(0xFF0EA5E9), const Color(0xFF38BDF8), 'Compare users side by side', const AnalyticsCompareScreen()),
     ]),
     _Section('Sales', Icons.trending_up_rounded, const Color(0xFF10B981), [
-      _M('CRM', Icons.contacts_rounded, const Color(0xFF10B981), const Color(0xFF34D399), 'CRM overview', const CrmScreen()),
-      _M('Contacts', Icons.person_rounded, const Color(0xFF3B82F6), const Color(0xFF60A5FA), 'Manage CRM contacts', const CrmContactsScreen()),
-      _M('Deals', Icons.handshake_rounded, const Color(0xFF8B5CF6), const Color(0xFFA78BFA), 'Track deals & pipeline', const CrmDealsScreen()),
-      _M('Activities', Icons.event_note_rounded, const Color(0xFF14B8A6), const Color(0xFF2DD4BF), 'Calls, emails, meetings', const CrmActivitiesScreen()),
-      _M('Pipelines', Icons.account_tree_rounded, const Color(0xFF6366F1), const Color(0xFF818CF8), 'Manage pipelines & stages', const CrmPipelineSettingsScreen()),
-      _M('Custom Fields', Icons.tune_rounded, const Color(0xFF0EA5E9), const Color(0xFF38BDF8), 'Custom CRM fields', const CrmCustomPropertiesScreen()),
-      _M('Master Data', Icons.dataset_rounded, const Color(0xFF64748B), const Color(0xFF94A3B8), 'Lead sources, stages & more', const CrmMasterDataScreen()),
+      _M('CRM', Icons.contacts_rounded, const Color(0xFF10B981), const Color(0xFF34D399), 'Contacts, Deals, Activities & more', const CrmScreen()),
       if (_can('CALL')) _M('Calls', Icons.phone_rounded, const Color(0xFF6366F1), const Color(0xFF818CF8), 'View call history', const CallHistoryScreen()),
       if (_can('CALL')) _M('Upload', Icons.cloud_upload_rounded, const Color(0xFF0EA5E9), const Color(0xFF38BDF8), 'Upload audio files', const CallUploadScreen()),
       if (_can('CALL')) _M('Approvals', Icons.verified_rounded, const Color(0xFF8B5CF6), const Color(0xFFA78BFA), 'Approve or reject', const CallApprovalsScreen()),
@@ -174,10 +162,7 @@ class MenuScreen extends StatelessWidget {
       if (_can('ANALYTICS')) _M('360° Compare', Icons.compare_arrows_rounded, const Color(0xFF0EA5E9), const Color(0xFF38BDF8), 'Compare users side by side', const AnalyticsCompareScreen()),
     ]),
     _Section('Sales', Icons.trending_up_rounded, const Color(0xFF10B981), [
-      _M('CRM', Icons.contacts_rounded, const Color(0xFF10B981), const Color(0xFF34D399), 'CRM overview', const CrmScreen()),
-      if (_can('LEAD')) _M('Contacts', Icons.person_rounded, const Color(0xFF3B82F6), const Color(0xFF60A5FA), 'Manage CRM contacts', const CrmContactsScreen()),
-      if (_can('LEAD')) _M('Deals', Icons.handshake_rounded, const Color(0xFF8B5CF6), const Color(0xFFA78BFA), 'Track deals & pipeline', const CrmDealsScreen()),
-      if (_can('LEAD')) _M('Activities', Icons.event_note_rounded, const Color(0xFF14B8A6), const Color(0xFF2DD4BF), 'Calls, emails, meetings', const CrmActivitiesScreen()),
+      _M('CRM', Icons.contacts_rounded, const Color(0xFF10B981), const Color(0xFF34D399), 'Contacts, Deals, Activities & more', const CrmScreen()),
       if (_can('CALL')) _M('Calls', Icons.phone_rounded, const Color(0xFF6366F1), const Color(0xFF818CF8), 'View call history', const CallHistoryScreen()),
       if (_can('CALL')) _M('Upload', Icons.cloud_upload_rounded, const Color(0xFF0EA5E9), const Color(0xFF38BDF8), 'Upload audio files', const CallUploadScreen()),
     ]),
@@ -200,9 +185,7 @@ class MenuScreen extends StatelessWidget {
   // Website allows: DASHBOARD, CRM_DASHBOARD, LEAD, FOLLOW_UP, VISIT, CALL, AI_INSIGHT, ANALYTICS, COMPARE_360
   List<_Section> _userSections() => [
     _Section('Sales', Icons.trending_up_rounded, const Color(0xFF10B981), [
-      _M('CRM', Icons.contacts_rounded, const Color(0xFF10B981), const Color(0xFF34D399), 'CRM overview', const CrmScreen()),
-      if (_can('LEAD')) _M('Leads', Icons.handshake_rounded, const Color(0xFF3B82F6), const Color(0xFF60A5FA), 'Track your leads', const CrmDealsScreen()),
-      if (_can('LEAD')) _M('Activities', Icons.event_note_rounded, const Color(0xFF8B5CF6), const Color(0xFFA78BFA), 'Calls, emails, meetings', const CrmActivitiesScreen()),
+      _M('CRM', Icons.contacts_rounded, const Color(0xFF10B981), const Color(0xFF34D399), 'Leads & Activities', const CrmScreen()),
       if (_can('CALL')) _M('Calls', Icons.phone_rounded, const Color(0xFF6366F1), const Color(0xFF818CF8), 'View call history', const CallHistoryScreen()),
       if (_can('CALL')) _M('Upload', Icons.cloud_upload_rounded, const Color(0xFF0EA5E9), const Color(0xFF38BDF8), 'Upload audio files', const CallUploadScreen()),
     ]),

@@ -3,12 +3,9 @@ import '../../main.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../models/user_model.dart';
-import 'crm_leads_screen.dart';
-import 'crm_daily_transcripts_screen.dart';
-import 'crm_followups_screen.dart';
 import 'crm_dashboard_screen.dart';
-import 'crm_contacts_screen.dart';
-import 'my_tasks_screen.dart';
+import '../crm_v2/crm_contacts_screen.dart';
+import '../crm_v2/crm_deals_screen.dart';
 import '../crm_v2/crm_activities_screen.dart';
 import '../crm_v2/crm_pipeline_settings_screen.dart';
 import '../crm_v2/crm_custom_properties_screen.dart';
@@ -66,26 +63,14 @@ class _CrmScreenState extends State<CrmScreen> {
       );
     }
 
+    // Website CRM v2 structure:
+    // USER type  → Leads (Deals), Activities
+    // Admin/Distributor → Dashboard, Contacts, Deals, Activities, Pipelines*, Custom Fields*, Master Data*
+    final isUser = _user?.userType == 'USER';
+    final isAdmin = _user?.isSuperAdmin == true || _user?.isCompanyAdmin == true;
+
     final modules = <_CrmModule>[
-      // Reception — always visible for CRM users
-      // _CrmModule(
-      //   'Reception',
-      //   Icons.support_agent_rounded,
-      //   const Color(0xFF059669),
-      //   const Color(0xFF34D399),
-      //   'Phone lookup & new leads',
-      //   const CrmReceptionScreen(),
-      // ),
-      // My Tasks — always visible, highest priority
-      _CrmModule(
-        'My Tasks',
-        Icons.task_alt_rounded,
-        const Color(0xFF4F46E5),
-        const Color(0xFF818CF8),
-        'Your assigned tasks',
-        const MyTasksScreen(),
-      ),
-      if (_can('CRM_DASHBOARD'))
+      if (!isUser && _can('CRM_DASHBOARD'))
         _CrmModule(
           'Dashboard',
           Icons.dashboard_rounded,
@@ -94,35 +79,7 @@ class _CrmScreenState extends State<CrmScreen> {
           '${_stats['openDeals'] ?? 0} open deals',
           const CrmDashboardSubScreen(),
         ),
-      // Leads & Follow-ups: always visible for regular users (matches web /crm-v2/deals behaviour),
-      // permission-gated only for non-USER roles (admin/distributor have explicit permissions).
-      if (_user?.userType == 'USER' || _can('LEAD'))
-        _CrmModule(
-          'Leads',
-          Icons.people_rounded,
-          const Color(0xFF10B981),
-          const Color(0xFF34D399),
-          'Manage your leads',
-          const CrmLeadsScreen(),
-        ),
-      _CrmModule(
-        'Daily Transcripts',
-        Icons.transcribe_rounded,
-        const Color(0xFF7C3AED),
-        const Color(0xFFA78BFA),
-        'Day-wise call transcripts',
-        const CrmDailyTranscriptsScreen(),
-      ),
-      if (_user?.userType == 'USER' || _can('FOLLOW_UP'))
-        _CrmModule(
-          'Follow-ups',
-          Icons.calendar_today_rounded,
-          const Color(0xFFF59E0B),
-          const Color(0xFFFBBF24),
-          'Scheduled follow-ups',
-          const CrmFollowUpsScreen(),
-        ),
-      if (_user?.userType == 'USER' || _can('CRM_CONTACT') || _can('CONTACT'))
+      if (!isUser && (isAdmin || _can('LEAD')))
         _CrmModule(
           'Contacts',
           Icons.contacts_rounded,
@@ -131,15 +88,25 @@ class _CrmScreenState extends State<CrmScreen> {
           '${_stats['totalContacts'] ?? 0} total contacts',
           const CrmContactsScreen(),
         ),
-      _CrmModule(
-        'Activities',
-        Icons.bolt_rounded,
-        const Color(0xFFF59E0B),
-        const Color(0xFFFBBF24),
-        'Calls, emails, meetings & tasks',
-        const CrmActivitiesScreen(),
-      ),
-      if (_user?.isSuperAdmin == true || _user?.isCompanyAdmin == true || _can('CRM_PIPELINE'))
+      if (isUser || isAdmin || _can('LEAD'))
+        _CrmModule(
+          isUser ? 'Leads' : 'Deals',
+          Icons.handshake_rounded,
+          const Color(0xFF10B981),
+          const Color(0xFF34D399),
+          isUser ? 'Manage your leads' : 'Track deals & pipeline',
+          const CrmDealsScreen(),
+        ),
+      if (isUser || isAdmin || _can('LEAD'))
+        _CrmModule(
+          'Activities',
+          Icons.bolt_rounded,
+          const Color(0xFFF59E0B),
+          const Color(0xFFFBBF24),
+          'Calls, emails, meetings & tasks',
+          const CrmActivitiesScreen(),
+        ),
+      if (isAdmin || _can('CRM_PIPELINE'))
         _CrmModule(
           'Pipelines',
           Icons.account_tree_rounded,
@@ -148,16 +115,16 @@ class _CrmScreenState extends State<CrmScreen> {
           'Manage deal pipelines & stages',
           const CrmPipelineSettingsScreen(),
         ),
-      if (_user?.isSuperAdmin == true || _user?.isCompanyAdmin == true || _can('CRM_PROPERTY'))
+      if (isAdmin || _can('CRM_PROPERTY'))
         _CrmModule(
-          'Customer Fields',
+          'Custom Fields',
           Icons.tune_rounded,
           const Color(0xFF06B6D4),
           const Color(0xFF22D3EE),
           'Custom contact & deal properties',
           const CrmCustomPropertiesScreen(),
         ),
-      if (_user?.isSuperAdmin == true || _user?.isCompanyAdmin == true || _can('CRM_MASTER'))
+      if (isAdmin || _can('CRM_MASTER'))
         _CrmModule(
           'Master Data',
           Icons.dataset_rounded,
