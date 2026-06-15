@@ -8,7 +8,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../firebase_options.dart';
 import 'api_service.dart';
 import '../utils/navigator_key.dart';
-import '../screens/crm/crm_screen.dart';
 import '../screens/crm_v2/crm_deal_detail_screen.dart';
 
 /// Top-level handler for background messages (must be top-level function)
@@ -220,10 +219,7 @@ class NotificationService {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         navigatorKey.currentState?.push(
           MaterialPageRoute(
-            builder: (_) => CrmSubWrapper(
-              title: dealName,
-              child: CrmDealDetailScreen(dealId: dealId, dealName: dealName),
-            ),
+            builder: (_) => CrmDealDetailScreen(dealId: dealId, dealName: dealName),
           ),
         );
       });

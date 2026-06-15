@@ -36,6 +36,11 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
   List<Map<String, dynamic>> _assignableUsers = [];
   String? _selectedPipelineId;
   String _search = '';
+  String? _filterBranchId;
+  String? _filterOwnerUserId;
+  DateTime? _filterFromDate;
+  DateTime? _filterToDate;
+  bool get _hasActiveFilters => _filterBranchId != null || _filterOwnerUserId != null || _filterFromDate != null || _filterToDate != null;
 
   @override
   void initState() {
@@ -89,7 +94,10 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
       final res = await _api.getCrmDeals(
         pipelineId: _selectedPipelineId,
         search: _search.isNotEmpty ? _search : null,
-        branchId: isTeamLeader ? null : _currentUser?.branchId,
+        branchId: _filterBranchId ?? (isTeamLeader ? null : _currentUser?.branchId),
+        ownerUserId: _filterOwnerUserId,
+        fromDate: _filterFromDate != null ? '${_filterFromDate!.year}-${_filterFromDate!.month.toString().padLeft(2, '0')}-${_filterFromDate!.day.toString().padLeft(2, '0')}' : null,
+        toDate: _filterToDate != null ? '${_filterToDate!.year}-${_filterToDate!.month.toString().padLeft(2, '0')}-${_filterToDate!.day.toString().padLeft(2, '0')}' : null,
       );
       final raw = res.data;
       _deals = raw is List
@@ -599,6 +607,105 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
   }
 
 
+  void _showBranchFilter() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(children: [
+              const Expanded(child: Text('Filter by Branch', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700))),
+              IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+            ]),
+            const SizedBox(height: 4),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('All Branches'),
+              trailing: _filterBranchId == null ? const Icon(Icons.check, color: AppColors.primary) : null,
+              onTap: () { setState(() => _filterBranchId = null); Navigator.pop(ctx); _load(); },
+            ),
+            ..._branches.map((b) => ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text('${b['name']}'),
+              trailing: _filterBranchId == b['id'] ? const Icon(Icons.check, color: AppColors.primary) : null,
+              onTap: () { setState(() => _filterBranchId = b['id'] as String?); Navigator.pop(ctx); _load(); },
+            )),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showOwnerFilter() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.5,
+        maxChildSize: 0.85,
+        builder: (ctx, scroll) => Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                const Expanded(child: Text('Filter by Owner', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700))),
+                IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+              ]),
+              const SizedBox(height: 4),
+              Expanded(
+                child: ListView(
+                  controller: scroll,
+                  children: [
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('All Owners'),
+                      trailing: _filterOwnerUserId == null ? const Icon(Icons.check, color: AppColors.primary) : null,
+                      onTap: () { setState(() => _filterOwnerUserId = null); Navigator.pop(ctx); _load(); },
+                    ),
+                    ..._assignableUsers.map((u) => ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text('${u['name']}'),
+                      subtitle: (u['branchName'] ?? u['roleName'] ?? '').toString().isNotEmpty
+                          ? Text('${u['branchName'] ?? ''}${u['roleName'] != null ? ' · ${u['roleName']}' : ''}', style: const TextStyle(fontSize: 12))
+                          : null,
+                      trailing: _filterOwnerUserId == u['id'] ? const Icon(Icons.check, color: AppColors.primary) : null,
+                      onTap: () { setState(() => _filterOwnerUserId = u['id'] as String?); Navigator.pop(ctx); _load(); },
+                    )),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterChip({required String label, required bool active, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: active ? AppColors.primary : AppColors.surfaceLight,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: active ? AppColors.primary : AppColors.surfaceLight),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: active ? Colors.white : AppColors.textSecondary)),
+          const SizedBox(width: 3),
+          Icon(Icons.keyboard_arrow_down_rounded, size: 14, color: active ? Colors.white : AppColors.textSecondary),
+        ]),
+      ),
+    );
+  }
+
   void _navigateToRecorder(String dealId, String dealName, String phone) {
     Navigator.push(
       context,
@@ -691,6 +798,8 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isTeamLeader = _currentUser?.branchRole == 'TEAM_LEADER';
+    final branchLocked = !isTeamLeader && _currentUser?.branchId != null && (_currentUser?.branchId?.isNotEmpty == true);
     return Column(children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
@@ -735,6 +844,89 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
             }).toList(),
           ),
         ),
+      // Filter row
+      SizedBox(
+        height: 36,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.fromLTRB(16, 2, 16, 2),
+          children: [
+            // Branch filter — hidden for team leaders and single-branch locked users
+            if (!isTeamLeader && !branchLocked) ...[
+              _buildFilterChip(
+                label: _filterBranchId != null
+                    ? (_branches.firstWhere((b) => b['id'] == _filterBranchId, orElse: () => {'name': 'Branch'})['name'] as String? ?? 'Branch')
+                    : 'Branch',
+                active: _filterBranchId != null,
+                onTap: _showBranchFilter,
+              ),
+              const SizedBox(width: 8),
+            ],
+            // Owner filter
+            _buildFilterChip(
+              label: _filterOwnerUserId != null
+                  ? (_assignableUsers.firstWhere((u) => u['id'] == _filterOwnerUserId, orElse: () => {'name': 'Owner'})['name'] as String? ?? 'Owner')
+                  : 'Owner',
+              active: _filterOwnerUserId != null,
+              onTap: _showOwnerFilter,
+            ),
+            const SizedBox(width: 8),
+            // From date
+            _buildFilterChip(
+              label: _filterFromDate != null
+                  ? 'From: ${_filterFromDate!.day}/${_filterFromDate!.month}'
+                  : 'From Date',
+              active: _filterFromDate != null,
+              onTap: () async {
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: _filterFromDate ?? DateTime.now(),
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime.now().add(const Duration(days: 365)),
+                );
+                if (picked != null) { setState(() => _filterFromDate = picked); _load(); }
+              },
+            ),
+            const SizedBox(width: 8),
+            // To date
+            _buildFilterChip(
+              label: _filterToDate != null
+                  ? 'To: ${_filterToDate!.day}/${_filterToDate!.month}'
+                  : 'To Date',
+              active: _filterToDate != null,
+              onTap: () async {
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: _filterToDate ?? DateTime.now(),
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime.now().add(const Duration(days: 365)),
+                );
+                if (picked != null) { setState(() => _filterToDate = picked); _load(); }
+              },
+            ),
+            // Clear all filters
+            if (_hasActiveFilters) ...[
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () { setState(() { _filterBranchId = null; _filterOwnerUserId = null; _filterFromDate = null; _filterToDate = null; }); _load(); },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.error.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+                  ),
+                  child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.clear_rounded, size: 12, color: AppColors.error),
+                    SizedBox(width: 4),
+                    Text('Clear', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.error)),
+                  ]),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
         child: Row(children: [

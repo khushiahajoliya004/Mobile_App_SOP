@@ -904,6 +904,8 @@ class ApiService {
     String? pipelineId,
     String? branchId,
     String? ownerUserId,
+    String? fromDate,
+    String? toDate,
   }) async {
     return _dio.get(
       '/crm/deals',
@@ -913,6 +915,8 @@ class ApiService {
         if (pipelineId != null) 'pipelineId': pipelineId,
         if (branchId != null) 'branchId': branchId,
         if (ownerUserId != null) 'ownerUserId': ownerUserId,
+        if (fromDate != null) 'fromDate': fromDate,
+        if (toDate != null) 'toDate': toDate,
       },
     );
   }
@@ -2375,17 +2379,19 @@ class ApiService {
   Future<Response> addCrmPipelineStage(
     String pipelineId, {
     required String name,
-    String type = 'OPEN',
-    int? slaDays,
-    double? winProbability,
+    bool isWon = false,
+    bool isLost = false,
+    int? slaMaxDays,
+    int? sortOrder,
   }) async {
     return _dio.post(
       '/crm/pipelines/$pipelineId/stages',
       data: {
         'name': name,
-        'type': type,
-        if (slaDays != null) 'slaDays': slaDays,
-        if (winProbability != null) 'winProbability': winProbability,
+        'isWon': isWon,
+        'isLost': isLost,
+        if (slaMaxDays != null) 'slaMaxDays': slaMaxDays,
+        if (sortOrder != null) 'sortOrder': sortOrder,
       },
     );
   }
@@ -2399,6 +2405,9 @@ class ApiService {
 
   Future<Response> deleteCrmPipeline(String id) async =>
       _dio.delete('/crm/pipelines/$id');
+
+  Future<Response> deleteCrmPipelineStage(String pipelineId, String stageId) async =>
+      _dio.delete('/crm/pipelines/$pipelineId/stages/$stageId');
 
   // ─── CRM v2 Follow-ups by Contact ───
 

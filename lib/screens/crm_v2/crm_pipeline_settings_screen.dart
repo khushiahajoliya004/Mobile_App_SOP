@@ -174,8 +174,9 @@ class _CrmPipelineSettingsScreenState extends State<CrmPipelineSettingsScreen> {
                       await _api.addCrmPipelineStage(
                         pipelineId,
                         name: nameCtrl.text.trim(),
-                        type: selectedType,
-                        slaDays: int.tryParse(slaDaysCtrl.text),
+                        isWon: selectedType == 'WON',
+                        isLost: selectedType == 'LOST',
+                        slaMaxDays: int.tryParse(slaDaysCtrl.text),
                       );
                       _msg('Stage added');
                       _load();
@@ -189,6 +190,60 @@ class _CrmPipelineSettingsScreenState extends State<CrmPipelineSettingsScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _confirmDeletePipeline(String id, String name) {
+    showDialog(
+      context: context,
+      builder: (d) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Delete Pipeline', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
+        content: Text('Delete "$name"? All stages in this pipeline will also be removed. This cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(d), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () async {
+              Navigator.pop(d);
+              setState(() => _loading = true);
+              try {
+                await _api.deleteCrmPipeline(id);
+                _msg('Pipeline deleted');
+                _load();
+              } catch (e) { _msg('Failed: $e', error: true); setState(() => _loading = false); }
+            },
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDeleteStage(String pipelineId, String stageId, String stageName) {
+    showDialog(
+      context: context,
+      builder: (d) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Delete Stage', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
+        content: Text('Delete "$stageName"?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(d), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () async {
+              Navigator.pop(d);
+              setState(() => _loading = true);
+              try {
+                await _api.deleteCrmPipelineStage(pipelineId, stageId);
+                _msg('Stage deleted');
+                _load();
+              } catch (e) { _msg('Failed: $e', error: true); setState(() => _loading = false); }
+            },
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('Delete'),
+          ),
+        ],
       ),
     );
   }
@@ -270,6 +325,15 @@ class _CrmPipelineSettingsScreenState extends State<CrmPipelineSettingsScreen> {
                 ]),
                 Text('${stages.length} stages', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
               ])),
+              GestureDetector(
+                onTap: () => _confirmDeletePipeline(id, '$name'),
+                child: Container(
+                  width: 30, height: 30,
+                  decoration: BoxDecoration(color: AppColors.error.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
+                  child: const Icon(Icons.delete_outline, size: 16, color: AppColors.error),
+                ),
+              ),
+              const SizedBox(width: 6),
               Icon(isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded, color: AppColors.textHint),
             ]),
           ),
@@ -320,6 +384,11 @@ class _CrmPipelineSettingsScreenState extends State<CrmPipelineSettingsScreen> {
                           decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
                           child: Text(stageType, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: color)),
                         ),
+                      const SizedBox(width: 6),
+                      GestureDetector(
+                        onTap: () => _confirmDeleteStage(id, '${s['id']}', '$stageName'),
+                        child: const Icon(Icons.close_rounded, size: 16, color: AppColors.textHint),
+                      ),
                     ]),
                   );
                 }),

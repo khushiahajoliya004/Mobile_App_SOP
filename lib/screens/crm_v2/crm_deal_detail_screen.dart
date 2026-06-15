@@ -154,6 +154,135 @@ class _CrmDealDetailScreenState extends State<CrmDealDetailScreen> {
     );
   }
 
+  void _showAddFollowUp() {
+    const followUpTypes = ['CALL', 'EMAIL', 'MEETING', 'TASK'];
+    String selectedType = 'CALL';
+    DateTime? selectedDate;
+    TimeOfDay? selectedTime;
+    final notesCtrl = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => Padding(
+          padding: EdgeInsets.only(left: 20, right: 20, top: 16, bottom: MediaQuery.of(ctx).viewInsets.bottom + 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                const Expanded(child: Text('Add Follow-up', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700))),
+                IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+              ]),
+              const SizedBox(height: 12),
+              // Type selector
+              const Text('Type', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+              const SizedBox(height: 6),
+              Row(children: followUpTypes.map((t) {
+                final sel = selectedType == t;
+                return GestureDetector(
+                  onTap: () => setSheet(() => selectedType = t),
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: sel ? AppColors.primary : AppColors.surfaceLight,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(t, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: sel ? Colors.white : AppColors.textSecondary)),
+                  ),
+                );
+              }).toList()),
+              const SizedBox(height: 12),
+              // Date + Time row
+              Row(children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () async {
+                      final d = await showDatePicker(
+                        context: ctx,
+                        initialDate: selectedDate ?? DateTime.now(),
+                        firstDate: DateTime.now().subtract(const Duration(days: 1)),
+                        lastDate: DateTime.now().add(const Duration(days: 365)),
+                      );
+                      if (d != null) setSheet(() => selectedDate = d);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                      decoration: BoxDecoration(color: AppColors.surfaceLight, borderRadius: BorderRadius.circular(10)),
+                      child: Row(children: [
+                        const Icon(Icons.calendar_today_rounded, size: 14, color: AppColors.textHint),
+                        const SizedBox(width: 8),
+                        Text(
+                          selectedDate != null ? '${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}' : 'Pick date',
+                          style: TextStyle(fontSize: 13, color: selectedDate != null ? AppColors.textPrimary : AppColors.textHint),
+                        ),
+                      ]),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () async {
+                      final t = await showTimePicker(context: ctx, initialTime: selectedTime ?? TimeOfDay.now());
+                      if (t != null) setSheet(() => selectedTime = t);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                      decoration: BoxDecoration(color: AppColors.surfaceLight, borderRadius: BorderRadius.circular(10)),
+                      child: Row(children: [
+                        const Icon(Icons.access_time_rounded, size: 14, color: AppColors.textHint),
+                        const SizedBox(width: 8),
+                        Text(
+                          selectedTime != null ? selectedTime!.format(ctx) : 'Pick time',
+                          style: TextStyle(fontSize: 13, color: selectedTime != null ? AppColors.textPrimary : AppColors.textHint),
+                        ),
+                      ]),
+                    ),
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 10),
+              TextField(
+                controller: notesCtrl,
+                maxLines: 2,
+                decoration: InputDecoration(
+                  labelText: 'Notes (optional)', alignLabelWithHint: true,
+                  filled: true, fillColor: AppColors.surfaceLight,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () async {
+                    if (selectedDate == null) { _msg('Please pick a date', error: true); return; }
+                    final time = selectedTime ?? const TimeOfDay(hour: 9, minute: 0);
+                    final scheduledAt = DateTime(selectedDate!.year, selectedDate!.month, selectedDate!.day, time.hour, time.minute);
+                    Navigator.pop(ctx);
+                    try {
+                      await _api.createCrmFollowUp(dealId: widget.dealId, scheduledAt: scheduledAt, type: selectedType, notes: notesCtrl.text.trim().isNotEmpty ? notesCtrl.text.trim() : null);
+                      _msg('Follow-up scheduled');
+                      _load();
+                    } catch (e) { _msg('Failed: $e', error: true); }
+                  },
+                  style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                  child: const Text('Schedule Follow-up'),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showLogActivity() {
     String selectedType = _activityTypes.first;
     final notesCtrl = TextEditingController();
@@ -410,46 +539,75 @@ class _CrmDealDetailScreenState extends State<CrmDealDetailScreen> {
   }
 
   Widget _followUpsTab() {
-    if (_followUps.isEmpty) return const Center(child: Text('No follow-ups scheduled', style: TextStyle(color: AppColors.textHint)));
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _followUps.length,
-      itemBuilder: (_, i) {
-        final f = _followUps[i];
-        final type = f['type'] ?? '';
-        final status = f['status'] ?? 'PENDING';
-        final scheduled = f['scheduledAt'] as String?;
-        String dateStr = '';
-        if (scheduled != null) { try { final dt = DateTime.parse(scheduled).toLocal(); dateStr = '${dt.day}/${dt.month}/${dt.year}'; } catch (_) {} }
-        final isDone = status == 'COMPLETED';
-        final color = isDone ? AppColors.success : AppColors.warning;
-        return Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.surfaceLight)),
-          child: Row(children: [
-            Container(width: 34, height: 34, decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)), child: Icon(isDone ? Icons.check_circle_rounded : Icons.schedule_rounded, size: 16, color: color)),
-            const SizedBox(width: 10),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Text('$type Follow-up', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                const Spacer(),
-                Text(dateStr, style: const TextStyle(fontSize: 10, color: AppColors.textHint)),
+    if (_followUps.isEmpty) {
+      return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        const Text('No follow-ups scheduled', style: TextStyle(color: AppColors.textHint)),
+        const SizedBox(height: 12),
+        TextButton.icon(onPressed: _showAddFollowUp, icon: const Icon(Icons.add_rounded), label: const Text('Add Follow-up')),
+      ]));
+    }
+    return Column(children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+        child: Row(children: [
+          Text('${_followUps.length} follow-up${_followUps.length == 1 ? '' : 's'}', style: const TextStyle(fontSize: 12, color: AppColors.textHint)),
+          const Spacer(),
+          GestureDetector(
+            onTap: _showAddFollowUp,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(color: AppColors.primarySurface, borderRadius: BorderRadius.circular(8)),
+              child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.add_rounded, size: 14, color: AppColors.primary),
+                SizedBox(width: 4),
+                Text('Add', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.primary)),
               ]),
-              Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)), child: Text(status, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: color))),
-            ])),
-            if (!isDone)
-              GestureDetector(
-                onTap: () async {
-                  try { await _api.completeCrmFollowUp(f['id'].toString(), outcome: 'Done'); _msg('Completed'); _load(); }
-                  catch (e) { _msg('Failed: $e', error: true); }
-                },
-                child: Container(width: 34, height: 34, decoration: BoxDecoration(color: AppColors.success.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.check_rounded, size: 16, color: AppColors.success)),
-              ),
-          ]),
-        );
-      },
-    );
+            ),
+          ),
+        ]),
+      ),
+      Expanded(
+        child: ListView.builder(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+          itemCount: _followUps.length,
+          itemBuilder: (_, i) {
+            final f = _followUps[i];
+            final type = f['type'] ?? '';
+            final status = f['status'] ?? 'PENDING';
+            final scheduled = f['scheduledAt'] as String?;
+            String dateStr = '';
+            if (scheduled != null) { try { final dt = DateTime.parse(scheduled).toLocal(); dateStr = '${dt.day}/${dt.month}/${dt.year} ${dt.hour.toString().padLeft(2,'0')}:${dt.minute.toString().padLeft(2,'0')}'; } catch (_) {} }
+            final isDone = status == 'COMPLETED';
+            final color = isDone ? AppColors.success : AppColors.warning;
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.surfaceLight)),
+              child: Row(children: [
+                Container(width: 34, height: 34, decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)), child: Icon(isDone ? Icons.check_circle_rounded : Icons.schedule_rounded, size: 16, color: color)),
+                const SizedBox(width: 10),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    Text('$type Follow-up', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                    const Spacer(),
+                    Text(dateStr, style: const TextStyle(fontSize: 10, color: AppColors.textHint)),
+                  ]),
+                  Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)), child: Text(status, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: color))),
+                ])),
+                if (!isDone)
+                  GestureDetector(
+                    onTap: () async {
+                      try { await _api.completeCrmFollowUp(f['id'].toString(), outcome: 'Done'); _msg('Completed'); _load(); }
+                      catch (e) { _msg('Failed: $e', error: true); }
+                    },
+                    child: Container(width: 34, height: 34, decoration: BoxDecoration(color: AppColors.success.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.check_rounded, size: 16, color: AppColors.success)),
+                  ),
+              ]),
+            );
+          },
+        ),
+      ),
+    ]);
   }
 
   Widget _stageHistoryTab() {

@@ -68,6 +68,10 @@ class _CrmScreenState extends State<CrmScreen> {
     // Admin/Distributor → Dashboard, Contacts, Deals, Activities, Pipelines*, Custom Fields*, Master Data*
     final isUser = _user?.userType == 'USER';
     final isAdmin = _user?.isSuperAdmin == true || _user?.isCompanyAdmin == true;
+    // Management roles see "Deals"; only Receptionist (and unknown roles) see "Leads"
+    const mgmtRoles = {'CEO', 'CFO', 'GM', 'BRANCH_MANAGER', 'TEAM_LEADER', 'SALES_MANAGER'};
+    final isMgmt = mgmtRoles.contains(_user?.branchRole);
+    final showAsLeads = isUser && !isMgmt;
 
     final modules = <_CrmModule>[
       if (!isUser && _can('CRM_DASHBOARD'))
@@ -90,11 +94,11 @@ class _CrmScreenState extends State<CrmScreen> {
         ),
       if (isUser || isAdmin || _can('LEAD'))
         _CrmModule(
-          isUser ? 'Leads' : 'Deals',
+          showAsLeads ? 'Leads' : 'Deals',
           Icons.handshake_rounded,
           const Color(0xFF10B981),
           const Color(0xFF34D399),
-          isUser ? 'Manage your leads' : 'Track deals & pipeline',
+          showAsLeads ? 'Manage your leads' : 'Track deals & pipeline',
           const CrmDealsScreen(),
         ),
       if (isUser || isAdmin || _can('LEAD'))
