@@ -321,7 +321,7 @@ class _UsersScreenState extends State<UsersScreen> {
                           if (selected) {
                             selectedRoleIds.remove(id);
                           } else {
-                            selectedRoleIds.add(id);
+                            selectedRoleIds = [id]; // single-select: replace any previous
                           }
                         }),
                       );
@@ -425,6 +425,10 @@ class _UsersScreenState extends State<UsersScreen> {
     }
     if (!isEdit && password.length < 6) {
       _msg('Password must be at least 6 characters', error: true);
+      return;
+    }
+    if (_currentUser?.isCompanyAdmin == true && _roles.isNotEmpty && roleIds.isEmpty) {
+      _msg('Please select a role', error: true);
       return;
     }
 
