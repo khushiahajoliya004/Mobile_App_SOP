@@ -792,6 +792,8 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
       ('Processing', 'PROCESSING'),
       ('Pending', 'PENDING'),
       ('Failed', 'FAILED'),
+      ('Skipped', 'SKIPPED'),
+      ('Manual', 'MANUAL'),
     ];
     final isFiltered = _statusFilter.isNotEmpty;
     return Expanded(
@@ -1366,6 +1368,14 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
       case 'APPROVAL_PENDING':
         bg = AppColors.warning.withValues(alpha: 0.1);
         fg = AppColors.warning;
+        break;
+      case 'SKIPPED':
+        bg = AppColors.textHint.withValues(alpha: 0.1);
+        fg = AppColors.textHint;
+        break;
+      case 'MANUAL':
+        bg = AppColors.primary.withValues(alpha: 0.08);
+        fg = AppColors.primary;
         break;
       default:
         bg = AppColors.surfaceLight;
