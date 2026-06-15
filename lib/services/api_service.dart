@@ -2040,6 +2040,7 @@ class ApiService {
     String? toDate,
     String? sortBy,
     String? sortOrder,
+    String? status,
   }) async {
     return _dio.get(
       '/employee-performance',
@@ -2051,6 +2052,7 @@ class ApiService {
         if (toDate != null) 'toDate': toDate,
         if (sortBy != null) 'sortBy': sortBy,
         if (sortOrder != null) 'sortOrder': sortOrder,
+        if (status != null) 'status': status,
       },
     );
   }
@@ -2066,6 +2068,13 @@ class ApiService {
         if (fromDate != null) 'fromDate': fromDate,
         if (toDate != null) 'toDate': toDate,
       },
+    );
+  }
+
+  Future<Response> getEmployeeAiTrend(String userId, {bool refresh = false}) async {
+    return _dio.get(
+      '/employee-performance/$userId/ai-trend',
+      queryParameters: {if (refresh) 'refresh': 'true'},
     );
   }
 
@@ -2219,7 +2228,7 @@ class ApiService {
     required String name,
     required String contactId,
     required String pipelineId,
-    required String stageId,
+    String? stageId,
     double? expectedValue,
     String? closeDate,
     String? priority,

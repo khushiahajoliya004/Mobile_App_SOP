@@ -760,12 +760,15 @@ class _SalesStagesScreenState extends State<SalesStagesScreen> {
                           color: AppColors.accent,
                         ),
                         const SizedBox(width: 4),
-                        Text(
-                          '$sqCount summary questions',
-                          style: const TextStyle(
-                            fontSize: 10,
-                            color: AppColors.accent,
-                            fontWeight: FontWeight.w600,
+                        Flexible(
+                          child: Text(
+                            '$sqCount summary questions',
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: AppColors.accent,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
