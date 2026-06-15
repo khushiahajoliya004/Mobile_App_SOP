@@ -156,8 +156,7 @@ class _CrmContactsScreenState extends State<CrmContactsScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheet) {
           Future<void> reloadBranchUsers(String? branchId) async {
@@ -192,7 +191,10 @@ class _CrmContactsScreenState extends State<CrmContactsScreen> {
               : branchUsers.where((u) => '${u['name']}'.toLowerCase().contains(ownerSearch.toLowerCase())).toList();
           final dropdownVisible = showOwnerDropdown && selectedOwner == null;
 
-          return Padding(
+          return Material(
+            color: Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            child: Padding(
             padding: EdgeInsets.only(left: 20, right: 20, top: 16, bottom: MediaQuery.of(ctx).viewInsets.bottom + 20),
             child: SingleChildScrollView(
               child: Column(
@@ -380,6 +382,7 @@ class _CrmContactsScreenState extends State<CrmContactsScreen> {
                   const SizedBox(height: 4),
                 ],
               ),
+            ),
             ),
           );
         },

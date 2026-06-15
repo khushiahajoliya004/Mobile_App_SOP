@@ -4,6 +4,9 @@ import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../models/user_model.dart';
 import 'crm_deal_detail_screen.dart';
+import '../call_recorder_screen.dart';
+import '../call_upload_screen.dart';
+import '../crm/crm_screen.dart' show CrmSubWrapper;
 
 const _leadSources = [
   {'value': 'WALK_IN', 'label': 'Walk-in'},
@@ -164,8 +167,7 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheet) {
           Future<void> reloadBranchUsers(String? branchId) async {
@@ -263,7 +265,10 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
               : branchUsers.where((u) => '${u['name']}'.toLowerCase().contains(ownerSearch.toLowerCase())).toList();
           final dropdownVisible = showOwnerDropdown && selectedOwner == null;
 
-          return Padding(
+          return Material(
+            color: Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            child: Padding(
             padding: EdgeInsets.only(left: 20, right: 20, top: 16, bottom: MediaQuery.of(ctx).viewInsets.bottom + 20),
             child: SingleChildScrollView(
               child: Column(
@@ -394,7 +399,7 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
                         Navigator.pop(ctx);
                         setState(() => _loading = true);
                         try {
-                          await _api.createCrmQuickLead(
+                          final res = await _api.createCrmQuickLead(
                             name: nameCtrl.text.trim(),
                             phone: phoneCtrl.text.trim(),
                             email: emailCtrl.text.trim().isNotEmpty ? emailCtrl.text.trim() : null,
@@ -408,6 +413,21 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
                           );
                           _msg('Lead created');
                           _load();
+                          // Show recording sheet if a deal was created
+                          if (createDeal) {
+                            final resData = res.data;
+                            String? newDealId;
+                            if (resData is Map) {
+                              final inner = resData['data'] ?? resData;
+                              if (inner is Map) {
+                                final deal = inner['deal'];
+                                if (deal is Map) newDealId = deal['id']?.toString();
+                              }
+                            }
+                            if (mounted && newDealId != null) {
+                              _showRecordingSheet(newDealId, nameCtrl.text.trim(), phoneCtrl.text.trim(), isNew: true);
+                            }
+                          }
                         } catch (e) { _msg('Failed: $e', error: true); setState(() => _loading = false); }
                       },
                       style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
@@ -417,6 +437,7 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
                   const SizedBox(height: 4),
                 ],
               ),
+            ),
             ),
           );
         },
@@ -471,6 +492,16 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
           children: [
             Text('${deal['name']}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
             const SizedBox(height: 16),
+            _actionTile(ctx, Icons.mic_rounded, 'Start Recording', AppColors.primary, () {
+              final phone = deal['contact']?['phone']?.toString() ?? '';
+              final name = deal['contact']?['name']?.toString() ?? deal['name']?.toString() ?? '';
+              _showRecordingSheet(deal['id'].toString(), name, phone);
+            }),
+            _actionTile(ctx, Icons.upload_file_rounded, 'Upload Call', const Color(0xFF0EA5E9), () {
+              final phone = deal['contact']?['phone']?.toString() ?? '';
+              final name = deal['contact']?['name']?.toString() ?? deal['name']?.toString() ?? '';
+              _navigateToUpload(deal['id'].toString(), name, phone);
+            }),
             _actionTile(ctx, Icons.swap_horiz_rounded, 'Move Stage', AppColors.primary, () => _showMoveStage(deal)),
             _actionTile(ctx, Icons.check_circle_outline_rounded, 'Mark Won', AppColors.success, () async {
               try { await _api.markDealWon(deal['id'] as String); _msg('Deal marked as won'); _load(); } catch (e) { _msg('Failed: $e', error: true); }
@@ -567,6 +598,88 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
     );
   }
 
+
+  void _navigateToRecorder(String dealId, String dealName, String phone) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CrmSubWrapper(
+          title: dealName,
+          child: CallRecorderScreen(
+            leadId: dealId,
+            leadCustomerName: dealName,
+            leadPhone: phone,
+          ),
+        ),
+      ),
+    ).then((_) => _load());
+  }
+
+  void _navigateToUpload(String dealId, String dealName, String phone) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CrmSubWrapper(
+          title: 'Upload Call',
+          child: CallUploadScreen(
+            leadId: dealId,
+            leadName: dealName,
+            leadPhone: phone,
+          ),
+        ),
+      ),
+    ).then((_) => _load());
+  }
+
+  void _showRecordingSheet(String dealId, String dealName, String phone, {bool isNew = false}) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (isNew) const Text('Lead created!', style: TextStyle(fontSize: 13, color: AppColors.textHint)),
+              Text(dealName, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 4),
+              Text(
+                isNew ? 'Do you want to start a recording?' : 'Add a recording for this lead',
+                style: const TextStyle(fontSize: 15, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 20),
+              Row(children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () { Navigator.pop(ctx); _navigateToUpload(dealId, dealName, phone); },
+                    icon: const Icon(Icons.upload_file_rounded, size: 18),
+                    label: const Text('Upload Call'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () { Navigator.pop(ctx); _navigateToRecorder(dealId, dealName, phone); },
+                    icon: const Icon(Icons.mic_rounded, size: 18),
+                    label: const Text('Start Recording'),
+                    style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+                  ),
+                ),
+              ]),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Center(child: Text('Skip for now', style: TextStyle(color: AppColors.textHint))),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   Color _statusColor(String? status) {
     switch (status) {
