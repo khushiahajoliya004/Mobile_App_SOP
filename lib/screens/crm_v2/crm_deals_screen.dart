@@ -4,9 +4,24 @@ import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../models/user_model.dart';
 import 'crm_deal_detail_screen.dart';
+import '../call_recorder_screen.dart';
+import '../call_upload_screen.dart';
+
+const _leadSources = [
+  {'value': 'WALK_IN', 'label': 'Walk-in'},
+  {'value': 'WEBSITE', 'label': 'Website'},
+  {'value': 'REFERRAL', 'label': 'Referral'},
+  {'value': 'PHONE', 'label': 'Phone Call'},
+  {'value': 'SOCIAL', 'label': 'Social Media'},
+  {'value': 'ADVERTISEMENT', 'label': 'Advertisement'},
+  {'value': 'PARTNER', 'label': 'Partner'},
+  {'value': 'EVENT', 'label': 'Event'},
+];
 
 class CrmDealsScreen extends StatefulWidget {
-  const CrmDealsScreen({super.key});
+  final String? initialStatus;
+  final String? initialDatePreset;
+  const CrmDealsScreen({super.key, this.initialStatus, this.initialDatePreset});
   @override
   State<CrmDealsScreen> createState() => _CrmDealsScreenState();
 }
@@ -18,13 +33,27 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
   bool _loading = true;
   List<Map<String, dynamic>> _deals = [];
   List<Map<String, dynamic>> _pipelines = [];
-  List<Map<String, dynamic>> _contacts = [];
+  List<Map<String, dynamic>> _branches = [];
+  List<Map<String, dynamic>> _assignableUsers = [];
   String? _selectedPipelineId;
   String _search = '';
+  String? _filterBranchId;
+  String? _filterOwnerUserId;
+  DateTime? _filterFromDate;
+  DateTime? _filterToDate;
+  late String _datePreset; // 'all','today','yesterday','week','month','custom'
+  late String _statusFilter; // 'OPEN','WON','LOST'
+  bool get _hasActiveFilters => _filterBranchId != null || _filterOwnerUserId != null || _datePreset != 'all';
+  // Pagination
+  int _page = 1;
+  int _total = 0;
+  bool _loadingMore = false;
 
   @override
   void initState() {
     super.initState();
+    _datePreset = widget.initialDatePreset ?? 'all';
+    _statusFilter = widget.initialStatus ?? 'ALL';
     _init();
   }
 
@@ -43,33 +72,148 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
       }
     } catch (_) {}
     try {
-      final res = await _api.getCrmContacts();
-      final raw = res.data;
-      _contacts = raw is List
-          ? raw.map((e) => Map<String, dynamic>.from(e)).toList()
-          : ((raw is Map ? (raw['data'] ?? []) : []) as List).map((e) => Map<String, dynamic>.from(e)).toList();
+      final res = await _api.getBranches();
+      final allBranches = (res.data is List
+          ? res.data as List
+          : ((res.data is Map ? (res.data['data'] ?? []) : []) as List))
+          .map((e) => Map<String, dynamic>.from(e)).toList();
+      // Match web: show only the user's own branches in the branch filter
+      final userBranchId = user?.branchId;
+      if (userBranchId != null && userBranchId.isNotEmpty) {
+        _branches = allBranches.where((b) => b['id'] == userBranchId).toList();
+        if (_branches.isEmpty) _branches = allBranches; // fallback
+      } else {
+        _branches = allBranches; // company-level user sees all branches
+      }
     } catch (_) {}
+    // Load users: branch team if user has a branch, otherwise all assignable users
+    if (user?.branchId != null && user!.branchId!.isNotEmpty) {
+      try {
+        final res = await _api.getBranchTeam(user.branchId!);
+        _assignableUsers = _normalizeBranchTeam(res.data);
+      } catch (_) {}
+    } else {
+      try {
+        final res = await _api.getAssignableUsers();
+        _assignableUsers = _normalizeUsers(res.data);
+      } catch (_) {}
+    }
     await _load();
   }
 
-  Future<void> _load() async {
-    setState(() => _loading = true);
+  String _fmt(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  (String?, String?) get _resolvedDates {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    switch (_datePreset) {
+      case 'today':
+        return (_fmt(today), _fmt(today));
+      case 'yesterday':
+        final y = today.subtract(const Duration(days: 1));
+        return (_fmt(y), _fmt(y));
+      case 'week':
+        final start = today.subtract(Duration(days: today.weekday - 1));
+        return (_fmt(start), _fmt(today));
+      case 'month':
+        return (_fmt(DateTime(now.year, now.month, 1)), _fmt(today));
+      case 'custom':
+        return (
+          _filterFromDate != null ? _fmt(_filterFromDate!) : null,
+          _filterToDate != null ? _fmt(_filterToDate!) : null,
+        );
+      default:
+        return (null, null);
+    }
+  }
+
+  String get _presetLabel {
+    switch (_datePreset) {
+      case 'today': return 'Today';
+      case 'yesterday': return 'Yesterday';
+      case 'week': return 'This Week';
+      case 'month': return 'This Month';
+      case 'custom':
+        if (_filterFromDate != null && _filterToDate != null) {
+          return '${_filterFromDate!.day}/${_filterFromDate!.month} – ${_filterToDate!.day}/${_filterToDate!.month}';
+        }
+        return 'Custom';
+      default: return 'All Time';
+    }
+  }
+
+  Future<void> _load({bool loadMore = false}) async {
+    if (loadMore) {
+      setState(() => _loadingMore = true);
+    } else {
+      setState(() { _loading = true; _page = 1; });
+    }
+    final (fromDate, toDate) = _resolvedDates;
+    final currentPage = loadMore ? _page + 1 : 1;
     try {
-      // Team leaders must NOT pass branchId — backend uses reportingToUserId hierarchy to scope deals.
-      // Passing branchId would bypass team-leader visibility and show all branch deals instead.
-      final isTeamLeader = _currentUser?.branchRole == 'TEAM_LEADER';
-      debugPrint('[CrmDeals] calling getCrmDeals isTeamLeader=$isTeamLeader branchId=${isTeamLeader ? 'skipped' : _currentUser?.branchId}, pipelineId=$_selectedPipelineId');
+      // Only send branchId when user explicitly picks one from the filter UI.
+      // Backend JWT scoping handles visibility automatically — sending branchId
+      // bypasses the branch-member-or logic and can show fewer deals than expected.
       final res = await _api.getCrmDeals(
         pipelineId: _selectedPipelineId,
         search: _search.isNotEmpty ? _search : null,
-        branchId: isTeamLeader ? null : _currentUser?.branchId,
+        status: _statusFilter,
+        branchId: _filterBranchId, // only explicit UI filter, never auto-injected
+        ownerUserId: _filterOwnerUserId,
+        fromDate: fromDate,
+        toDate: toDate,
+        page: currentPage,
+        limit: 50,
       );
       final raw = res.data;
-      _deals = raw is List
+      final newDeals = raw is List
           ? raw.map((e) => Map<String, dynamic>.from(e)).toList()
           : ((raw is Map ? (raw['data'] ?? []) : []) as List).map((e) => Map<String, dynamic>.from(e)).toList();
-    } catch (_) { _deals = []; }
-    if (mounted) setState(() => _loading = false);
+      final pagination = raw is Map ? (raw['pagination'] as Map?) : null;
+      if (mounted) setState(() {
+        if (loadMore) {
+          _deals.addAll(newDeals);
+          _page = currentPage;
+        } else {
+          _deals = newDeals;
+          _page = 1;
+        }
+        _total = (pagination?['total'] as num?)?.toInt() ?? newDeals.length;
+      });
+    } catch (_) {
+      if (!loadMore && mounted) setState(() => _deals = []);
+    }
+    if (mounted) setState(() { _loading = false; _loadingMore = false; });
+  }
+
+  List<Map<String, dynamic>> _normalizeBranchTeam(dynamic raw) {
+    final list = raw is List ? raw : (raw is Map ? (raw['data'] ?? []) : []);
+    return (list as List).map((u) {
+      final fn = u['user']?['firstName'] ?? u['firstName'] ?? '';
+      final ln = u['user']?['lastName'] ?? u['lastName'] ?? '';
+      final full = '$fn $ln'.trim();
+      return <String, dynamic>{
+        'id': u['userId'] ?? u['user']?['id'] ?? u['id'] ?? '',
+        'name': full.isNotEmpty ? full : (u['name'] ?? ''),
+        'roleName': u['branchRole'] ?? u['role'] ?? '',
+      };
+    }).where((u) => u['id'].toString().isNotEmpty && u['name'].toString().isNotEmpty).toList();
+  }
+
+  List<Map<String, dynamic>> _normalizeUsers(dynamic raw) {
+    final list = raw is List ? raw : (raw is Map ? (raw['data'] ?? []) : []);
+    return (list as List).map((u) {
+      final fn = '${u['firstName'] ?? ''}';
+      final ln = '${u['lastName'] ?? ''}';
+      final full = '$fn $ln'.trim();
+      return <String, dynamic>{
+        'id': u['id'] ?? '',
+        'name': full.isNotEmpty ? full : (u['name'] ?? ''),
+        'branchName': u['branchName'] ?? '',
+        'roleName': u['branchRole'] ?? u['userType'] ?? '',
+      };
+    }).where((u) => u['id'].toString().isNotEmpty && u['name'].toString().isNotEmpty).toList();
   }
 
   void _msg(String t, {bool error = false}) {
@@ -89,113 +233,302 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
     return [];
   }
 
-  void _showCreateForm() {
+  void _showCreateLeadForm() {
     final nameCtrl = TextEditingController();
-    final valueCtrl = TextEditingController();
-    String? selectedContactId;
-    String? selectedPipelineId = _selectedPipelineId;
-    String? selectedStageId;
-
-    List<Map<String, dynamic>> stages = [];
-    if (selectedPipelineId != null) {
-      try {
-        final p = _pipelines.firstWhere((p) => p['id'] == selectedPipelineId);
-        final s = p['stages'];
-        if (s is List) {
-          stages = s.map((e) => Map<String, dynamic>.from(e)).toList();
-          if (stages.isNotEmpty) selectedStageId = stages.first['id'] as String?;
-        }
-      } catch (_) {}
-    }
+    final phoneCtrl = TextEditingController();
+    final emailCtrl = TextEditingController();
+    final valueCtrl = TextEditingController(text: '0');
+    final notesCtrl = TextEditingController();
+    String? selectedSource = 'WALK_IN';
+    // Branch lock: single-branch users get auto-selected locked branch
+    final branchLocked = _currentUser?.branchId != null && (_currentUser?.branchId?.isNotEmpty == true);
+    String? selectedBranchId = branchLocked ? _currentUser!.branchId : null;
+    String? selectedPipelineId = _pipelines.isNotEmpty
+        ? (_pipelines.firstWhere((p) => p['isDefault'] == true, orElse: () => _pipelines.first)['id'] as String?)
+        : null;
+    Map<String, dynamic>? selectedOwner;
+    bool createDeal = true;
+    List<Map<String, dynamic>> branchUsers = List.from(_assignableUsers);
+    String ownerSearch = '';
+    bool showOwnerDropdown = false;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheet) => Padding(
-          padding: EdgeInsets.only(left: 20, right: 20, top: 16, bottom: MediaQuery.of(ctx).viewInsets.bottom + 16),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(children: [
-                  const Expanded(child: Text('New Deal', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700))),
-                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
-                ]),
-                const SizedBox(height: 12),
-                _field(nameCtrl, 'Deal Name *'),
-                const SizedBox(height: 10),
-                _field(valueCtrl, 'Deal Value', type: TextInputType.number),
-                const SizedBox(height: 10),
-                const Text('Contact *', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
-                const SizedBox(height: 6),
-                _dropdown<String>(selectedContactId, 'Select contact', [
-                  const DropdownMenuItem<String>(value: null, child: Text('None', style: TextStyle(fontSize: 14))),
-                  ..._contacts.map((c) => DropdownMenuItem<String>(value: c['id'] as String, child: Text('${c['name']}', style: const TextStyle(fontSize: 14)))),
-                ], (v) => setSheet(() => selectedContactId = v)),
-                const SizedBox(height: 10),
-                const Text('Pipeline *', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
-                const SizedBox(height: 6),
-                _dropdown<String>(selectedPipelineId, 'Select pipeline', [
-                  ..._pipelines.map((p) => DropdownMenuItem<String>(value: p['id'] as String, child: Text('${p['name']}', style: const TextStyle(fontSize: 14)))),
-                ], (v) {
-                  setSheet(() {
-                    selectedPipelineId = v;
-                    selectedStageId = null;
-                    stages = [];
-                    if (v != null) {
-                      try {
-                        final p = _pipelines.firstWhere((p) => p['id'] == v);
-                        final s = p['stages'];
-                        if (s is List) {
-                          stages = s.map((e) => Map<String, dynamic>.from(e)).toList();
-                          if (stages.isNotEmpty) selectedStageId = stages.first['id'] as String?;
-                        }
-                      } catch (_) {}
-                    }
-                  });
-                }),
-                if (stages.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  const Text('Stage *', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
-                  const SizedBox(height: 6),
-                  _dropdown<String>(selectedStageId, 'Select stage', [
-                    ...stages.map((s) => DropdownMenuItem<String>(value: s['id'] as String, child: Text('${s['name']}', style: const TextStyle(fontSize: 14)))),
-                  ], (v) => setSheet(() => selectedStageId = v)),
-                ],
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: () async {
-                      if (nameCtrl.text.trim().isEmpty) { _msg('Deal name is required', error: true); return; }
-                      if (selectedContactId == null) { _msg('Contact is required', error: true); return; }
-                      if (selectedPipelineId == null || selectedStageId == null) { _msg('Pipeline and stage are required', error: true); return; }
-                      Navigator.pop(ctx);
-                      setState(() => _loading = true);
-                      try {
-                        await _api.createCrmDeal(
-                          name: nameCtrl.text.trim(),
-                          contactId: selectedContactId!,
-                          pipelineId: selectedPipelineId!,
-                          stageId: selectedStageId!,
-                          expectedValue: double.tryParse(valueCtrl.text),
-                        );
-                        _msg('Deal created');
-                        _load();
-                      } catch (e) { _msg('Failed: $e', error: true); setState(() => _loading = false); }
-                    },
-                    style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                    child: const Text('Create Deal'),
-                  ),
-                ),
-                const SizedBox(height: 8),
-              ],
+        builder: (ctx, setSheet) {
+          Future<void> reloadBranchUsers(String? branchId) async {
+            try {
+              if (branchId != null) {
+                final res = await _api.getBranchTeam(branchId);
+                setSheet(() { branchUsers = _normalizeBranchTeam(res.data); selectedOwner = null; ownerSearch = ''; showOwnerDropdown = false; });
+              } else {
+                final res = await _api.getAssignableUsers();
+                setSheet(() { branchUsers = _normalizeUsers(res.data); selectedOwner = null; ownerSearch = ''; showOwnerDropdown = false; });
+              }
+            } catch (_) {}
+          }
+
+          Widget sectionHeader(String label) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.textSecondary, letterSpacing: 0.8)),
+          );
+
+          Widget formField(TextEditingController ctrl, String hint, {TextInputType type = TextInputType.text, bool required = false}) => TextField(
+            controller: ctrl, keyboardType: type,
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: const TextStyle(fontSize: 14, color: AppColors.textHint),
+              filled: true, fillColor: const Color(0xFFF5F6FA),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
             ),
-          ),
-        ),
+          );
+
+          Widget sourceDropdown() => Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(color: const Color(0xFFF5F6FA), borderRadius: BorderRadius.circular(10)),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: selectedSource,
+                isExpanded: true,
+                hint: const Text('Source', style: TextStyle(fontSize: 14, color: AppColors.textHint)),
+                items: _leadSources.map((s) => DropdownMenuItem<String>(value: s['value'], child: Text(s['label']!, style: const TextStyle(fontSize: 14)))).toList(),
+                onChanged: (v) => setSheet(() => selectedSource = v),
+              ),
+            ),
+          );
+
+          Widget branchWidget() {
+            if (branchLocked) {
+              final branchName = _branches.firstWhere(
+                (b) => b['id'] == selectedBranchId,
+                orElse: () => {'name': _currentUser?.branchName ?? selectedBranchId ?? 'Branch'},
+              )['name'] as String? ?? 'Branch';
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+                decoration: BoxDecoration(color: const Color(0xFFF0FDF4), borderRadius: BorderRadius.circular(10)),
+                child: Row(children: [
+                  const Icon(Icons.lock_rounded, size: 14, color: Color(0xFF16A34A)),
+                  const SizedBox(width: 6),
+                  Expanded(child: Text(branchName, style: const TextStyle(fontSize: 14, color: Color(0xFF16A34A), fontWeight: FontWeight.w600))),
+                ]),
+              );
+            }
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(color: const Color(0xFFF5F6FA), borderRadius: BorderRadius.circular(10)),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: selectedBranchId,
+                  isExpanded: true,
+                  hint: const Text('All Branches', style: TextStyle(fontSize: 14, color: AppColors.textHint)),
+                  items: [
+                    const DropdownMenuItem<String>(value: null, child: Text('All Branches', style: TextStyle(fontSize: 14))),
+                    ..._branches.map((b) => DropdownMenuItem<String>(value: b['id'] as String?, child: Text('${b['name']}', style: const TextStyle(fontSize: 14)))),
+                  ],
+                  onChanged: (v) { setSheet(() => selectedBranchId = v); reloadBranchUsers(v); },
+                ),
+              ),
+            );
+          }
+
+          Widget pipelineDropdown() => Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(color: const Color(0xFFF5F6FA), borderRadius: BorderRadius.circular(10)),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: selectedPipelineId,
+                isExpanded: true,
+                hint: const Text('Pipeline', style: TextStyle(fontSize: 14, color: AppColors.textHint)),
+                items: _pipelines.map((p) => DropdownMenuItem<String>(value: p['id'] as String?, child: Text('${p['name']}', style: const TextStyle(fontSize: 14)))).toList(),
+                onChanged: (v) => setSheet(() => selectedPipelineId = v),
+              ),
+            ),
+          );
+
+          final filteredUsers = ownerSearch.isEmpty
+              ? branchUsers
+              : branchUsers.where((u) => '${u['name']}'.toLowerCase().contains(ownerSearch.toLowerCase())).toList();
+          final dropdownVisible = showOwnerDropdown && selectedOwner == null;
+
+          return Material(
+            color: Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            child: Padding(
+            padding: EdgeInsets.only(left: 20, right: 20, top: 16, bottom: MediaQuery.of(ctx).viewInsets.bottom + 20),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // drag handle
+                  Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)))),
+                  const SizedBox(height: 14),
+                  // Header
+                  Row(children: [
+                    const Expanded(child: Text('Create Lead', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary))),
+                    GestureDetector(onTap: () => Navigator.pop(ctx), child: Container(width: 32, height: 32, decoration: BoxDecoration(color: AppColors.surfaceLight, borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.close_rounded, size: 18, color: AppColors.textSecondary))),
+                  ]),
+                  const SizedBox(height: 18),
+                  // ── CONTACT INFORMATION ──
+                  sectionHeader('CONTACT INFORMATION'),
+                  formField(nameCtrl, 'Customer name *'),
+                  const SizedBox(height: 10),
+                  Row(children: [
+                    Expanded(child: formField(phoneCtrl, 'Phone number *', type: TextInputType.phone)),
+                    const SizedBox(width: 10),
+                    Expanded(child: formField(emailCtrl, 'Email address', type: TextInputType.emailAddress)),
+                  ]),
+                  const SizedBox(height: 10),
+                  Row(children: [
+                    Expanded(child: sourceDropdown()),
+                    const SizedBox(width: 10),
+                    Expanded(child: branchWidget()),
+                  ]),
+                  const SizedBox(height: 10),
+                  // Assign To
+                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    TextField(
+                      onChanged: (v) => setSheet(() => ownerSearch = v),
+                      onTap: () => setSheet(() => showOwnerDropdown = true),
+                      decoration: InputDecoration(
+                        hintText: selectedOwner != null ? '${selectedOwner!['name']}' : 'Search team member by name...',
+                        hintStyle: TextStyle(fontSize: 14, color: selectedOwner != null ? AppColors.textPrimary : AppColors.textHint, fontWeight: selectedOwner != null ? FontWeight.w600 : FontWeight.normal),
+                        prefixIcon: const Icon(Icons.search, size: 18, color: AppColors.textHint),
+                        suffixIcon: selectedOwner != null
+                            ? GestureDetector(onTap: () => setSheet(() { selectedOwner = null; ownerSearch = ''; showOwnerDropdown = false; }), child: const Icon(Icons.clear, size: 16, color: AppColors.textHint))
+                            : (showOwnerDropdown ? GestureDetector(onTap: () => setSheet(() { showOwnerDropdown = false; ownerSearch = ''; }), child: const Icon(Icons.keyboard_arrow_up, size: 18, color: AppColors.textHint)) : null),
+                        filled: true, fillColor: const Color(0xFFF5F6FA),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                      ),
+                    ),
+                    if (dropdownVisible) Container(
+                      margin: const EdgeInsets.only(top: 4),
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.surfaceLight), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8, offset: const Offset(0, 2))]),
+                      constraints: const BoxConstraints(maxHeight: 200),
+                      child: ListView(
+                        shrinkWrap: true,
+                        padding: EdgeInsets.zero,
+                        children: filteredUsers.isEmpty
+                            ? [Padding(padding: const EdgeInsets.all(12), child: Text(branchUsers.isEmpty ? 'No team members in this branch' : 'No members found', style: const TextStyle(color: AppColors.textHint, fontSize: 13)))]
+                            : filteredUsers.take(10).map((u) => InkWell(
+                                onTap: () => setSheet(() { selectedOwner = u; ownerSearch = ''; showOwnerDropdown = false; }),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  child: Row(children: [
+                                    CircleAvatar(radius: 14, backgroundColor: AppColors.primary.withValues(alpha: 0.1), child: Text('${u['name']}'[0].toUpperCase(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primary))),
+                                    const SizedBox(width: 10),
+                                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                      Text('${u['name']}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                                      if ((u['branchName'] ?? u['roleName'] ?? '').toString().isNotEmpty)
+                                        Text('${u['branchName'] ?? ''}${u['roleName'] != null ? ' · ${u['roleName']}' : ''}', style: const TextStyle(fontSize: 11, color: AppColors.textHint)),
+                                    ])),
+                                  ]),
+                                ),
+                              )).toList(),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 16),
+                  // ── CREATE DEAL toggle ──
+                  GestureDetector(
+                    onTap: () => setSheet(() => createDeal = !createDeal),
+                    child: Row(children: [
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        width: 20, height: 20,
+                        decoration: BoxDecoration(
+                          color: createDeal ? AppColors.primary : Colors.transparent,
+                          border: Border.all(color: createDeal ? AppColors.primary : AppColors.textHint, width: 2),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: createDeal ? const Icon(Icons.check, size: 14, color: Colors.white) : null,
+                      ),
+                      const SizedBox(width: 10),
+                      const Text('CREATE DEAL', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.textPrimary, letterSpacing: 0.5)),
+                    ]),
+                  ),
+                  if (createDeal) ...[
+                    const SizedBox(height: 12),
+                    Row(children: [
+                      Expanded(child: pipelineDropdown()),
+                      const SizedBox(width: 10),
+                      Expanded(child: formField(valueCtrl, 'Expected Value (₹)', type: TextInputType.number)),
+                    ]),
+                  ],
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: notesCtrl,
+                    maxLines: 3,
+                    decoration: InputDecoration(
+                      hintText: 'Any initial notes...',
+                      hintStyle: const TextStyle(fontSize: 14, color: AppColors.textHint),
+                      filled: true, fillColor: const Color(0xFFF5F6FA),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  // ── Buttons ──
+                  Row(children: [
+                    Expanded(child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), side: const BorderSide(color: AppColors.surfaceLight)),
+                      child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
+                    )),
+                    const SizedBox(width: 12),
+                    Expanded(child: FilledButton(
+                      onPressed: () async {
+                        if (nameCtrl.text.trim().isEmpty) { _msg('Name is required', error: true); return; }
+                        if (phoneCtrl.text.trim().isEmpty) { _msg('Phone is required', error: true); return; }
+                        Navigator.pop(ctx);
+                        setState(() => _loading = true);
+                        try {
+                          final res = await _api.createCrmQuickLead(
+                            name: nameCtrl.text.trim(),
+                            phone: phoneCtrl.text.trim(),
+                            email: emailCtrl.text.trim().isNotEmpty ? emailCtrl.text.trim() : null,
+                            source: selectedSource,
+                            branchId: selectedBranchId,
+                            pipelineId: createDeal ? selectedPipelineId : null,
+                            expectedValue: createDeal ? double.tryParse(valueCtrl.text) : null,
+                            ownerUserId: selectedOwner?['id'] as String?,
+                            notes: notesCtrl.text.trim().isNotEmpty ? notesCtrl.text.trim() : null,
+                            createDeal: createDeal,
+                          );
+                          _msg('Lead created');
+                          _load();
+                          // Show recording sheet if a deal was created
+                          if (createDeal) {
+                            final resData = res.data;
+                            String? newDealId;
+                            if (resData is Map) {
+                              final inner = resData['data'] ?? resData;
+                              if (inner is Map) {
+                                final deal = inner['deal'];
+                                if (deal is Map) newDealId = deal['id']?.toString();
+                              }
+                            }
+                            if (mounted && newDealId != null) {
+                              _showRecordingSheet(newDealId, nameCtrl.text.trim(), phoneCtrl.text.trim(), isNew: true);
+                            }
+                          }
+                        } catch (e) { _msg('Failed: $e', error: true); setState(() => _loading = false); }
+                      },
+                      style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                      child: const Text('Create Lead', style: TextStyle(fontWeight: FontWeight.w700)),
+                    )),
+                  ]),
+                  const SizedBox(height: 4),
+                ],
+              ),
+            ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -233,62 +566,6 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
           ],
         ),
       ),
-    );
-  }
-
-  void _showDealActions(Map<String, dynamic> deal) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('${deal['name']}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 16),
-            _actionTile(ctx, Icons.swap_horiz_rounded, 'Move Stage', AppColors.primary, () => _showMoveStage(deal)),
-            _actionTile(ctx, Icons.check_circle_outline_rounded, 'Mark Won', AppColors.success, () async {
-              try { await _api.markDealWon(deal['id'] as String); _msg('Deal marked as won'); _load(); } catch (e) { _msg('Failed: $e', error: true); }
-            }),
-            _actionTile(ctx, Icons.cancel_outlined, 'Mark Lost', AppColors.error, () {
-              Navigator.pop(ctx);
-              _showMarkLost(deal);
-            }),
-            _actionTile(ctx, Icons.delete_outline, 'Delete Deal', AppColors.error, () async {
-              Navigator.pop(ctx);
-              showDialog(
-                context: context,
-                builder: (d) => AlertDialog(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                  title: const Text('Delete Deal', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
-                  content: Text('Delete "${deal['name']}"?'),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(d), child: const Text('Cancel')),
-                    FilledButton(
-                      onPressed: () async {
-                        Navigator.pop(d);
-                        try { await _api.deleteCrmDeal(deal['id'] as String); _msg('Deal deleted'); _load(); } catch (e) { _msg('Failed: $e', error: true); }
-                      },
-                      style: FilledButton.styleFrom(backgroundColor: AppColors.error),
-                      child: const Text('Delete'),
-                    ),
-                  ],
-                ),
-              );
-            }),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _actionTile(BuildContext ctx, IconData icon, String label, Color color, VoidCallback onTap) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: Container(width: 36, height: 36, decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)), child: Icon(icon, color: color, size: 18)),
-      title: Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: color)),
-      onTap: () { Navigator.pop(ctx); onTap(); },
     );
   }
 
@@ -343,28 +620,302 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
     );
   }
 
-  Widget _field(TextEditingController ctrl, String label, {TextInputType type = TextInputType.text}) {
-    return TextField(
-      controller: ctrl, keyboardType: type,
-      decoration: InputDecoration(
-        labelText: label, filled: true, fillColor: AppColors.surfaceLight,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+
+  void _showBranchFilter() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(children: [
+              const Expanded(child: Text('Filter by Branch', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700))),
+              IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+            ]),
+            const SizedBox(height: 4),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('All Branches'),
+              trailing: _filterBranchId == null ? const Icon(Icons.check, color: AppColors.primary) : null,
+              onTap: () { setState(() => _filterBranchId = null); Navigator.pop(ctx); _load(); },
+            ),
+            ..._branches.map((b) => ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text('${b['name']}'),
+              trailing: _filterBranchId == b['id'] ? const Icon(Icons.check, color: AppColors.primary) : null,
+              onTap: () { setState(() => _filterBranchId = b['id'] as String?); Navigator.pop(ctx); _load(); },
+            )),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _dropdown<T>(T? value, String hint, List<DropdownMenuItem<T>> items, ValueChanged<T?> onChanged) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(color: AppColors.surfaceLight, borderRadius: BorderRadius.circular(12)),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<T>(value: value, isExpanded: true, hint: Text(hint, style: const TextStyle(fontSize: 14)), items: items, onChanged: onChanged),
+  void _showOwnerFilter() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.5,
+        maxChildSize: 0.85,
+        builder: (ctx, scroll) => Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                const Expanded(child: Text('Filter by Owner', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700))),
+                IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+              ]),
+              const SizedBox(height: 4),
+              Expanded(
+                child: ListView(
+                  controller: scroll,
+                  children: [
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('All Owners'),
+                      trailing: _filterOwnerUserId == null ? const Icon(Icons.check, color: AppColors.primary) : null,
+                      onTap: () { setState(() => _filterOwnerUserId = null); Navigator.pop(ctx); _load(); },
+                    ),
+                    ..._assignableUsers.map((u) => ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text('${u['name']}'),
+                      subtitle: (u['branchName'] ?? u['roleName'] ?? '').toString().isNotEmpty
+                          ? Text('${u['branchName'] ?? ''}${u['roleName'] != null ? ' · ${u['roleName']}' : ''}', style: const TextStyle(fontSize: 12))
+                          : null,
+                      trailing: _filterOwnerUserId == u['id'] ? const Icon(Icons.check, color: AppColors.primary) : null,
+                      onTap: () { setState(() => _filterOwnerUserId = u['id'] as String?); Navigator.pop(ctx); _load(); },
+                    )),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  Color _statusColor(String? status) {
+  void _showDatePresetSheet() {
+    const presets = [
+      ('all', 'All Time', Icons.all_inclusive_rounded),
+      ('today', 'Today', Icons.today_rounded),
+      ('yesterday', 'Yesterday', Icons.history_rounded),
+      ('week', 'This Week', Icons.view_week_rounded),
+      ('month', 'This Month', Icons.calendar_month_rounded),
+    ];
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)))),
+              const SizedBox(height: 14),
+              const Text('Filter by Date', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+              const SizedBox(height: 8),
+              ...presets.map((p) {
+                final sel = _datePreset == p.$1;
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    width: 36, height: 36,
+                    decoration: BoxDecoration(color: sel ? AppColors.primary : AppColors.surfaceLight, borderRadius: BorderRadius.circular(10)),
+                    child: Icon(p.$3, size: 17, color: sel ? Colors.white : AppColors.textHint),
+                  ),
+                  title: Text(p.$2, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: sel ? AppColors.primary : AppColors.textPrimary)),
+                  trailing: sel ? const Icon(Icons.check_rounded, color: AppColors.primary, size: 18) : null,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    setState(() { _datePreset = p.$1; _filterFromDate = null; _filterToDate = null; });
+                    _load();
+                  },
+                );
+              }),
+              // Custom range
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  width: 36, height: 36,
+                  decoration: BoxDecoration(color: _datePreset == 'custom' ? AppColors.primary : AppColors.surfaceLight, borderRadius: BorderRadius.circular(10)),
+                  child: Icon(Icons.date_range_rounded, size: 17, color: _datePreset == 'custom' ? Colors.white : AppColors.textHint),
+                ),
+                title: Text(
+                  _datePreset == 'custom' && _filterFromDate != null && _filterToDate != null
+                      ? '${_filterFromDate!.day}/${_filterFromDate!.month}/${_filterFromDate!.year} – ${_filterToDate!.day}/${_filterToDate!.month}/${_filterToDate!.year}'
+                      : 'Custom Range',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _datePreset == 'custom' ? AppColors.primary : AppColors.textPrimary),
+                ),
+                trailing: _datePreset == 'custom' ? const Icon(Icons.check_rounded, color: AppColors.primary, size: 18) : null,
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final now = DateTime.now();
+                  final from = await showDatePicker(
+                    context: context,
+                    initialDate: _filterFromDate ?? now,
+                    firstDate: DateTime(2020),
+                    lastDate: now,
+                    helpText: 'Select start date',
+                    builder: (c, child) => Theme(data: Theme.of(c).copyWith(colorScheme: const ColorScheme.light(primary: AppColors.primary)), child: child!),
+                  );
+                  if (from == null || !mounted) return;
+                  final to = await showDatePicker(
+                    context: context,
+                    initialDate: _filterToDate ?? from,
+                    firstDate: from,
+                    lastDate: now,
+                    helpText: 'Select end date',
+                    builder: (c, child) => Theme(data: Theme.of(c).copyWith(colorScheme: const ColorScheme.light(primary: AppColors.primary)), child: child!),
+                  );
+                  if (to == null || !mounted) return;
+                  setState(() { _datePreset = 'custom'; _filterFromDate = from; _filterToDate = to; });
+                  _load();
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterChip({required String label, required bool active, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: active ? AppColors.primary : AppColors.surfaceLight,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: active ? AppColors.primary : AppColors.surfaceLight),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: active ? Colors.white : AppColors.textSecondary)),
+          const SizedBox(width: 3),
+          Icon(Icons.keyboard_arrow_down_rounded, size: 14, color: active ? Colors.white : AppColors.textSecondary),
+        ]),
+      ),
+    );
+  }
+
+  Widget _statusTab(String value, String label) {
+    final selected = _statusFilter == value;
+    Color color;
+    switch (value) {
+      case 'WON': color = AppColors.success; break;
+      case 'LOST': color = AppColors.error; break;
+      default: color = AppColors.primary;
+    }
+    return Expanded(
+      child: GestureDetector(
+        onTap: () { setState(() => _statusFilter = value); _load(); },
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 7),
+          decoration: BoxDecoration(
+            color: selected ? color : AppColors.surfaceLight,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(label, textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
+                  color: selected ? Colors.white : AppColors.textSecondary)),
+        ),
+      ),
+    );
+  }
+
+  void _navigateToRecorder(String dealId, String dealName, String phone) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _CrmV2Wrapper(
+          title: dealName,
+          child: CallRecorderScreen(
+            dealId: dealId,
+            leadCustomerName: dealName,
+            leadPhone: phone,
+          ),
+        ),
+      ),
+    ).then((_) => _load());
+  }
+
+  void _navigateToUpload(String dealId, String dealName, String phone) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _CrmV2Wrapper(
+          title: 'Upload Call',
+          child: CallUploadScreen(
+            dealId: dealId,
+            leadName: dealName,
+            leadPhone: phone,
+          ),
+        ),
+      ),
+    ).then((_) => _load());
+  }
+
+  void _showRecordingSheet(String dealId, String dealName, String phone, {bool isNew = false}) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (isNew) const Text('Lead created!', style: TextStyle(fontSize: 13, color: AppColors.textHint)),
+              Text(dealName, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 4),
+              Text(
+                isNew ? 'Do you want to start a recording?' : 'Add a recording for this lead',
+                style: const TextStyle(fontSize: 15, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 20),
+              Row(children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () { Navigator.pop(ctx); _navigateToUpload(dealId, dealName, phone); },
+                    icon: const Icon(Icons.cloud_upload_rounded, size: 18),
+                    label: const Text('Upload Call'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () { Navigator.pop(ctx); _navigateToRecorder(dealId, dealName, phone); },
+                    icon: const Icon(Icons.mic_rounded, size: 18),
+                    label: const Text('Start Recording'),
+                    style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+                  ),
+                ),
+              ]),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Center(child: Text('Skip for now', style: TextStyle(color: AppColors.textHint))),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Color _stageColor(String? status) {
     switch (status) {
       case 'WON': return AppColors.success;
       case 'LOST': return AppColors.error;
@@ -374,6 +925,8 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isTeamLeader = _currentUser?.branchRole == 'TEAM_LEADER';
+    final branchLocked = !isTeamLeader && _currentUser?.branchId != null && (_currentUser?.branchId?.isNotEmpty == true);
     return Column(children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
@@ -393,7 +946,7 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
           ),
           const SizedBox(width: 8),
           GestureDetector(
-            onTap: _showCreateForm,
+            onTap: _showCreateLeadForm,
             child: Container(width: 44, height: 44, decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.add_rounded, color: Colors.white, size: 22)),
           ),
         ]),
@@ -418,10 +971,91 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
             }).toList(),
           ),
         ),
+      // Status tabs: All / Open / Won / Lost
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 4),
+        child: Row(children: [
+          _statusTab('ALL', 'All'),
+          const SizedBox(width: 6),
+          _statusTab('OPEN', 'Open'),
+          const SizedBox(width: 6),
+          _statusTab('WON', 'Won'),
+          const SizedBox(width: 6),
+          _statusTab('LOST', 'Lost'),
+        ]),
+      ),
+      // Filter row
+      SizedBox(
+        height: 36,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.fromLTRB(16, 2, 16, 2),
+          children: [
+            // Branch filter — hidden for team leaders and single-branch locked users
+            if (!isTeamLeader && !branchLocked) ...[
+              _buildFilterChip(
+                label: _filterBranchId != null
+                    ? (_branches.firstWhere((b) => b['id'] == _filterBranchId, orElse: () => {'name': 'Branch'})['name'] as String? ?? 'Branch')
+                    : 'Branch',
+                active: _filterBranchId != null,
+                onTap: _showBranchFilter,
+              ),
+              const SizedBox(width: 8),
+            ],
+            // Owner filter
+            _buildFilterChip(
+              label: _filterOwnerUserId != null
+                  ? (_assignableUsers.firstWhere((u) => u['id'] == _filterOwnerUserId, orElse: () => {'name': 'Owner'})['name'] as String? ?? 'Owner')
+                  : 'Owner',
+              active: _filterOwnerUserId != null,
+              onTap: _showOwnerFilter,
+            ),
+            const SizedBox(width: 8),
+            // Date preset dropdown
+            _buildFilterChip(
+              label: _presetLabel,
+              active: _datePreset != 'all',
+              onTap: _showDatePresetSheet,
+            ),
+            // Clear all filters
+            if (_hasActiveFilters) ...[
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _filterBranchId = null;
+                    _filterOwnerUserId = null;
+                    _filterFromDate = null;
+                    _filterToDate = null;
+                    _datePreset = 'all';
+                  });
+                  _load();
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.error.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+                  ),
+                  child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.clear_rounded, size: 12, color: AppColors.error),
+                    SizedBox(width: 4),
+                    Text('Clear', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.error)),
+                  ]),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
         child: Row(children: [
-          Text('${_deals.length} deals', style: const TextStyle(fontSize: 12, color: AppColors.textHint)),
+          Text(
+            _total > _deals.length ? '${_deals.length} of $_total deals' : '${_deals.length} deals',
+            style: const TextStyle(fontSize: 12, color: AppColors.textHint),
+          ),
           const Spacer(),
           GestureDetector(onTap: _load, child: const Icon(Icons.refresh, size: 16, color: AppColors.primary)),
         ]),
@@ -435,13 +1069,49 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
                 color: AppColors.primary,
                 onRefresh: _load,
                 child: ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: _deals.length,
-                  itemBuilder: (_, i) => _dealTile(_deals[i]),
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  itemCount: _deals.length + (_deals.length < _total ? 1 : 0),
+                  itemBuilder: (_, i) {
+                    if (i == _deals.length) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: _loadingMore
+                            ? const Center(child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2))
+                            : GestureDetector(
+                                onTap: () => _load(loadMore: true),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primarySurface,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      'Load more (${_total - _deals.length} remaining)',
+                                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                      );
+                    }
+                    return _dealTile(_deals[i]);
+                  },
                 ),
               ),
       ),
     ]);
+  }
+
+  // Deterministic avatar color from name
+  Color _avatarColor(String name) {
+    const palette = [
+      Color(0xFF4F46E5), Color(0xFF7C3AED), Color(0xFF0EA5E9),
+      Color(0xFF10B981), Color(0xFFF59E0B), Color(0xFFEF4444),
+      Color(0xFF06B6D4), Color(0xFF8B5CF6), Color(0xFFEC4899),
+    ];
+    final idx = name.isNotEmpty ? name.codeUnitAt(0) % palette.length : 0;
+    return palette[idx];
   }
 
   Widget _dealTile(Map<String, dynamic> deal) {
@@ -450,64 +1120,651 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
     final rawValue = deal['expectedValue'] ?? deal['value'];
     final value = rawValue == null ? null : double.tryParse('$rawValue');
     final contactName = deal['contact']?['name'] ?? deal['contactName'] ?? '';
-    // Prefer contactName; strip " - <date>" suffix from deal name as fallback
     final name = contactName.isNotEmpty ? contactName : rawName.split(' - ').first.trim();
+    final phone = (deal['contact']?['phone'] ?? deal['phone'] ?? '').toString();
     final stageName = deal['stage']?['name'] ?? deal['stageName'] ?? '';
-    final statusColor = _statusColor(status);
-    return GestureDetector(
-      onTap: () => _showDealActions(deal),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.surfaceLight)),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Container(
-              width: 40, height: 40,
-              decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
-              child: Icon(
-                status == 'WON' ? Icons.emoji_events_rounded : status == 'LOST' ? Icons.cancel_rounded : Icons.handshake_rounded,
-                color: statusColor, size: 20,
+    final callCount = (deal['callCount'] ?? deal['totalCalls'] ?? (deal['calls'] is List ? (deal['calls'] as List).length : null) ?? 0) as num;
+    final ownerFirstName = deal['owner']?['firstName'] ?? '';
+    final ownerLastName = deal['owner']?['lastName'] ?? '';
+    final ownerName = '$ownerFirstName $ownerLastName'.trim();
+    final aiScore = deal['aiScore'] != null ? (deal['aiScore'] as num).toInt() : 0;
+    final stageEnteredAt = deal['stageEnteredAt'] != null ? DateTime.tryParse(deal['stageEnteredAt'].toString()) : null;
+    final daysInStage = stageEnteredAt != null ? DateTime.now().difference(stageEnteredAt).inDays : null;
+    final initials = name.trim().isEmpty ? '?' : name.trim().split(' ').map((w) => w.isNotEmpty ? w[0] : '').take(2).join().toUpperCase();
+    final avatarColor = _avatarColor(name);
+    final stageColor = _stageColor(status);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => CrmDealDetailScreen(dealId: deal['id'].toString(), dealName: name)),
+          ).then((_) => _load()),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+              // Initials avatar
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: avatarColor,
+                child: Text(initials, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-              if ((deal['contact']?['phone'] ?? deal['phone'] ?? '').toString().isNotEmpty) Text((deal['contact']?['phone'] ?? deal['phone'] ?? '').toString(), style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-            ])),
-            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              if (status != null) Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                child: Text(status, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: statusColor)),
+              const SizedBox(width: 12),
+              // Name + meta
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(
+                    name,
+                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.textPrimary),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Wrap(spacing: 6, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                    if (stageName.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: stageColor.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(5),
+                        ),
+                        child: Text(stageName, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: stageColor)),
+                      ),
+                    if (aiScore > 0)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.warning.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(5),
+                        ),
+                        child: Text('AI $aiScore', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.warning)),
+                      ),
+                    Row(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(Icons.call_rounded, size: 11, color: AppColors.textHint),
+                      const SizedBox(width: 3),
+                      Text('${callCount.toInt()} calls', style: const TextStyle(fontSize: 11, color: AppColors.textHint)),
+                    ]),
+                    if (daysInStage != null)
+                      Row(mainAxisSize: MainAxisSize.min, children: [
+                        const Icon(Icons.schedule_rounded, size: 11, color: AppColors.textHint),
+                        const SizedBox(width: 3),
+                        Text('${daysInStage}d in stage', style: const TextStyle(fontSize: 11, color: AppColors.textHint)),
+                      ]),
+                  ]),
+                  if (ownerName.isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Row(children: [
+                      const Icon(Icons.person_outline_rounded, size: 11, color: AppColors.textHint),
+                      const SizedBox(width: 3),
+                      Flexible(child: Text(ownerName, style: const TextStyle(fontSize: 11, color: AppColors.textHint), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                    ]),
+                  ],
+                ]),
               ),
-              if (value != null) ...[
-                const SizedBox(height: 4),
-                Text('₹${value.toStringAsFixed(0)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.success)),
-              ],
+              const SizedBox(width: 8),
+              // Right: value + actions
+              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                if (value != null && value > 0)
+                  Text(
+                    '₹${_formatValue(value)}',
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.success),
+                  ),
+                const SizedBox(height: 8),
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  // Mic
+                  _tinyAction(
+                    icon: Icons.mic_rounded,
+                    color: AppColors.primary,
+                    onTap: () => _navigateToRecorder(deal['id'].toString(), name, phone),
+                  ),
+                  const SizedBox(width: 6),
+                  // Upload
+                  _tinyAction(
+                    icon: Icons.cloud_upload_rounded,
+                    color: const Color(0xFF0EA5E9),
+                    onTap: () => _navigateToUpload(deal['id'].toString(), name, phone),
+                  ),
+                  const SizedBox(width: 6),
+                  // View Summary — always visible
+                  _tinyAction(
+                    icon: Icons.summarize_rounded,
+                    color: AppColors.success,
+                    onTap: () => _showCallSummaryForDeal(deal['id'].toString(), name, hasNoCalls: callCount == 0),
+                  ),
+                  const SizedBox(width: 2),
+                  // Three-dot
+                  PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert_rounded, size: 17, color: AppColors.textHint),
+                    padding: EdgeInsets.zero,
+                    iconSize: 17,
+                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    onSelected: (val) {
+                      switch (val) {
+                        case 'stage': _showMoveStage(deal); break;
+                        case 'lost': _showMarkLost(deal); break;
+                        case 'delete':
+                          showDialog(
+                            context: context,
+                            builder: (d) => AlertDialog(
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                              title: const Text('Delete Deal', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
+                              content: Text('Delete "$name"?'),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(d), child: const Text('Cancel')),
+                                FilledButton(
+                                  onPressed: () async {
+                                    Navigator.pop(d);
+                                    try { await _api.deleteCrmDeal(deal['id'] as String); _msg('Deal deleted'); _load(); } catch (e) { _msg('Failed: $e', error: true); }
+                                  },
+                                  style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+                                  child: const Text('Delete'),
+                                ),
+                              ],
+                            ),
+                          );
+                          break;
+                      }
+                    },
+                    itemBuilder: (_) => [
+                      const PopupMenuItem(value: 'stage', child: Row(children: [Icon(Icons.swap_horiz_rounded, size: 16, color: AppColors.primary), SizedBox(width: 10), Text('Move Stage')])),
+                      const PopupMenuItem(value: 'lost', child: Row(children: [Icon(Icons.cancel_outlined, size: 16, color: AppColors.error), SizedBox(width: 10), Text('Mark Lost')])),
+                      const PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline, size: 16, color: AppColors.error), SizedBox(width: 10), Text('Delete Deal', style: TextStyle(color: AppColors.error))])),
+                    ],
+                  ),
+                ]),
+              ]),
             ]),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatValue(double v) {
+    if (v >= 10000000) return '${(v / 10000000).toStringAsFixed(1)}Cr';
+    if (v >= 100000) return '${(v / 100000).toStringAsFixed(1)}L';
+    if (v >= 1000) return '${(v / 1000).toStringAsFixed(1)}K';
+    return v.toStringAsFixed(0);
+  }
+
+  void _showCallSummaryForDeal(String dealId, String dealName, {bool hasNoCalls = false}) {
+    if (hasNoCalls) {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => _NoCallsSheet(dealName: dealName),
+      );
+      return;
+    }
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _DealCallSummarySheet(dealId: dealId, dealName: dealName),
+    );
+  }
+
+  Widget _tinyAction({required IconData icon, required Color color, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Icon(icon, size: 18, color: color),
+      ),
+    );
+  }
+}
+
+class _CrmV2Wrapper extends StatelessWidget {
+  final String title;
+  final Widget child;
+  const _CrmV2Wrapper({required this.title, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.scaffoldBg,
+      child: Column(children: [
+        Container(
+          padding: EdgeInsets.only(
+            top: MediaQuery.of(context).padding.top + 8,
+            left: 4, right: 16, bottom: 14,
+          ),
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF1E1B4B), Color(0xFF312E81), AppColors.primary],
+            ),
+          ),
+          child: Row(children: [
+            IconButton(
+              icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+              onPressed: () => Navigator.pop(context),
+            ),
+            Text(title, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
           ]),
-          if (stageName.isNotEmpty) ...[
-            const SizedBox(height: 8),
+        ),
+        Expanded(child: Scaffold(backgroundColor: AppColors.scaffoldBg, body: child)),
+      ]),
+    );
+  }
+}
+
+// ── Deal Call Summary Sheet ────────────────────────────────────────────────
+
+class _DealCallSummarySheet extends StatefulWidget {
+  final String dealId;
+  final String dealName;
+  const _DealCallSummarySheet({required this.dealId, required this.dealName});
+  @override
+  State<_DealCallSummarySheet> createState() => _DealCallSummarySheetState();
+}
+
+class _DealCallSummarySheetState extends State<_DealCallSummarySheet> {
+  final _api = ApiService();
+  bool _loading = true;
+  String? _error;
+  List<Map<String, dynamic>> _calls = [];
+  Map<String, dynamic>? _selectedDetail;
+  String? _selectedCallId;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCalls();
+  }
+
+  Future<void> _loadCalls() async {
+    try {
+      final res = await _api.getCallsByDeal(widget.dealId);
+      final raw = res.data;
+      _calls = (raw is List ? raw : ((raw is Map ? raw['data'] ?? [] : []) as List))
+          .map((e) => Map<String, dynamic>.from(e)).toList();
+      if (_calls.isNotEmpty) {
+        await _loadDetail(_calls.first['id'].toString());
+        return;
+      }
+    } catch (e) {
+      _error = 'Failed to load calls';
+    }
+    if (mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _loadDetail(String callId) async {
+    if (mounted) setState(() { _loading = true; _selectedCallId = callId; });
+    try {
+      final res = await _api.getAiInsightDetail(callId);
+      final raw = res.data;
+      _selectedDetail = raw is Map ? Map<String, dynamic>.from(raw['data'] ?? raw) : {};
+    } catch (_) {
+      _selectedDetail = {};
+    }
+    if (mounted) setState(() => _loading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.7,
+      maxChildSize: 0.92,
+      minChildSize: 0.4,
+      builder: (_, scrollCtrl) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: _loading
+              ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+              : _error != null || _calls.isEmpty
+                  ? Center(child: Text(_error ?? 'No calls found for this deal', style: const TextStyle(color: AppColors.textHint)))
+                  : ListView(
+                      controller: scrollCtrl,
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+                      children: [
+                        Center(
+                          child: Container(
+                            width: 40, height: 4,
+                            decoration: BoxDecoration(color: AppColors.surfaceLight, borderRadius: BorderRadius.circular(2)),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(widget.dealName,
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                        const SizedBox(height: 10),
+                        // Call selector if multiple calls
+                        if (_calls.length > 1) ...[
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: _calls.asMap().entries.map((e) {
+                                final c = e.value;
+                                final cId = c['id'].toString();
+                                final isSelected = cId == _selectedCallId;
+                                return GestureDetector(
+                                  onTap: () => _loadDetail(cId),
+                                  child: Container(
+                                    margin: const EdgeInsets.only(right: 8),
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: isSelected ? AppColors.primary : AppColors.surfaceLight,
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text('Call ${e.key + 1}',
+                                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
+                                            color: isSelected ? Colors.white : AppColors.textSecondary)),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                        ],
+                        if (_selectedDetail != null) ...[
+                          _buildHeader(_selectedDetail!),
+                          const SizedBox(height: 16),
+                          _buildSectionScores(_selectedDetail!),
+                          _buildSummary(_selectedDetail!),
+                          _buildKeyPoints(_selectedDetail!),
+                          if (_noContent(_selectedDetail!))
+                            Container(
+                              margin: const EdgeInsets.only(top: 16),
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(color: AppColors.surfaceLight, borderRadius: BorderRadius.circular(12)),
+                              child: Column(children: [
+                                const Icon(Icons.hourglass_empty_rounded, size: 32, color: AppColors.textHint),
+                                const SizedBox(height: 8),
+                                Text(
+                                  _selectedDetail!['analysisStatus'] == 'MANUAL' || _selectedDetail!['analysisStatus'] == 'SKIPPED'
+                                      ? 'This call was marked as ${_selectedDetail!['analysisStatus']?.toLowerCase()}.\nNo summary available.'
+                                      : 'Analysis not yet completed.\nStatus: ${_selectedDetail!['analysisStatus'] ?? 'PENDING'}',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.5),
+                                ),
+                              ]),
+                            ),
+                        ],
+                      ],
+                    ),
+        );
+      },
+    );
+  }
+
+  bool _noContent(Map<String, dynamic> d) {
+    final ai = d['aiAnalysis'] as Map<String, dynamic>? ?? {};
+    final hasSections = (d['sectionScores'] as List? ?? []).isNotEmpty;
+    final rawSummary = d['callSummary'] ?? ai['summary'] ?? ai['callSummary'] ?? '';
+    final hasSummary = rawSummary is List ? rawSummary.isNotEmpty : rawSummary.toString().isNotEmpty;
+    final raw = ai['keyDiscussionPoints'] ?? ai['keyPoints'] ?? [];
+    final hasPoints = raw is List ? raw.isNotEmpty : false;
+    return !hasSections && !hasSummary && !hasPoints;
+  }
+
+  Widget _buildHeader(Map<String, dynamic> d) {
+    final score = d['sopScore'] != null ? num.tryParse(d['sopScore'].toString()) : null;
+    final name = d['customerName'] ?? 'Unknown';
+    final status = d['analysisStatus'] ?? '';
+    final duration = d['durationSeconds'] != null
+        ? '${((d['durationSeconds'] as num) / 60).floor()}:${((d['durationSeconds'] as num).toInt() % 60).toString().padLeft(2, '0')}'
+        : '';
+    final scoreColor = score != null
+        ? (score >= 70 ? AppColors.success : score >= 40 ? AppColors.warning : AppColors.error)
+        : AppColors.textHint;
+
+    return Row(children: [
+      Container(
+        width: 56, height: 56,
+        decoration: BoxDecoration(
+          color: score != null ? scoreColor.withValues(alpha: 0.1) : AppColors.surfaceLight,
+          shape: BoxShape.circle,
+        ),
+        child: Center(
+          child: score != null
+              ? Column(mainAxisSize: MainAxisSize.min, children: [
+                  Text('${score.round()}',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: scoreColor)),
+                  Text('%', style: TextStyle(fontSize: 10, color: scoreColor.withValues(alpha: 0.7))),
+                ])
+              : Icon(status == 'PROCESSING' ? Icons.hourglass_top : Icons.schedule,
+                  size: 22, color: AppColors.textHint),
+        ),
+      ),
+      const SizedBox(width: 14),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+        const SizedBox(height: 4),
+        Wrap(spacing: 8, children: [
+          if (duration.isNotEmpty)
+            Text('⏱ $duration', style: const TextStyle(fontSize: 12, color: AppColors.textHint)),
+          if (status.isNotEmpty)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(color: AppColors.surfaceLight, borderRadius: BorderRadius.circular(8)),
-              child: Text(stageName, style: const TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(color: AppColors.surfaceLight, borderRadius: BorderRadius.circular(6)),
+              child: Text(status, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
             ),
-          ],
-          const SizedBox(height: 8),
-          Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-            GestureDetector(
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CrmDealDetailScreen(dealId: deal['id'].toString(), dealName: name))),
-              child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: AppColors.primarySurface, borderRadius: BorderRadius.circular(8)), child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.open_in_new_rounded, size: 12, color: AppColors.primary), SizedBox(width: 4), Text('Details', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.primary))])),
-            ),
-            const SizedBox(width: 8),
-            GestureDetector(
-              onTap: () => _showDealActions(deal),
-              child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: AppColors.surfaceLight, borderRadius: BorderRadius.circular(8)), child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.more_horiz_rounded, size: 14, color: AppColors.textSecondary), SizedBox(width: 4), Text('Manage', style: TextStyle(fontSize: 10, color: AppColors.textSecondary))])),
-            ),
-          ]),
         ]),
+      ])),
+    ]);
+  }
+
+  Widget _buildSectionScores(Map<String, dynamic> d) {
+    final sections = (d['sectionScores'] ?? []) as List;
+    if (sections.isEmpty) return const SizedBox.shrink();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('Section Scores', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+      const SizedBox(height: 10),
+      ...sections.map((s) {
+        final sec = Map<String, dynamic>.from(s);
+        final secScore = (sec['score'] ?? 0) as num;
+        final secName = sec['title'] ?? sec['sectionName'] ?? '';
+        final color = secScore >= 70 ? AppColors.success : secScore >= 40 ? AppColors.warning : AppColors.error;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(children: [
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(secName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+              const SizedBox(height: 4),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(3),
+                child: LinearProgressIndicator(
+                  value: secScore / 100,
+                  minHeight: 6,
+                  backgroundColor: color.withValues(alpha: 0.1),
+                  valueColor: AlwaysStoppedAnimation(color),
+                ),
+              ),
+            ])),
+            const SizedBox(width: 12),
+            Text('${secScore.toInt()}%', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
+          ]),
+        );
+      }),
+    ]);
+  }
+
+  Widget _buildSummary(Map<String, dynamic> d) {
+    final ai = d['aiAnalysis'] as Map<String, dynamic>? ?? {};
+    // callSummary lives directly on the call OR inside aiAnalysis
+    final rawSummary = d['callSummary'] ?? ai['summary'] ?? ai['callSummary'] ?? '';
+    final isEmpty = rawSummary is List ? rawSummary.isEmpty : rawSummary.toString().isEmpty;
+    if (isEmpty) return const SizedBox.shrink();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        const Icon(Icons.summarize_rounded, size: 14, color: AppColors.primary),
+        const SizedBox(width: 6),
+        const Text('Call Summary', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+      ]),
+      const SizedBox(height: 8),
+      Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(color: AppColors.primarySurface, borderRadius: BorderRadius.circular(12)),
+        child: rawSummary is List
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: rawSummary.asMap().entries.map((e) {
+                  final item = e.value is Map ? Map<String, dynamic>.from(e.value as Map) : <String, dynamic>{};
+                  final answer = item['answer']?.toString() ?? '';
+                  final question = item['question']?.toString() ?? '';
+                  if (answer.isEmpty) return const SizedBox.shrink();
+                  return Padding(
+                    padding: EdgeInsets.only(bottom: e.key < rawSummary.length - 1 ? 8 : 0),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      if (question.isNotEmpty) ...[
+                        Text(question, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                        const SizedBox(height: 2),
+                      ],
+                      Text(answer, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.5)),
+                    ]),
+                  );
+                }).toList(),
+              )
+            : Text(rawSummary.toString(), style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.5)),
+      ),
+    ]);
+  }
+
+  Widget _buildKeyPoints(Map<String, dynamic> d) {
+    final ai = d['aiAnalysis'] as Map<String, dynamic>? ?? {};
+    final raw = ai['keyDiscussionPoints'] ?? ai['keyPoints'] ?? [];
+    List<String> points = [];
+    if (raw is List) {
+      points = raw.map((e) => e.toString()).toList();
+    } else if (raw is Map) {
+      raw.forEach((key, value) {
+        if (value is List) {
+          points.addAll(value.map((e) => e.toString()));
+        } else if (value is String && value.isNotEmpty && value != 'N/A' && value != 'Not Discussed') {
+          points.add('$key: $value');
+        }
+      });
+    }
+    if (points.isEmpty) return const SizedBox.shrink();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        const Icon(Icons.list_alt_rounded, size: 14, color: AppColors.success),
+        const SizedBox(width: 6),
+        const Text('Key Points', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+      ]),
+      const SizedBox(height: 8),
+      ...points.take(5).map((p) => Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Padding(padding: EdgeInsets.only(top: 4), child: Icon(Icons.check_circle_outline, size: 14, color: AppColors.success)),
+          const SizedBox(width: 8),
+          Expanded(child: Text(p, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4))),
+        ]),
+      )),
+    ]);
+  }
+}
+
+// ═══ NO CALLS SHEET ══════════════════════════════════════════════════════════
+class _NoCallsSheet extends StatelessWidget {
+  final String dealName;
+  const _NoCallsSheet({required this.dealName});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: DraggableScrollableSheet(
+        initialChildSize: 0.38,
+        minChildSize: 0.28,
+        maxChildSize: 0.5,
+        builder: (_, ctrl) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              const SizedBox(height: 10),
+              Container(width: 36, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: [
+                    const Icon(Icons.summarize_rounded, color: AppColors.textHint, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        dealName,
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 20, color: AppColors.textHint),
+                      onPressed: () => Navigator.pop(context),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 20),
+              Expanded(
+                child: ListView(
+                  controller: ctrl,
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  children: [
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceLight,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Column(
+                        children: [
+                          Container(
+                            width: 56,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              color: AppColors.textHint.withValues(alpha: 0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.phone_missed_rounded, size: 26, color: AppColors.textHint),
+                          ),
+                          const SizedBox(height: 14),
+                          const Text(
+                            'No Calls Recorded Yet',
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Call summaries and AI insights will appear here once a call has been recorded for this deal.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.5),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

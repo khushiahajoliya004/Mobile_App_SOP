@@ -221,7 +221,7 @@ class _SalesStagesScreenState extends State<SalesStagesScreen> {
                 ),
                 const SizedBox(height: 4),
                 const Text(
-                  'Questions for AI call summary generation',
+                  'Questions for call summary',
                   style: TextStyle(
                     fontSize: 11,
                     color: AppColors.textSecondary,
@@ -376,6 +376,7 @@ class _SalesStagesScreenState extends State<SalesStagesScreen> {
                               name: nameCtrl.text.trim(),
                               description: descCtrl.text.trim(),
                               sortOrder: int.tryParse(sortCtrl.text) ?? 0,
+                              summaryQuestions: summaryQuestions,
                             );
                             _msg('Stage updated');
                           } else {
@@ -384,6 +385,7 @@ class _SalesStagesScreenState extends State<SalesStagesScreen> {
                               companyId: _companyId,
                               description: descCtrl.text.trim(),
                               sortOrder: int.tryParse(sortCtrl.text) ?? 0,
+                              summaryQuestions: summaryQuestions,
                             );
                             _msg('Stage created');
                           }
@@ -760,12 +762,15 @@ class _SalesStagesScreenState extends State<SalesStagesScreen> {
                           color: AppColors.accent,
                         ),
                         const SizedBox(width: 4),
-                        Text(
-                          '$sqCount summary questions',
-                          style: const TextStyle(
-                            fontSize: 10,
-                            color: AppColors.accent,
-                            fontWeight: FontWeight.w600,
+                        Flexible(
+                          child: Text(
+                            '$sqCount summary questions',
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: AppColors.accent,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],

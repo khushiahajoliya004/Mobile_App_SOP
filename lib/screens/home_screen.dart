@@ -39,7 +39,7 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: AppColors.scaffoldBg,
         body: const CallRecorderScreen(),
       ),
-      MenuScreen(user: _user),
+      MenuScreen(user: _user, onProfileTap: () => setState(() => _currentTab = 3)),
       ProfileScreen(user: _user, onLogout: _logout),
     ];
 
@@ -60,11 +60,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildBottomNav() {
-    const items = [
-      _NavItem(Icons.dashboard_outlined, Icons.dashboard_rounded, 'Home'),
-      _NavItem(Icons.mic_outlined, Icons.mic_rounded, 'Record'),
-      _NavItem(Icons.grid_view_outlined, Icons.grid_view_rounded, 'Menu'),
-      _NavItem(Icons.person_outline, Icons.person_rounded, 'Profile'),
+    final items = [
+      const _NavItem(Icons.dashboard_outlined, Icons.dashboard_rounded, 'Home'),
+      const _NavItem(Icons.mic_outlined, Icons.mic_rounded, 'Record'),
+      const _NavItem(Icons.grid_view_outlined, Icons.grid_view_rounded, 'Menu'),
+      const _NavItem(Icons.person_outline, Icons.person_rounded, 'Profile'),
     ];
 
     return Container(

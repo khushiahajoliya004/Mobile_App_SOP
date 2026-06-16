@@ -266,7 +266,7 @@ class _UsersScreenState extends State<UsersScreen> {
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text(
-                      'Enable AI Analysis',
+                      'Enable Call Analysis',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
@@ -321,7 +321,7 @@ class _UsersScreenState extends State<UsersScreen> {
                           if (selected) {
                             selectedRoleIds.remove(id);
                           } else {
-                            selectedRoleIds.add(id);
+                            selectedRoleIds = [id]; // single-select: replace any previous
                           }
                         }),
                       );
@@ -425,6 +425,10 @@ class _UsersScreenState extends State<UsersScreen> {
     }
     if (!isEdit && password.length < 6) {
       _msg('Password must be at least 6 characters', error: true);
+      return;
+    }
+    if (_currentUser?.isCompanyAdmin == true && _roles.isNotEmpty && roleIds.isEmpty) {
+      _msg('Please select a role', error: true);
       return;
     }
 
@@ -559,7 +563,7 @@ class _UsersScreenState extends State<UsersScreen> {
     try {
       await _api.updateUser(user['id'], aiEnabled: newVal);
       setState(() => user['aiEnabled'] = newVal);
-      _msg('AI ${newVal ? 'enabled' : 'disabled'} for ${user['firstName']}');
+      _msg('Analysis ${newVal ? 'enabled' : 'disabled'} for ${user['firstName']}');
     } catch (e) {
       _msg('Failed: $e', error: true);
     }
@@ -813,7 +817,7 @@ class _UsersScreenState extends State<UsersScreen> {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          'AI ${aiEnabled ? 'ON' : 'OFF'}',
+                          'Analysis ${aiEnabled ? 'ON' : 'OFF'}',
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w700,

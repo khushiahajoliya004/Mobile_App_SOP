@@ -32,20 +32,17 @@ import 'sales_performance/sales_performance_screen.dart';
 import 'team_report/team_report_screen.dart';
 import 'prompt_settings/prompt_settings_screen.dart';
 import 'settings/wa_settings_screen.dart';
-import 'crm_v2/crm_contacts_screen.dart';
-import 'crm_v2/crm_deals_screen.dart';
-import 'crm_v2/crm_activities_screen.dart';
-import 'crm_v2/crm_custom_properties_screen.dart';
-import 'crm_v2/crm_pipeline_settings_screen.dart';
-import 'crm_v2/crm_master_data_screen.dart';
 import 'daily_transcripts/daily_transcripts_screen.dart';
 import 'salesman_sop/salesman_sop_screen.dart';
 import 'analytics/analytics_compare_screen.dart';
 import 'force_update/force_update_settings_screen.dart';
+import 'crm/quick_lead_sheet.dart';
+import 'call_recorder_screen.dart';
 
 class MenuScreen extends StatelessWidget {
   final UserModel? user;
-  const MenuScreen({super.key, this.user});
+  final VoidCallback? onProfileTap;
+  const MenuScreen({super.key, this.user, this.onProfileTap});
 
   bool _can(String code) {
     if (user == null) return false;
@@ -62,12 +59,15 @@ class MenuScreen extends StatelessWidget {
       (s, sec) => s + sec.items.length,
     );
 
+    final canCreateLead = _can('LEAD') || user?.isSuperAdmin == true || user?.isCompanyAdmin == true;
+
     return Container(
       color: AppColors.scaffoldBg,
       child: SafeArea(
         child: Column(
           children: [
             _buildHeader(context, totalModules),
+            if (canCreateLead) _buildQuickActions(context),
             Expanded(
               child: ListView.builder(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
@@ -107,7 +107,7 @@ class MenuScreen extends StatelessWidget {
       _M('Modules', Icons.view_module_rounded, const Color(0xFF3B82F6), const Color(0xFF60A5FA), 'System modules', const ModuleListScreen()),
       _M('Operations', Icons.settings_applications_rounded, const Color(0xFF14B8A6), const Color(0xFF2DD4BF), 'System operations', const OperationListScreen()),
       _M('Permissions', Icons.lock_rounded, const Color(0xFFEC4899), const Color(0xFFF472B6), 'Manage permissions', const PermissionListScreen()),
-      _M('LLM Config', Icons.auto_awesome_rounded, const Color(0xFF8B5CF6), const Color(0xFFA78BFA), 'AI prompt templates', const LlmConfigScreen()),
+      _M('LLM Config', Icons.auto_awesome_rounded, const Color(0xFF8B5CF6), const Color(0xFFA78BFA), 'Prompt templates', const LlmConfigScreen()),
       _M('Force Update', Icons.system_update_rounded, const Color(0xFFEF4444), const Color(0xFFFCA5A5), 'App version control', const ForceUpdateSettingsScreen()),
     ]),
   ];
@@ -128,19 +128,13 @@ class MenuScreen extends StatelessWidget {
       if (_can('ANALYTICS')) _M('360° Compare', Icons.compare_arrows_rounded, const Color(0xFF0EA5E9), const Color(0xFF38BDF8), 'Compare users side by side', const AnalyticsCompareScreen()),
     ]),
     _Section('Sales', Icons.trending_up_rounded, const Color(0xFF10B981), [
-      _M('CRM', Icons.contacts_rounded, const Color(0xFF10B981), const Color(0xFF34D399), 'CRM overview', const CrmScreen()),
-      _M('Contacts', Icons.person_rounded, const Color(0xFF3B82F6), const Color(0xFF60A5FA), 'Manage CRM contacts', const CrmContactsScreen()),
-      _M('Deals', Icons.handshake_rounded, const Color(0xFF8B5CF6), const Color(0xFFA78BFA), 'Track deals & pipeline', const CrmDealsScreen()),
-      _M('Activities', Icons.event_note_rounded, const Color(0xFF14B8A6), const Color(0xFF2DD4BF), 'Calls, emails, meetings', const CrmActivitiesScreen()),
-      _M('Pipelines', Icons.account_tree_rounded, const Color(0xFF6366F1), const Color(0xFF818CF8), 'Manage pipelines & stages', const CrmPipelineSettingsScreen()),
-      _M('Custom Fields', Icons.tune_rounded, const Color(0xFF0EA5E9), const Color(0xFF38BDF8), 'Custom CRM fields', const CrmCustomPropertiesScreen()),
-      _M('Master Data', Icons.dataset_rounded, const Color(0xFF64748B), const Color(0xFF94A3B8), 'Lead sources, stages & more', const CrmMasterDataScreen()),
+      _M('CRM', Icons.contacts_rounded, const Color(0xFF10B981), const Color(0xFF34D399), 'Contacts, Deals, Activities & more', const CrmScreen()),
       if (_can('CALL')) _M('Calls', Icons.phone_rounded, const Color(0xFF6366F1), const Color(0xFF818CF8), 'View call history', const CallHistoryScreen()),
       if (_can('CALL')) _M('Upload', Icons.cloud_upload_rounded, const Color(0xFF0EA5E9), const Color(0xFF38BDF8), 'Upload audio files', const CallUploadScreen()),
       if (_can('CALL')) _M('Approvals', Icons.verified_rounded, const Color(0xFF8B5CF6), const Color(0xFFA78BFA), 'Approve or reject', const CallApprovalsScreen()),
     ]),
-    _Section('AI & Insights', Icons.auto_awesome_rounded, const Color(0xFFF59E0B), [
-      if (_can('AI_INSIGHT')) _M('AI Insights', Icons.auto_awesome_rounded, const Color(0xFFF59E0B), const Color(0xFFFBBF24), 'AI call analysis', const AiInsightsScreen()),
+    _Section('Call Insights', Icons.auto_awesome_rounded, const Color(0xFFF59E0B), [
+      if (_can('AI_INSIGHT')) _M('Call Analysis', Icons.auto_awesome_rounded, const Color(0xFFF59E0B), const Color(0xFFFBBF24), 'Call analysis & scores', const AiInsightsScreen()),
       if (_can('AI_INSIGHT')) _M('SOP Evaluator', Icons.quiz_rounded, const Color(0xFF0D9488), const Color(0xFF14B8A6), 'Test against SOP', const SopEvaluatorScreen()),
       if (_can('SOP_BUILDER')) _M('SOP Builder', Icons.build_circle_rounded, const Color(0xFF14B8A6), const Color(0xFF2DD4BF), 'Create & edit SOPs', const SopListScreen()),
       _M('SOP Checklist', Icons.checklist_rounded, const Color(0xFF10B981), const Color(0xFF34D399), 'View assigned SOPs', const SalesmanSopScreen()),
@@ -154,11 +148,11 @@ class MenuScreen extends StatelessWidget {
     _Section('Settings', Icons.settings_rounded, const Color(0xFF64748B), [
       _M('Roles', Icons.shield_rounded, const Color(0xFFF59E0B), const Color(0xFFFBBF24), 'Manage roles', const RolesScreen()),
       if (_can('PERMISSION')) _M('Permissions', Icons.lock_rounded, const Color(0xFFEC4899), const Color(0xFFF472B6), 'Manage permissions', const PermissionListScreen()),
-      _M('AI Prompts', Icons.text_snippet_rounded, const Color(0xFF10B981), const Color(0xFF34D399), 'Master prompt config', const PromptSettingsScreen()),
+      _M('Prompt Templates', Icons.text_snippet_rounded, const Color(0xFF10B981), const Color(0xFF34D399), 'Master prompt config', const PromptSettingsScreen()),
       _M('WhatsApp', Icons.message_rounded, const Color(0xFF25D366), const Color(0xFF128C7E), 'WA audit & auto-send', const WaSettingsScreen()),
       if (_can('CATEGORY')) _M('Categories', Icons.label_rounded, const Color(0xFFEC4899), const Color(0xFFF472B6), 'Manage categories', const CategoriesScreen()),
       if (_can('SALES_STAGE')) _M('Sales Stages', Icons.flag_rounded, const Color(0xFFF97316), const Color(0xFFFB923C), 'Configure stages', const SalesStagesScreen()),
-      if (_can('LLM_CONFIG')) _M('LLM Config', Icons.auto_awesome_rounded, const Color(0xFF8B5CF6), const Color(0xFFA78BFA), 'AI model configuration', const LlmConfigScreen()),
+      if (_can('LLM_CONFIG')) _M('LLM Config', Icons.auto_awesome_rounded, const Color(0xFF8B5CF6), const Color(0xFFA78BFA), 'Model configuration', const LlmConfigScreen()),
       _M('Audio Library', Icons.library_music_rounded, const Color(0xFF06B6D4), const Color(0xFF22D3EE), 'Local recordings', const AudioLibraryScreen()),
     ]),
   ].where((s) => s.items.isNotEmpty).toList();
@@ -174,15 +168,12 @@ class MenuScreen extends StatelessWidget {
       if (_can('ANALYTICS')) _M('360° Compare', Icons.compare_arrows_rounded, const Color(0xFF0EA5E9), const Color(0xFF38BDF8), 'Compare users side by side', const AnalyticsCompareScreen()),
     ]),
     _Section('Sales', Icons.trending_up_rounded, const Color(0xFF10B981), [
-      _M('CRM', Icons.contacts_rounded, const Color(0xFF10B981), const Color(0xFF34D399), 'CRM overview', const CrmScreen()),
-      if (_can('LEAD')) _M('Contacts', Icons.person_rounded, const Color(0xFF3B82F6), const Color(0xFF60A5FA), 'Manage CRM contacts', const CrmContactsScreen()),
-      if (_can('LEAD')) _M('Deals', Icons.handshake_rounded, const Color(0xFF8B5CF6), const Color(0xFFA78BFA), 'Track deals & pipeline', const CrmDealsScreen()),
-      if (_can('LEAD')) _M('Activities', Icons.event_note_rounded, const Color(0xFF14B8A6), const Color(0xFF2DD4BF), 'Calls, emails, meetings', const CrmActivitiesScreen()),
+      _M('CRM', Icons.contacts_rounded, const Color(0xFF10B981), const Color(0xFF34D399), 'Contacts, Deals, Activities & more', const CrmScreen()),
       if (_can('CALL')) _M('Calls', Icons.phone_rounded, const Color(0xFF6366F1), const Color(0xFF818CF8), 'View call history', const CallHistoryScreen()),
       if (_can('CALL')) _M('Upload', Icons.cloud_upload_rounded, const Color(0xFF0EA5E9), const Color(0xFF38BDF8), 'Upload audio files', const CallUploadScreen()),
     ]),
-    _Section('AI & Insights', Icons.auto_awesome_rounded, const Color(0xFFF59E0B), [
-      if (_can('AI_INSIGHT')) _M('AI Insights', Icons.auto_awesome_rounded, const Color(0xFFF59E0B), const Color(0xFFFBBF24), 'AI call analysis', const AiInsightsScreen()),
+    _Section('Call Insights', Icons.auto_awesome_rounded, const Color(0xFFF59E0B), [
+      if (_can('AI_INSIGHT')) _M('Call Analysis', Icons.auto_awesome_rounded, const Color(0xFFF59E0B), const Color(0xFFFBBF24), 'Call analysis & scores', const AiInsightsScreen()),
       if (_can('SOP_BUILDER')) _M('SOP Builder', Icons.build_circle_rounded, const Color(0xFF14B8A6), const Color(0xFF2DD4BF), 'Create & edit SOPs', const SopListScreen()),
       _M('SOP Checklist', Icons.checklist_rounded, const Color(0xFF10B981), const Color(0xFF34D399), 'View assigned SOPs', const SalesmanSopScreen()),
     ]),
@@ -200,14 +191,12 @@ class MenuScreen extends StatelessWidget {
   // Website allows: DASHBOARD, CRM_DASHBOARD, LEAD, FOLLOW_UP, VISIT, CALL, AI_INSIGHT, ANALYTICS, COMPARE_360
   List<_Section> _userSections() => [
     _Section('Sales', Icons.trending_up_rounded, const Color(0xFF10B981), [
-      _M('CRM', Icons.contacts_rounded, const Color(0xFF10B981), const Color(0xFF34D399), 'CRM overview', const CrmScreen()),
-      if (_can('LEAD')) _M('Leads', Icons.handshake_rounded, const Color(0xFF3B82F6), const Color(0xFF60A5FA), 'Track your leads', const CrmDealsScreen()),
-      if (_can('LEAD')) _M('Activities', Icons.event_note_rounded, const Color(0xFF8B5CF6), const Color(0xFFA78BFA), 'Calls, emails, meetings', const CrmActivitiesScreen()),
+      _M('CRM', Icons.contacts_rounded, const Color(0xFF10B981), const Color(0xFF34D399), 'Leads & Activities', const CrmScreen()),
       if (_can('CALL')) _M('Calls', Icons.phone_rounded, const Color(0xFF6366F1), const Color(0xFF818CF8), 'View call history', const CallHistoryScreen()),
       if (_can('CALL')) _M('Upload', Icons.cloud_upload_rounded, const Color(0xFF0EA5E9), const Color(0xFF38BDF8), 'Upload audio files', const CallUploadScreen()),
     ]),
-    _Section('AI & Insights', Icons.auto_awesome_rounded, const Color(0xFFF59E0B), [
-      if (_can('AI_INSIGHT')) _M('AI Insights', Icons.auto_awesome_rounded, const Color(0xFFF59E0B), const Color(0xFFFBBF24), 'AI call analysis', const AiInsightsScreen()),
+    _Section('Call Insights', Icons.auto_awesome_rounded, const Color(0xFFF59E0B), [
+      if (_can('AI_INSIGHT')) _M('Call Analysis', Icons.auto_awesome_rounded, const Color(0xFFF59E0B), const Color(0xFFFBBF24), 'Call analysis & scores', const AiInsightsScreen()),
     ]),
     _Section('Analytics', Icons.bar_chart_rounded, const Color(0xFF3B82F6), [
       if (_can('ANALYTICS')) _M('Analytics', Icons.bar_chart_rounded, const Color(0xFF3B82F6), const Color(0xFF60A5FA), 'Performance data', const AnalyticsScreen()),
@@ -295,7 +284,7 @@ class MenuScreen extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      'AI Sales Intelligence Platform',
+                      'Sales Intelligence Platform',
                       style: TextStyle(
                         fontSize: 11,
                         color: Colors.white.withValues(alpha: 0.55),
@@ -327,7 +316,9 @@ class MenuScreen extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           // User info row
-          Container(
+          GestureDetector(
+            onTap: onProfileTap,
+            child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.1),
@@ -375,8 +366,11 @@ class MenuScreen extends StatelessWidget {
                     style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: _roleColor),
                   ),
                 ),
+                const SizedBox(width: 6),
+                const Icon(Icons.chevron_right_rounded, color: Colors.white54, size: 16),
               ],
             ),
+          ),
           ),
           const SizedBox(height: 12),
           // Feature chips
@@ -384,10 +378,10 @@ class MenuScreen extends StatelessWidget {
             spacing: 6,
             runSpacing: 6,
             children: [
-              _featureChip(Icons.mic_rounded, 'Record'),
-              _featureChip(Icons.auto_awesome_rounded, 'AI'),
-              _featureChip(Icons.insights_rounded, 'Insights'),
-              _featureChip(Icons.groups_rounded, 'CRM'),
+              _featureChip(context, Icons.mic_rounded, 'Record', const CallRecorderScreen()),
+              _featureChip(context, Icons.auto_awesome_rounded, 'Smart Analysis', const AiInsightsScreen()),
+              _featureChip(context, Icons.insights_rounded, 'Insights', const AnalyticsScreen()),
+              _featureChip(context, Icons.groups_rounded, 'CRM', const CrmScreen()),
             ],
           ),
         ],
@@ -395,28 +389,79 @@ class MenuScreen extends StatelessWidget {
     );
   }
 
-  Widget _featureChip(IconData icon, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 11, color: Colors.white.withValues(alpha: 0.5)),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              color: Colors.white.withValues(alpha: 0.5),
-              fontWeight: FontWeight.w500,
+  Widget _buildQuickActions(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: GestureDetector(
+        onTap: () => QuickLeadSheet.show(context),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF10B981), Color(0xFF34D399)],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
             ),
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF10B981).withValues(alpha: 0.25),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-        ],
+          child: const Row(
+            children: [
+              Icon(Icons.person_add_rounded, color: Colors.white, size: 20),
+              SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('New Lead', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
+                    Text('Quickly create a lead without entering CRM', style: TextStyle(fontSize: 11, color: Colors.white70)),
+                  ],
+                ),
+              ),
+              Icon(Icons.add_circle_outline_rounded, color: Colors.white, size: 22),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _featureChip(BuildContext context, IconData icon, String label, Widget screen) {
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => _ModuleWrapper(title: label, child: screen),
+        ),
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 11, color: Colors.white),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 10,
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

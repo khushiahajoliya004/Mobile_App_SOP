@@ -15,9 +15,10 @@ import '../models/user_model.dart';
 
 class CallRecorderScreen extends StatefulWidget {
   final String? leadId;
+  final String? dealId;
   final String? leadCustomerName;
   final String? leadPhone;
-  const CallRecorderScreen({super.key, this.leadId, this.leadCustomerName, this.leadPhone});
+  const CallRecorderScreen({super.key, this.leadId, this.dealId, this.leadCustomerName, this.leadPhone});
   @override
   State<CallRecorderScreen> createState() => _CallRecorderScreenState();
 }
@@ -238,6 +239,8 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
         notes: 'Recorded from mobile',
         audioFilePath: path,
         audioFileName: fn,
+        leadId: widget.leadId,
+        dealId: widget.dealId,
       );
       if (mounted) {
         final cd = res.data is Map ? res.data['data'] : null;
@@ -256,7 +259,7 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
         final isAi =
             _user!.aiEnabled && (as2 == 'PENDING' || as2 == 'PROCESSING');
         final msg = isAi
-            ? 'Uploaded! AI analysis started.'
+            ? 'Uploaded! Analysis started.'
             : 'Submitted for approval.';
         setState(() {
           _isSaving = false;
@@ -692,7 +695,7 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
                       const SizedBox(height: 4),
                       Text(
                         _hasSop
-                            ? 'Audio will be analyzed by AI'
+                            ? 'Audio will be analyzed automatically'
                             : 'Audio will be saved locally',
                         style: TextStyle(
                           fontSize: 12,

@@ -39,18 +39,21 @@ class _MyTasksScreenState extends State<MyTasksScreen>
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
+    if (mounted) setState(() => _loading = true);
     try {
       final res = await _api.getMyTasks(status: _filter);
       final raw = res.data;
-      _tasks =
-          (raw is List ? raw : (raw is Map ? (raw['data'] ?? []) as List : []))
-              .map((e) => Map<String, dynamic>.from(e as Map))
-              .toList();
-    } catch (_) {
-      _tasks = [];
+      final list = raw is List ? raw : (raw is Map ? (raw['data'] ?? []) as List : []);
+      if (mounted) setState(() {
+        _tasks = list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        _loading = false;
+      });
+    } catch (e) {
+      if (mounted) setState(() {
+        _tasks = [];
+        _loading = false;
+      });
     }
-    if (mounted) setState(() => _loading = false);
   }
 
   Color _priorityColor(String? p) {
@@ -152,43 +155,58 @@ class _MyTasksScreenState extends State<MyTasksScreen>
                     strokeWidth: 3,
                   ),
                 )
-              : _tasks.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 56,
-                        height: 56,
-                        decoration: const BoxDecoration(
-                          color: AppColors.primarySurface,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.task_alt_rounded,
-                          color: AppColors.primary,
-                          size: 28,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'No ${_tabLabels[_tabCtrl.index].toLowerCase()} tasks',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                )
               : RefreshIndicator(
                   color: AppColors.primary,
                   onRefresh: _load,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _tasks.length,
-                    itemBuilder: (_, i) => _buildTaskCard(_tasks[i]),
-                  ),
+                  child: _tasks.isEmpty
+                  ? ListView(
+                      children: [
+                        SizedBox(
+                          height: 300,
+                          child: Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 56,
+                                  height: 56,
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.primarySurface,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.task_alt_rounded,
+                                    color: AppColors.primary,
+                                    size: 28,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'No ${_tabLabels[_tabCtrl.index].toLowerCase()} tasks',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                const Text(
+                                  'Pull down to refresh',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textHint,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _tasks.length,
+                      itemBuilder: (_, i) => _buildTaskCard(_tasks[i]),
+                    ),
                 ),
         ),
       ],

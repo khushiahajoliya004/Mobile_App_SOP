@@ -11,9 +11,22 @@ class CallHistoryScreen extends StatefulWidget {
 
 class _CallHistoryScreenState extends State<CallHistoryScreen> {
   final _api = ApiService();
+  final _searchCtrl = TextEditingController();
+
   List<dynamic> _calls = [];
   bool _loading = true;
   String? _error;
+
+  // Filters
+  String _duration = 'all'; // all | short | long
+  DateTime? _dateFrom;
+  DateTime? _dateTo;
+
+  // Pagination
+  int _page = 1;
+  int _total = 0;
+  int _totalPages = 0;
+  static const _limit = 20;
 
   @override
   void initState() {
@@ -21,17 +34,37 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
     _loadCalls();
   }
 
-  Future<void> _loadCalls() async {
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  String _fmt(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  Future<void> _loadCalls({bool reset = false}) async {
+    if (reset) _page = 1;
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final response = await _api.getCalls();
-      final responseData = response.data;
-      final data = responseData['data'] ?? responseData;
+      final response = await _api.getCalls(
+        search: _searchCtrl.text.trim().isNotEmpty ? _searchCtrl.text.trim() : null,
+        duration: _duration,
+        fromDate: _dateFrom != null ? _fmt(_dateFrom!) : null,
+        toDate: _dateTo != null ? _fmt(_dateTo!) : null,
+        page: _page,
+        limit: _limit,
+      );
+      final raw = response.data;
+      final dataList = raw['data'] ?? [];
+      final pagination = raw['pagination'];
       setState(() {
-        _calls = data is List ? data : [];
+        _calls = dataList is List ? dataList : [];
+        _total = pagination?['total'] ?? _calls.length;
+        _totalPages = pagination?['totalPages'] ?? 1;
         _loading = false;
       });
     } catch (e) {
@@ -41,6 +74,46 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
       });
     }
   }
+
+  Future<void> _pickDate(bool isFrom) async {
+    final initial = isFrom ? (_dateFrom ?? DateTime.now()) : (_dateTo ?? DateTime.now());
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.light(primary: AppColors.primary),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked == null) return;
+    setState(() {
+      if (isFrom) {
+        _dateFrom = picked;
+        if (_dateTo != null && _dateTo!.isBefore(_dateFrom!)) _dateTo = null;
+      } else {
+        _dateTo = picked;
+        if (_dateFrom != null && _dateFrom!.isAfter(_dateTo!)) _dateFrom = null;
+      }
+    });
+    _loadCalls(reset: true);
+  }
+
+  void _clearFilters() {
+    _searchCtrl.clear();
+    setState(() {
+      _duration = 'all';
+      _dateFrom = null;
+      _dateTo = null;
+    });
+    _loadCalls(reset: true);
+  }
+
+  bool get _hasActiveFilters =>
+      _searchCtrl.text.isNotEmpty || _duration != 'all' || _dateFrom != null || _dateTo != null;
 
   void _showCallDetail(Map<String, dynamic> call) {
     final callId = call['id'];
@@ -55,12 +128,174 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _buildFilterBar(),
+        Expanded(child: _buildBody()),
+      ],
+    );
+  }
+
+  // ─── Filter Bar ────────────────────────────────────────────────────────────
+
+  Widget _buildFilterBar() {
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      child: Column(
+        children: [
+          // Search + duration row
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: AppColors.scaffoldBg,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.surfaceLight),
+                  ),
+                  child: TextField(
+                    controller: _searchCtrl,
+                    onSubmitted: (_) => _loadCalls(reset: true),
+                    onChanged: (v) {
+                      if (v.isEmpty) _loadCalls(reset: true);
+                    },
+                    style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+                    decoration: InputDecoration(
+                      hintText: 'Search customer...',
+                      hintStyle: const TextStyle(fontSize: 13, color: AppColors.textHint),
+                      prefixIcon: const Icon(Icons.search_rounded, size: 18, color: AppColors.textHint),
+                      suffixIcon: _searchCtrl.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.close_rounded, size: 16, color: AppColors.textHint),
+                              onPressed: () {
+                                _searchCtrl.clear();
+                                _loadCalls(reset: true);
+                              },
+                            )
+                          : null,
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              _durationDropdown(),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // Date range row
+          Row(
+            children: [
+              Expanded(child: _datePicker('From', _dateFrom, () => _pickDate(true))),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 6),
+                child: Text('–', style: TextStyle(color: AppColors.textHint)),
+              ),
+              Expanded(child: _datePicker('To', _dateTo, () => _pickDate(false))),
+              if (_hasActiveFilters) ...[
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: _clearFilters,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.error.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'Clear',
+                      style: TextStyle(fontSize: 12, color: AppColors.error, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _durationDropdown() {
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: AppColors.scaffoldBg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.surfaceLight),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _duration,
+          isDense: true,
+          icon: const Icon(Icons.expand_more_rounded, size: 18, color: AppColors.textHint),
+          style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+          items: const [
+            DropdownMenuItem(value: 'all', child: Text('All Calls')),
+            DropdownMenuItem(value: 'short', child: Text('Short (< 10s)')),
+            DropdownMenuItem(value: 'long', child: Text('Long (≥ 10s)')),
+          ],
+          onChanged: (v) {
+            if (v == null) return;
+            setState(() => _duration = v);
+            _loadCalls(reset: true);
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _datePicker(String label, DateTime? value, VoidCallback onTap) {
+    final hasValue = value != null;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: hasValue ? AppColors.primarySurface : AppColors.scaffoldBg,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: hasValue ? AppColors.primary.withValues(alpha: 0.3) : AppColors.surfaceLight,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.calendar_today_rounded,
+              size: 14,
+              color: hasValue ? AppColors.primary : AppColors.textHint,
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                hasValue
+                    ? '${value.day}/${value.month}/${value.year}'
+                    : label,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: hasValue ? AppColors.primary : AppColors.textHint,
+                  fontWeight: hasValue ? FontWeight.w600 : FontWeight.normal,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── Body ──────────────────────────────────────────────────────────────────
+
+  Widget _buildBody() {
     if (_loading) {
       return const Center(
-        child: CircularProgressIndicator(
-          color: AppColors.primary,
-          strokeWidth: 3,
-        ),
+        child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 3),
       );
     }
 
@@ -76,34 +311,18 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
                 color: AppColors.error.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
-                Icons.error_outline_rounded,
-                size: 28,
-                color: AppColors.error,
-              ),
+              child: const Icon(Icons.error_outline_rounded, size: 28, color: AppColors.error),
             ),
             const SizedBox(height: 16),
-            Text(
-              _error!,
-              style: const TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            Text(_error!, style: const TextStyle(color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w600)),
             const SizedBox(height: 4),
-            const Text(
-              'Please check your connection and try again',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-            ),
+            const Text('Please check your connection and try again',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
             const SizedBox(height: 20),
             GestureDetector(
               onTap: _loadCalls,
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 decoration: BoxDecoration(
                   color: AppColors.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
@@ -111,20 +330,9 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      Icons.refresh_rounded,
-                      size: 16,
-                      color: AppColors.primary,
-                    ),
+                    Icon(Icons.refresh_rounded, size: 16, color: AppColors.primary),
                     SizedBox(width: 8),
-                    Text(
-                      'Retry',
-                      style: TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
-                    ),
+                    Text('Retry', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 14)),
                   ],
                 ),
               ),
@@ -142,29 +350,16 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
             Container(
               width: 56,
               height: 56,
-              decoration: const BoxDecoration(
-                color: AppColors.primarySurface,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.history_rounded,
-                size: 28,
-                color: AppColors.primary,
-              ),
+              decoration: const BoxDecoration(color: AppColors.primarySurface, shape: BoxShape.circle),
+              child: const Icon(Icons.history_rounded, size: 28, color: AppColors.primary),
             ),
             const SizedBox(height: 16),
-            const Text(
-              'No calls found',
-              style: TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            const Text('No calls found',
+                style: TextStyle(color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w600)),
             const SizedBox(height: 4),
-            const Text(
-              'Your call history will appear here',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            Text(
+              _hasActiveFilters ? 'Try adjusting your filters' : 'Your call history will appear here',
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
             ),
           ],
         ),
@@ -172,164 +367,168 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
     }
 
     return RefreshIndicator(
-      onRefresh: _loadCalls,
+      onRefresh: () => _loadCalls(reset: true),
       color: AppColors.primary,
       child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _calls.length,
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+        itemCount: _calls.length + (_totalPages > _page ? 1 : 0),
         itemBuilder: (context, index) {
-          final call = _calls[index];
-          final customerName = call['customerName'] ?? 'Unknown';
-          final categoryName = call['category']?['name'] ?? '';
-          final stageName = call['salesStage']?['name'] ?? '';
-          final analysisStatus = call['analysisStatus'] ?? 'PENDING';
-          // Parse sopScore — backend may return decimal string e.g. "37.00"
-          num? sopScore = call['sopScore'] != null
-              ? num.tryParse(call['sopScore'].toString())
-              : null;
-          // Fallback to nested aiAnalysis if score is missing or zero
-          if (sopScore == null || sopScore == 0) {
-            final ai = call['aiAnalysis'];
-            if (ai is Map) {
-              final nested = ai['overallScore'] ?? ai['sopScore'] ?? ai['score'];
-              if (nested != null) sopScore = num.tryParse(nested.toString());
-            }
+          if (index == _calls.length) {
+            return _buildLoadMore();
           }
-          if (sopScore == 0) sopScore = null;
-          final date = call['createdAt'] ?? '';
-          final userName = call['user'] != null
-              ? '${call['user']['firstName'] ?? ''} ${call['user']['lastName'] ?? ''}'
-                    .trim()
-              : '';
-
+          final call = _calls[index];
           return GestureDetector(
             onTap: () => _showCallDetail(Map<String, dynamic>.from(call)),
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        // Avatar
-                        Container(
-                          width: 46,
-                          height: 46,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [
-                                AppColors.primary,
-                                AppColors.primaryLight,
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Center(
-                            child: Text(
-                              customerName.isNotEmpty
-                                  ? customerName[0].toUpperCase()
-                                  : '?',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 18,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        // Name + user
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                customerName,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 14,
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
-                              if (userName.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 2),
-                                  child: Text(
-                                    'by $userName',
-                                    style: const TextStyle(
-                                      color: AppColors.textHint,
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        // Status badge
-                        _buildStatusBadge(analysisStatus),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    // Tags row
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        if (sopScore != null) _buildScoreBadge(sopScore),
-                        if (categoryName.isNotEmpty)
-                          _buildTag(
-                            Icons.label_rounded,
-                            categoryName,
-                            AppColors.primary,
-                          ),
-                        if (stageName.isNotEmpty)
-                          _buildTag(
-                            Icons.flag_rounded,
-                            stageName,
-                            AppColors.accent,
-                          ),
-                        _buildTag(
-                          Icons.calendar_today_rounded,
-                          _formatDate(date),
-                          AppColors.textSecondary,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+            child: _buildCallCard(call),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildLoadMore() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Center(
+        child: GestureDetector(
+          onTap: () {
+            setState(() => _page++);
+            _loadCalls();
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.primarySurface,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+            ),
+            child: Text(
+              'Load more (${_total - _calls.length} remaining)',
+              style: const TextStyle(
+                color: AppColors.primary,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
               ),
             ),
-          ); // close GestureDetector
-        },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCallCard(dynamic call) {
+    final customerName = call['customerName'] ?? 'Unknown';
+    final categoryName = call['category']?['name'] ?? '';
+    final stageName = call['salesStage']?['name'] ?? '';
+    final analysisStatus = call['analysisStatus'] ?? 'PENDING';
+    num? sopScore = call['sopScore'] != null ? num.tryParse(call['sopScore'].toString()) : null;
+    if (sopScore == null || sopScore == 0) {
+      final ai = call['aiAnalysis'];
+      if (ai is Map) {
+        final nested = ai['overallScore'] ?? ai['sopScore'] ?? ai['score'];
+        if (nested != null) sopScore = num.tryParse(nested.toString());
+      }
+    }
+    if (sopScore == 0) sopScore = null;
+    final date = call['createdAt'] ?? '';
+    final durationSec = call['durationSeconds'] as num?;
+    final userName = call['user'] != null
+        ? '${call['user']['firstName'] ?? ''} ${call['user']['lastName'] ?? ''}'.trim()
+        : '';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [AppColors.primary, AppColors.primaryLight],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Center(
+                    child: Text(
+                      customerName.isNotEmpty ? customerName[0].toUpperCase() : '?',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 18,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        customerName,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      if (userName.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            'by $userName',
+                            style: const TextStyle(color: AppColors.textHint, fontSize: 11),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                _buildStatusBadge(analysisStatus),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (sopScore != null) _buildScoreBadge(sopScore),
+                if (categoryName.isNotEmpty)
+                  _buildTag(Icons.label_rounded, categoryName, AppColors.primary),
+                if (stageName.isNotEmpty)
+                  _buildTag(Icons.flag_rounded, stageName, AppColors.accent),
+                if (durationSec != null)
+                  _buildTag(Icons.timer_outlined, _formatDuration(durationSec.toInt()), AppColors.textSecondary),
+                _buildTag(Icons.calendar_today_rounded, _formatDate(date), AppColors.textSecondary),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildScoreBadge(dynamic score) {
     final numScore = score is num ? score.toInt() : (num.tryParse('$score')?.toInt() ?? 0);
-    Color color;
-    if (numScore >= 80) {
-      color = AppColors.success;
-    } else if (numScore >= 60) {
-      color = AppColors.warning;
-    } else {
-      color = AppColors.error;
-    }
+    final color = numScore >= 80 ? AppColors.success : numScore >= 60 ? AppColors.warning : AppColors.error;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
@@ -342,14 +541,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
         children: [
           Icon(Icons.score_rounded, size: 12, color: color),
           const SizedBox(width: 4),
-          Text(
-            '$numScore%',
-            style: TextStyle(
-              color: color,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+          Text('$numScore%', style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700)),
         ],
       ),
     );
@@ -386,14 +578,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
         children: [
           Icon(icon, size: 12, color: color),
           const SizedBox(width: 4),
-          Text(
-            status,
-            style: TextStyle(
-              color: color,
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+          Text(status, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w700)),
         ],
       ),
     );
@@ -411,14 +596,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
         children: [
           Icon(icon, size: 12, color: color.withValues(alpha: 0.8)),
           const SizedBox(width: 5),
-          Text(
-            text,
-            style: TextStyle(
-              color: color,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          Text(text, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -431,6 +609,12 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
     } catch (_) {
       return dateStr;
     }
+  }
+
+  String _formatDuration(int seconds) {
+    final m = seconds ~/ 60;
+    final s = seconds % 60;
+    return m > 0 ? '${m}m ${s}s' : '${s}s';
   }
 }
 
@@ -475,9 +659,7 @@ class _CallQuickSummarySheetState extends State<_CallQuickSummarySheet> {
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: _loading
-              ? const Center(
-                  child: CircularProgressIndicator(color: AppColors.primary),
-                )
+              ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
               : ListView(
                   controller: scrollCtrl,
                   padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
@@ -517,11 +699,7 @@ class _CallQuickSummarySheetState extends State<_CallQuickSummarySheet> {
         : '';
 
     final scoreColor = score != null
-        ? (score >= 70
-              ? AppColors.success
-              : score >= 40
-              ? AppColors.warning
-              : AppColors.error)
+        ? (score >= 70 ? AppColors.success : score >= 40 ? AppColors.warning : AppColors.error)
         : AppColors.textHint;
 
     return Row(
@@ -530,9 +708,7 @@ class _CallQuickSummarySheetState extends State<_CallQuickSummarySheet> {
           width: 60,
           height: 60,
           decoration: BoxDecoration(
-            color: score != null
-                ? scoreColor.withValues(alpha: 0.1)
-                : AppColors.surfaceLight,
+            color: score != null ? scoreColor.withValues(alpha: 0.1) : AppColors.surfaceLight,
             shape: BoxShape.circle,
           ),
           child: Center(
@@ -540,27 +716,13 @@ class _CallQuickSummarySheetState extends State<_CallQuickSummarySheet> {
                 ? Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        '${score!.round()}',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          color: scoreColor,
-                        ),
-                      ),
-                      Text(
-                        '%',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: scoreColor.withValues(alpha: 0.7),
-                        ),
-                      ),
+                      Text('${score.round()}',
+                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: scoreColor)),
+                      Text('%', style: TextStyle(fontSize: 10, color: scoreColor.withValues(alpha: 0.7))),
                     ],
                   )
                 : Icon(
-                    status == 'PROCESSING'
-                        ? Icons.hourglass_top
-                        : Icons.schedule,
+                    status == 'PROCESSING' ? Icons.hourglass_top : Icons.schedule,
                     size: 24,
                     color: AppColors.textHint,
                   ),
@@ -571,34 +733,17 @@ class _CallQuickSummarySheetState extends State<_CallQuickSummarySheet> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                name,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
-                ),
-              ),
+              Text(name,
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
               const SizedBox(height: 4),
               Wrap(
                 spacing: 8,
                 children: [
                   if (category.isNotEmpty)
-                    Text(
-                      category,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
+                    Text(category,
+                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                   if (duration.isNotEmpty)
-                    Text(
-                      '⏱ $duration',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textHint,
-                      ),
-                    ),
+                    Text('⏱ $duration', style: const TextStyle(fontSize: 12, color: AppColors.textHint)),
                 ],
               ),
             ],
@@ -615,24 +760,14 @@ class _CallQuickSummarySheetState extends State<_CallQuickSummarySheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Section Scores',
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textPrimary,
-          ),
-        ),
+        const Text('Section Scores',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
         const SizedBox(height: 10),
         ...sections.map((s) {
           final sec = Map<String, dynamic>.from(s);
           final secScore = (sec['score'] ?? 0) as num;
           final secName = sec['title'] ?? sec['sectionName'] ?? '';
-          final color = secScore >= 70
-              ? AppColors.success
-              : secScore >= 40
-              ? AppColors.warning
-              : AppColors.error;
+          final color = secScore >= 70 ? AppColors.success : secScore >= 40 ? AppColors.warning : AppColors.error;
           return Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Row(
@@ -641,13 +776,7 @@ class _CallQuickSummarySheetState extends State<_CallQuickSummarySheet> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        secName,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
+                      Text(secName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
                       const SizedBox(height: 4),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(3),
@@ -662,14 +791,8 @@ class _CallQuickSummarySheetState extends State<_CallQuickSummarySheet> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                Text(
-                  '${secScore.toInt()}%',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: color,
-                  ),
-                ),
+                Text('${secScore.toInt()}%',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
               ],
             ),
           );
@@ -680,7 +803,8 @@ class _CallQuickSummarySheetState extends State<_CallQuickSummarySheet> {
 
   Widget _buildSummary() {
     final ai = _detail['aiAnalysis'] as Map<String, dynamic>? ?? {};
-    final rawSummary = ai['summary'] ?? ai['callSummary'] ?? '';
+    // callSummary lives directly on the call OR inside aiAnalysis
+    final rawSummary = _detail['callSummary'] ?? ai['summary'] ?? ai['callSummary'] ?? '';
     final isEmpty = rawSummary is List ? rawSummary.isEmpty : rawSummary.toString().isEmpty;
     if (isEmpty) return const SizedBox.shrink();
 
@@ -691,10 +815,8 @@ class _CallQuickSummarySheetState extends State<_CallQuickSummarySheet> {
           children: [
             const Icon(Icons.summarize_rounded, size: 14, color: AppColors.primary),
             const SizedBox(width: 6),
-            const Text(
-              'Quick Summary',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
-            ),
+            const Text('Quick Summary',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
           ],
         ),
         const SizedBox(height: 8),
@@ -713,18 +835,20 @@ class _CallQuickSummarySheetState extends State<_CallQuickSummarySheet> {
                       padding: EdgeInsets.only(bottom: e.key < rawSummary.length - 1 ? 8 : 0),
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         if (question.isNotEmpty) ...[
-                          Text(question, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                          Text(question,
+                              style: const TextStyle(
+                                  fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                           const SizedBox(height: 2),
                         ],
-                        Text(answer, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.5)),
+                        Text(answer,
+                            style: const TextStyle(
+                                fontSize: 12, color: AppColors.textSecondary, height: 1.5)),
                       ]),
                     );
                   }).toList(),
                 )
-              : Text(
-                  rawSummary.toString(),
-                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.5),
-                ),
+              : Text(rawSummary.toString(),
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.5)),
         ),
       ],
     );
@@ -741,10 +865,7 @@ class _CallQuickSummarySheetState extends State<_CallQuickSummarySheet> {
       raw.forEach((key, value) {
         if (value is List) {
           points.addAll(value.map((e) => e.toString()));
-        } else if (value is String &&
-            value.isNotEmpty &&
-            value != 'N/A' &&
-            value != 'Not Discussed') {
+        } else if (value is String && value.isNotEmpty && value != 'N/A' && value != 'Not Discussed') {
           points.add('$key: $value');
         }
       });
@@ -756,26 +877,14 @@ class _CallQuickSummarySheetState extends State<_CallQuickSummarySheet> {
       children: [
         Row(
           children: [
-            const Icon(
-              Icons.list_alt_rounded,
-              size: 14,
-              color: AppColors.success,
-            ),
+            const Icon(Icons.list_alt_rounded, size: 14, color: AppColors.success),
             const SizedBox(width: 6),
-            const Text(
-              'Key Points',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
-              ),
-            ),
+            const Text('Key Points',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
           ],
         ),
         const SizedBox(height: 8),
-        ...points
-            .take(5)
-            .map(
+        ...points.take(5).map(
               (p) => Padding(
                 padding: const EdgeInsets.only(bottom: 6),
                 child: Row(
@@ -783,22 +892,12 @@ class _CallQuickSummarySheetState extends State<_CallQuickSummarySheet> {
                   children: [
                     const Padding(
                       padding: EdgeInsets.only(top: 4),
-                      child: Icon(
-                        Icons.check_circle_outline,
-                        size: 14,
-                        color: AppColors.success,
-                      ),
+                      child: Icon(Icons.check_circle_outline, size: 14, color: AppColors.success),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(
-                        p,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
-                          height: 1.4,
-                        ),
-                      ),
+                      child: Text(p,
+                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4)),
                     ),
                   ],
                 ),

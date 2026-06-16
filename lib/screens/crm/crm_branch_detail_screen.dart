@@ -25,15 +25,19 @@ class _CrmBranchDetailScreenState extends State<CrmBranchDetailScreen> {
   String? _selectedRole;
   Map<String, dynamic>? _selectedReportingTo;
 
-  static const _roles = [
-    {'label': 'Branch Manager', 'value': 'BRANCH_MANAGER'},
-    {'label': 'Team Leader',    'value': 'TEAM_LEADER'},
-    {'label': 'Sales Manager',  'value': 'SALES_MANAGER'},
-    {'label': 'Receptionist',   'value': 'RECEPTIONIST'},
-  ];
+  // dynamic roles loaded from API
+  List<Map<String, dynamic>> _roles = [];
+  List<Map<String, dynamic>> _filteredUsers = []; // users filtered by selected role
+  bool _rolesLoading = true;
+
+  static const _hiddenRoles = ['Super Admin', 'Distributor', 'My', 'Company'];
+  static const _topRoles = {'CEO', 'CFO', 'GM', 'GENERAL_MANAGER', 'BRANCH_MANAGER', 'TEAM_LEADER'};
+
+  static String _normalizeRole(String name) =>
+      name.trim().toUpperCase().replaceAll(RegExp(r'\s+'), '_');
 
   bool get _showReportingTo =>
-      _selectedRole == 'SALES_MANAGER' || _selectedRole == 'RECEPTIONIST';
+      _selectedRole != null && !_topRoles.contains(_selectedRole);
 
   List<Map<String, dynamic>> get _teamLeaders => _team
       .where((m) => (m['branchRole'] ?? '').toString() == 'TEAM_LEADER')
@@ -44,6 +48,7 @@ class _CrmBranchDetailScreenState extends State<CrmBranchDetailScreen> {
     super.initState();
     _loadTeam();
     _loadUsers();
+    _loadRoles();
   }
 
   Future<void> _loadTeam() async {
@@ -77,6 +82,29 @@ class _CrmBranchDetailScreenState extends State<CrmBranchDetailScreen> {
       }
     } catch (_) {
       if (mounted) setState(() => _usersLoading = false);
+    }
+  }
+
+  Future<void> _loadRoles() async {
+    try {
+      final res = await _api.getRoles();
+      final raw = res.data;
+      final list = raw is List ? raw : (raw is Map ? (raw['data'] ?? []) as List : []);
+      if (mounted) {
+        setState(() {
+          _roles = list
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .where((r) => r['status'] == 'ACTIVE' && !_hiddenRoles.contains(r['name']))
+              .map<Map<String, dynamic>>((r) => {
+                    'label': r['name']?.toString() ?? '',
+                    'value': _normalizeRole(r['name']?.toString() ?? ''),
+                  })
+              .toList();
+          _rolesLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _rolesLoading = false);
     }
   }
 
@@ -152,11 +180,28 @@ class _CrmBranchDetailScreenState extends State<CrmBranchDetailScreen> {
 
   // ── Pick user from searchable bottom sheet ──
   Future<void> _pickUser() async {
+    // If a role is selected, show only users with that role; else show all
+    final usersToShow = _selectedRole != null ? _filteredUsers : _allUsers;
     final picked = await _showUserPicker(
       title: 'Select Member',
-      users: _allUsers,
+      users: usersToShow,
     );
-    if (picked != null) setState(() => _selectedUser = picked);
+    if (picked != null) {
+      // Auto-fill role from user's first assigned role
+      String? autoRole;
+      final userRoles = picked['roles'];
+      if (userRoles is List && userRoles.isNotEmpty) {
+        final roleName = (userRoles[0] as Map)['name']?.toString() ?? '';
+        if (roleName.isNotEmpty) autoRole = _normalizeRole(roleName);
+      }
+      setState(() {
+        _selectedUser = picked;
+        if (_selectedRole == null && autoRole != null) {
+          _selectedRole = autoRole;
+          _selectedReportingTo = null;
+        }
+      });
+    }
   }
 
   Future<void> _pickReportingTo() async {
@@ -272,13 +317,13 @@ class _CrmBranchDetailScreenState extends State<CrmBranchDetailScreen> {
   }
 
   String _roleLabel(String role) {
-    switch (role) {
-      case 'BRANCH_MANAGER': return 'Branch Manager';
-      case 'TEAM_LEADER':    return 'Team Leader';
-      case 'SALES_MANAGER':  return 'Sales Manager';
-      case 'RECEPTIONIST':   return 'Receptionist';
-      default:               return role.replaceAll('_', ' ');
-    }
+    final found = _roles.cast<Map<String, dynamic>?>().firstWhere(
+      (r) => r?['value'] == role,
+      orElse: () => null,
+    );
+    if (found != null) return found['label'] as String;
+    // Fallback: convert UPPER_SNAKE to Title Case
+    return role.split('_').map((w) => w.isEmpty ? '' : '${w[0]}${w.substring(1).toLowerCase()}').join(' ');
   }
 
   @override
@@ -323,7 +368,7 @@ class _CrmBranchDetailScreenState extends State<CrmBranchDetailScreen> {
           Expanded(
             child: RefreshIndicator(
               color: AppColors.primary,
-              onRefresh: () async { await _loadTeam(); await _loadUsers(); },
+              onRefresh: () async { await _loadTeam(); await _loadUsers(); await _loadRoles(); },
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
@@ -449,15 +494,28 @@ class _CrmBranchDetailScreenState extends State<CrmBranchDetailScreen> {
           DropdownButtonFormField<String>(
             value: _selectedRole,
             decoration: const InputDecoration(prefixIcon: Icon(Icons.badge_outlined), isDense: true),
-            hint: const Text('Select role'),
+            hint: Text(_rolesLoading ? 'Loading roles…' : 'Select role'),
             items: _roles.map((r) => DropdownMenuItem<String>(
               value: r['value'] as String,
               child: Text(r['label'] as String),
             )).toList(),
-            onChanged: (v) => setState(() {
-              _selectedRole = v;
-              _selectedReportingTo = null;
-            }),
+            onChanged: (_rolesLoading || _selectedUser != null) ? null : (v) {
+              setState(() {
+                _selectedRole = v;
+                _selectedUser = null;
+                _selectedReportingTo = null;
+                if (v != null) {
+                  _filteredUsers = _allUsers.where((u) {
+                    final userRoles = u['roles'];
+                    if (userRoles is! List || userRoles.isEmpty) return false;
+                    final roleName = (userRoles[0] as Map)['name']?.toString() ?? '';
+                    return _normalizeRole(roleName) == v;
+                  }).toList();
+                } else {
+                  _filteredUsers = [];
+                }
+              });
+            },
           ),
           const SizedBox(height: 12),
 

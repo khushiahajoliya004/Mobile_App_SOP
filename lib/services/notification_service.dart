@@ -8,8 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../firebase_options.dart';
 import 'api_service.dart';
 import '../utils/navigator_key.dart';
-import '../screens/crm/crm_leads_screen.dart';
-import '../screens/crm/crm_screen.dart';
+import '../screens/crm_v2/crm_deal_detail_screen.dart';
 
 /// Top-level handler for background messages (must be top-level function)
 @pragma('vm:entry-point')
@@ -215,14 +214,12 @@ class NotificationService {
   static void _navigateFromData(Map<String, dynamic> data) {
     final type = data['type']?.toString();
     final dealId = data['dealId']?.toString();
+    final dealName = data['dealName']?.toString() ?? data['contactName']?.toString() ?? 'Lead';
     if (type == 'LEAD_ASSIGNED' && dealId != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         navigatorKey.currentState?.push(
           MaterialPageRoute(
-            builder: (_) => CrmSubWrapper(
-              title: 'Leads',
-              child: CrmLeadsScreen(highlightDealId: dealId),
-            ),
+            builder: (_) => CrmDealDetailScreen(dealId: dealId, dealName: dealName),
           ),
         );
       });

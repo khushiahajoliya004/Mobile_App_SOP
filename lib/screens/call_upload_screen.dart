@@ -41,10 +41,11 @@ class _MediaStoreFile {
 
 class CallUploadScreen extends StatefulWidget {
   final String? leadId;
+  final String? dealId;
   final String? leadName;
   final String? leadPhone;
 
-  const CallUploadScreen({super.key, this.leadId, this.leadName, this.leadPhone});
+  const CallUploadScreen({super.key, this.leadId, this.dealId, this.leadName, this.leadPhone});
 
   @override
   State<CallUploadScreen> createState() => _CallUploadScreenState();
@@ -90,6 +91,10 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
     super.initState();
     if (widget.leadId != null) {
       _linkedLeadId = widget.leadId;
+      _linkedLeadName = widget.leadName;
+      _customerNameController.text = widget.leadName ?? '';
+      _phoneController.text = widget.leadPhone ?? '';
+    } else if (widget.dealId != null) {
       _linkedLeadName = widget.leadName;
       _customerNameController.text = widget.leadName ?? '';
       _phoneController.text = widget.leadPhone ?? '';
@@ -458,6 +463,7 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
           audioFilePath: _audioFilePath,
           audioFileName: _audioFileName,
           leadId: _linkedLeadId,
+          dealId: widget.dealId,
           phoneNumber: phone,
         );
       } on DioException catch (e1) {
@@ -641,7 +647,7 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
                         ),
                         SizedBox(height: 2),
                         Text(
-                          'Upload will work but AI analysis needs SOP. Ask admin to assign one.',
+                          'Upload will work but analysis needs SOP. Ask admin to assign one.',
                           style: TextStyle(
                             fontSize: 11,
                             color: AppColors.textSecondary,

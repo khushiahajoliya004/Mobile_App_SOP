@@ -29,6 +29,9 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
   final _searchController = TextEditingController();
   final _scrollController = ScrollController();
   String? _highlightedId;
+  String? _dateFilter = 'today'; // null=All, 'today','yesterday','week','month','custom'
+  DateTime? _customFrom;
+  DateTime? _customTo;
 
   @override
   void initState() {
@@ -114,12 +117,38 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
     return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
   }
 
+  String _fmt(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  (String?, String?) get _dateRange {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    switch (_dateFilter) {
+      case 'today':
+        return (_fmt(today), _fmt(today));
+      case 'yesterday':
+        final y = today.subtract(const Duration(days: 1));
+        return (_fmt(y), _fmt(y));
+      case 'week':
+        final start = today.subtract(Duration(days: today.weekday - 1));
+        return (_fmt(start), _fmt(today));
+      case 'month':
+        return (_fmt(DateTime(now.year, now.month, 1)), _fmt(today));
+      case 'custom':
+        return (_customFrom != null ? _fmt(_customFrom!) : null, _customTo != null ? _fmt(_customTo!) : null);
+      default:
+        return (null, null);
+    }
+  }
+
   Future<void> _load() async {
+    final (fromDate, toDate) = _dateRange;
     try {
       final res = await _api.getCrmDeals(
         pipelineId: _selectedPipelineId,
         branchId: _currentUser?.branchId,
         search: _searchController.text.isEmpty ? null : _searchController.text,
+        fromDate: fromDate,
+        toDate: toDate,
       );
       final raw = res.data;
       final list = raw is List
@@ -148,16 +177,13 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
     final notesCtrl = TextEditingController();
     final expectedValueCtrl = TextEditingController();
     String source = 'Walk-in';
-    // Auto-select branch from user profile, matching web frontend logic
     String? branchId = _currentUser?.branchId;
     final bool branchLocked = branchId != null;
-    // Auto-select first pipeline — backend requires pipelineId when createDeal=true
     String? pipelineId = _pipelines.isNotEmpty ? _pipelines.first['id']?.toString() : null;
     Map<String, dynamic>? assignedUser;
     List<Map<String, dynamic>> sheetUsers = List.from(_assignableUsers);
     bool sheetUsersLoading = false;
 
-    // Pre-fetch branch team if user has a branch (same as web onBranchChange on init)
     if (branchId != null) {
       try {
         final res = await _api.getCrmUsersByBranch(branchId);
@@ -182,7 +208,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
           Future<void> onBranchChanged(String? selectedBranchId) async {
             setSheetState(() {
               branchId = selectedBranchId;
-              assignedUser = null; // reset selected user when branch changes
+              assignedUser = null;
               sheetUsersLoading = selectedBranchId != null;
               if (selectedBranchId == null) sheetUsers = List.from(_assignableUsers);
             });
@@ -193,7 +219,6 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
               final list = raw is List ? raw : (raw is Map ? (raw['data'] ?? []) as List : []);
               final users = list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
               setSheetState(() {
-                // getCrmUsersByBranch returns userId field, normalize to also have id
                 sheetUsers = users.map((u) => {...u, 'id': u['userId'] ?? u['id']}).toList();
                 sheetUsersLoading = false;
               });
@@ -272,7 +297,6 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // ── Header ──
                   Row(children: [
                     Container(
                       padding: const EdgeInsets.all(10),
@@ -286,8 +310,6 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                     const Text('Create New Lead', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
                   ]),
                   const SizedBox(height: 20),
-
-                  // ── Customer Name ──
                   TextField(
                     controller: nameCtrl,
                     textCapitalization: TextCapitalization.words,
@@ -295,8 +317,6 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                     onChanged: (_) => setSheetState(() {}),
                   ),
                   const SizedBox(height: 12),
-
-                  // ── Phone * ──
                   TextField(
                     controller: phoneCtrl,
                     keyboardType: TextInputType.phone,
@@ -305,16 +325,12 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                     onChanged: (_) => setSheetState(() {}),
                   ),
                   const SizedBox(height: 12),
-
-                  // ── Email ──
                   TextField(
                     controller: emailCtrl,
                     keyboardType: TextInputType.emailAddress,
                     decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.email_outlined)),
                   ),
                   const SizedBox(height: 12),
-
-                  // ── Source ──
                   DropdownButtonFormField<String>(
                     value: source,
                     decoration: const InputDecoration(labelText: 'Source', prefixIcon: Icon(Icons.source_outlined)),
@@ -323,8 +339,6 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                     onChanged: (v) => setSheetState(() => source = v!),
                   ),
                   const SizedBox(height: 12),
-
-                  // ── Branch ──
                   if (_branches.isNotEmpty) ...[
                     DropdownButtonFormField<String>(
                       value: branchId,
@@ -355,8 +369,6 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                     ],
                     const SizedBox(height: 12),
                   ],
-
-                  // ── Pipeline ──
                   if (_pipelines.isNotEmpty) ...[
                     DropdownButtonFormField<String>(
                       value: pipelineId,
@@ -370,8 +382,6 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                     ),
                     const SizedBox(height: 12),
                   ],
-
-                  // ── Expected Value ──
                   TextField(
                     controller: expectedValueCtrl,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -382,8 +392,6 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-
-                  // ── Assign Salesperson ──
                   Row(children: [
                     const Text('Assign Salesperson', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
                     if (branchId != null) ...[
@@ -433,8 +441,6 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-
-                  // ── Notes ──
                   TextField(
                     controller: notesCtrl,
                     maxLines: 3,
@@ -446,21 +452,18 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                     ),
                   ),
                   const SizedBox(height: 20),
-
-                  // ── Submit ──
                   FilledButton(
                     onPressed: (nameCtrl.text.trim().isEmpty || phoneCtrl.text.trim().isEmpty || (_pipelines.isNotEmpty && pipelineId == null)) ? null : () async {
                       final name = nameCtrl.text.trim();
                       final phone = phoneCtrl.text.trim();
-
                       if (phone.isNotEmpty) {
                         try {
                           final dupRes = await _api.checkDuplicateCrmContact(phone);
                           final raw = dupRes.data;
                           final list = raw is List ? raw : (raw is Map ? (raw['data'] ?? raw['contacts'] ?? []) : []);
-                          final isDuplicate = list is List && (list as List).isNotEmpty;
+                          final isDuplicate = list is List && list.isNotEmpty;
                           if (isDuplicate && ctx.mounted) {
-                            final first = (list as List).first;
+                            final first = list.first;
                             final existingName = first is Map ? (first['name'] ?? 'another contact') : 'another contact';
                             final proceed = await showDialog<bool>(
                               context: ctx,
@@ -482,7 +485,6 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                           }
                         } catch (_) {}
                       }
-
                       try {
                         final evText = expectedValueCtrl.text.trim();
                         final notes = notesCtrl.text.trim();
@@ -497,7 +499,6 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                           expectedValue: evText.isNotEmpty ? double.tryParse(evText) : null,
                           notes: notes.isNotEmpty ? notes : null,
                         );
-                        // Extract new lead ID from response
                         String? newLeadId;
                         final resData = res.data;
                         if (resData is Map) {
@@ -521,9 +522,7 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                                 : null;
                             msg = serverMsg ?? msg;
                           }
-                          ScaffoldMessenger.of(ctx).showSnackBar(
-                            SnackBar(content: Text(msg)),
-                          );
+                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(msg)));
                         }
                       }
                     },
@@ -539,6 +538,55 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  void _showNewLeadRecordingSheet(String leadId, String leadName, String phone) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Lead created!', style: const TextStyle(fontSize: 13, color: AppColors.textHint)),
+              Text(leadName, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 4),
+              const Text('Do you want to start a recording?', style: TextStyle(fontSize: 15, color: AppColors.textSecondary)),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () { Navigator.pop(ctx); _navigateToUpload(leadId, leadName, phone); },
+                      icon: const Icon(Icons.upload_file_rounded, size: 18),
+                      label: const Text('Upload Call'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () { Navigator.pop(ctx); _navigateToRecorder(leadId, leadName, phone); },
+                      icon: const Icon(Icons.mic_rounded, size: 18),
+                      label: const Text('Start Recording'),
+                      style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+                    ),
+                  ),
+                ],
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Center(child: Text('Skip for now', style: TextStyle(color: AppColors.textHint))),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -592,6 +640,174 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
           SnackBar(content: Text('Failed to mark lost: $e')),
         );
       }
+    }
+  }
+
+  Future<void> _pickCustomRange() async {
+    final now = DateTime.now();
+    final from = await showDatePicker(
+      context: context,
+      initialDate: _customFrom ?? now,
+      firstDate: DateTime(now.year - 2),
+      lastDate: now,
+      helpText: 'Select start date',
+      builder: (ctx, child) => Theme(data: Theme.of(ctx).copyWith(colorScheme: const ColorScheme.light(primary: AppColors.primary)), child: child!),
+    );
+    if (from == null || !mounted) return;
+    final to = await showDatePicker(
+      context: context,
+      initialDate: _customTo ?? from,
+      firstDate: from,
+      lastDate: now,
+      helpText: 'Select end date',
+      builder: (ctx, child) => Theme(data: Theme.of(ctx).copyWith(colorScheme: const ColorScheme.light(primary: AppColors.primary)), child: child!),
+    );
+    if (to == null || !mounted) return;
+    setState(() { _dateFilter = 'custom'; _customFrom = from; _customTo = to; });
+    _load();
+  }
+
+  String get _dateFilterLabel {
+    switch (_dateFilter) {
+      case 'today': return 'Today';
+      case 'yesterday': return 'Yesterday';
+      case 'week': return 'This Week';
+      case 'month': return 'This Month';
+      case 'custom':
+        if (_customFrom != null && _customTo != null) {
+          return '${_customFrom!.day}/${_customFrom!.month} – ${_customTo!.day}/${_customTo!.month}';
+        }
+        return 'Custom';
+      default: return 'All Time';
+    }
+  }
+
+  Widget _buildFilterRow() {
+    const presets = [
+      (null, 'All Time'),
+      ('today', 'Today'),
+      ('yesterday', 'Yesterday'),
+      ('week', 'This Week'),
+      ('month', 'This Month'),
+    ];
+    final hasFilter = _dateFilter != null;
+
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+      child: Row(children: [
+        const Icon(Icons.calendar_today_rounded, size: 15, color: AppColors.textHint),
+        const SizedBox(width: 8),
+        Expanded(
+          child: GestureDetector(
+            onTap: () => _showDateFilterSheet(presets),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: hasFilter ? AppColors.primary.withValues(alpha: 0.08) : AppColors.surfaceLight,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: hasFilter ? AppColors.primary.withValues(alpha: 0.4) : Colors.transparent),
+              ),
+              child: Row(children: [
+                Expanded(
+                  child: Text(
+                    _dateFilterLabel,
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: hasFilter ? AppColors.primary : AppColors.textSecondary),
+                  ),
+                ),
+                Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: hasFilter ? AppColors.primary : AppColors.textHint),
+              ]),
+            ),
+          ),
+        ),
+        if (hasFilter) ...[
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: () { setState(() { _dateFilter = null; _customFrom = null; _customTo = null; }); _load(); },
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: AppColors.error.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
+              child: const Icon(Icons.close_rounded, size: 15, color: AppColors.error),
+            ),
+          ),
+        ],
+      ]),
+    );
+  }
+
+  void _showDateFilterSheet(List<(String?, String)> presets) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)))),
+              const SizedBox(height: 14),
+              const Text('Filter by Date', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+              const SizedBox(height: 12),
+              ...presets.map((p) {
+                final sel = _dateFilter == p.$1;
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    width: 36, height: 36,
+                    decoration: BoxDecoration(
+                      color: sel ? AppColors.primary : AppColors.surfaceLight,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(_dateIcon(p.$1), size: 17, color: sel ? Colors.white : AppColors.textHint),
+                  ),
+                  title: Text(p.$2, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: sel ? AppColors.primary : AppColors.textPrimary)),
+                  trailing: sel ? const Icon(Icons.check_rounded, color: AppColors.primary, size: 18) : null,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    setState(() { _dateFilter = p.$1; _customFrom = null; _customTo = null; });
+                    _load();
+                  },
+                );
+              }),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  width: 36, height: 36,
+                  decoration: BoxDecoration(
+                    color: _dateFilter == 'custom' ? AppColors.primary : AppColors.surfaceLight,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.date_range_rounded, size: 17, color: _dateFilter == 'custom' ? Colors.white : AppColors.textHint),
+                ),
+                title: Text(
+                  _dateFilter == 'custom' && _customFrom != null && _customTo != null
+                      ? '${_customFrom!.day}/${_customFrom!.month}/${_customFrom!.year} – ${_customTo!.day}/${_customTo!.month}/${_customTo!.year}'
+                      : 'Custom Range',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _dateFilter == 'custom' ? AppColors.primary : AppColors.textPrimary),
+                ),
+                trailing: _dateFilter == 'custom' ? const Icon(Icons.check_rounded, color: AppColors.primary, size: 18) : null,
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickCustomRange();
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  IconData _dateIcon(String? key) {
+    switch (key) {
+      case 'today': return Icons.today_rounded;
+      case 'yesterday': return Icons.history_rounded;
+      case 'week': return Icons.view_week_rounded;
+      case 'month': return Icons.calendar_month_rounded;
+      default: return Icons.all_inclusive_rounded;
     }
   }
 
@@ -676,75 +892,6 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
             FadeTransition(opacity: animation, child: child),
       ),
     ).then((_) => _load());
-  }
-
-  // Shown after a new lead is created
-  void _showNewLeadRecordingSheet(String leadId, String leadName, String phone) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Lead created!',
-                style: const TextStyle(fontSize: 13, color: AppColors.textHint),
-              ),
-              Text(
-                leadName,
-                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'Do you want to start a recording?',
-                style: TextStyle(fontSize: 15, color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        _navigateToUpload(leadId, leadName, phone);
-                      },
-                      icon: const Icon(Icons.upload_file_rounded, size: 18),
-                      label: const Text('Upload Call'),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        _navigateToRecorder(leadId, leadName, phone);
-                      },
-                      icon: const Icon(Icons.mic_rounded, size: 18),
-                      label: const Text('Start Recording'),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Center(
-                  child: Text('Skip for now', style: TextStyle(color: AppColors.textHint)),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   // Shown when tapping an existing lead
@@ -858,43 +1005,45 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) {
-      return const Center(
-        child: CircularProgressIndicator(
-          color: AppColors.primary,
-          strokeWidth: 3,
-        ),
-      );
-    }
     return Container(
       color: AppColors.scaffoldBg,
       child: Stack(
         children: [
           Column(
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              Container(
+                color: Colors.white,
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                 child: TextField(
                   controller: _searchController,
                   decoration: InputDecoration(
                     hintText: 'Search leads...',
-                    prefixIcon: const Icon(
-                      Icons.search,
-                      color: AppColors.textHint,
-                    ),
+                    prefixIcon: const Icon(Icons.search, color: AppColors.textHint),
                     suffixIcon: IconButton(
                       icon: const Icon(Icons.clear, color: AppColors.textHint),
-                      onPressed: () {
-                        _searchController.clear();
-                        _load();
-                      },
+                      onPressed: () { _searchController.clear(); _load(); },
                     ),
+                    filled: true,
+                    fillColor: AppColors.surfaceLight,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
                   ),
                   onSubmitted: (_) => _load(),
                 ),
               ),
+              _buildFilterRow(),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                child: Row(children: [
+                  Text('${_leads.length} leads', style: const TextStyle(fontSize: 12, color: AppColors.textHint)),
+                  const Spacer(),
+                  GestureDetector(onTap: _load, child: const Icon(Icons.refresh, size: 16, color: AppColors.primary)),
+                ]),
+              ),
               Expanded(
-                child: _leads.isEmpty
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 3))
+                    : _leads.isEmpty
                     ? _buildEmptyState()
                     : RefreshIndicator(
                         color: AppColors.primary,
