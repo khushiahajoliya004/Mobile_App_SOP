@@ -8,7 +8,9 @@ import '../../services/api_service.dart';
 class AiInsightsScreen extends StatefulWidget {
   final String? initialStatus;
   final String? initialUserId;
-  const AiInsightsScreen({super.key, this.initialStatus, this.initialUserId});
+  final DateTime? initialFromDate;
+  final DateTime? initialToDate;
+  const AiInsightsScreen({super.key, this.initialStatus, this.initialUserId, this.initialFromDate, this.initialToDate});
   @override
   State<AiInsightsScreen> createState() => _AiInsightsScreenState();
 }
@@ -76,6 +78,8 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
     if (widget.initialUserId != null && widget.initialUserId!.isNotEmpty) {
       _fixedUserId = widget.initialUserId;
     }
+    if (widget.initialFromDate != null) _dateFrom = widget.initialFromDate;
+    if (widget.initialToDate != null) _dateTo = widget.initialToDate;
     _load();
     _loadTranscriptionSetting();
   }
@@ -112,8 +116,16 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
             .toList();
         _total = raw['pagination']?['total'] ?? _calls.length;
         _totalPages = raw['pagination']?['totalPages'] ?? 1;
+        final summary = raw['summary'];
+        if (summary != null) {
+          _totalCalls = _total;
+          _completedCount = (summary['analyzedCount'] as num?)?.toInt() ?? 0;
+          _avgScore = (summary['avgScore'] as num?)?.toInt() ?? 0;
+          _successRate = (summary['successRate'] as num?)?.toInt() ?? 0;
+        } else {
+          _computeStats();
+        }
       }
-      _computeStats();
     } catch (_) {
       _calls = [];
     }

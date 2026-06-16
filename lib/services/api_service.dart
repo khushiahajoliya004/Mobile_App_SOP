@@ -759,8 +759,8 @@ class ApiService {
     if (userSearch != null && userSearch.isNotEmpty)
       params['userSearch'] = userSearch;
     if (status != null && status.isNotEmpty) params['status'] = status;
-    if (startDate != null) params['startDate'] = startDate;
-    if (endDate != null) params['endDate'] = endDate;
+    if (startDate != null) params['fromDate'] = startDate;
+    if (endDate != null) params['toDate'] = endDate;
     if (userId != null && userId.isNotEmpty) params['userId'] = userId;
     return _dio.get('/ai-insights', queryParameters: params);
   }

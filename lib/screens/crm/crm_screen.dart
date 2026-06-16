@@ -71,10 +71,11 @@ class _CrmScreenState extends State<CrmScreen> {
     // Management roles see "Deals"; only Receptionist (and unknown roles) see "Leads"
     const mgmtRoles = {'CEO', 'CFO', 'GM', 'BRANCH_MANAGER', 'TEAM_LEADER', 'SALES_MANAGER'};
     final isMgmt = mgmtRoles.contains(_user?.branchRole);
+    final isReceptionist = _user?.branchRole == 'RECEPTIONIST';
     final showAsLeads = isUser && !isMgmt;
 
     final modules = <_CrmModule>[
-      if (!isUser && _can('CRM_DASHBOARD'))
+      if (!isUser && _can('CRM_DASHBOARD') || isReceptionist)
         _CrmModule(
           'Dashboard',
           Icons.dashboard_rounded,

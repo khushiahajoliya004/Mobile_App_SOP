@@ -290,7 +290,16 @@ class _DashboardScreenState extends State<DashboardScreen>
   Widget _headerStat(String value, String label, IconData icon, {String? filterStatus}) {
     return Expanded(
       child: GestureDetector(
-        onTap: () => _navigateTo(AiInsightsScreen(initialStatus: filterStatus ?? '', initialUserId: _user?.id), 'Call Analysis'),
+        onTap: () {
+          final now = DateTime.now();
+          final from30d = now.subtract(const Duration(days: 30));
+          _navigateTo(AiInsightsScreen(
+            initialStatus: filterStatus ?? '',
+            initialUserId: (_user?.isCompanyAdmin == true || _user?.isSuperAdmin == true) ? null : _user?.id,
+            initialFromDate: from30d,
+            initialToDate: now,
+          ), 'Call Analysis');
+        },
         child: Column(
           children: [
             Icon(icon, color: Colors.white.withValues(alpha: 0.6), size: 18),
@@ -341,7 +350,16 @@ class _DashboardScreenState extends State<DashboardScreen>
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
       child: GestureDetector(
-        onTap: () => _navigateTo(AiInsightsScreen(initialStatus: 'COMPLETED', initialUserId: _user?.id), 'Call Analysis'),
+        onTap: () {
+          final now = DateTime.now();
+          final from30d = now.subtract(const Duration(days: 30));
+          _navigateTo(AiInsightsScreen(
+            initialStatus: 'COMPLETED',
+            initialUserId: (_user?.isCompanyAdmin == true || _user?.isSuperAdmin == true) ? null : _user?.id,
+            initialFromDate: from30d,
+            initialToDate: now,
+          ), 'Call Analysis');
+        },
         child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(

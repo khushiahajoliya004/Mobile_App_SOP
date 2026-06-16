@@ -37,10 +37,12 @@ import 'salesman_sop/salesman_sop_screen.dart';
 import 'analytics/analytics_compare_screen.dart';
 import 'force_update/force_update_settings_screen.dart';
 import 'crm/quick_lead_sheet.dart';
+import 'call_recorder_screen.dart';
 
 class MenuScreen extends StatelessWidget {
   final UserModel? user;
-  const MenuScreen({super.key, this.user});
+  final VoidCallback? onProfileTap;
+  const MenuScreen({super.key, this.user, this.onProfileTap});
 
   bool _can(String code) {
     if (user == null) return false;
@@ -314,7 +316,9 @@ class MenuScreen extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           // User info row
-          Container(
+          GestureDetector(
+            onTap: onProfileTap,
+            child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.1),
@@ -362,8 +366,11 @@ class MenuScreen extends StatelessWidget {
                     style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: _roleColor),
                   ),
                 ),
+                const SizedBox(width: 6),
+                const Icon(Icons.chevron_right_rounded, color: Colors.white54, size: 16),
               ],
             ),
+          ),
           ),
           const SizedBox(height: 12),
           // Feature chips
@@ -371,10 +378,10 @@ class MenuScreen extends StatelessWidget {
             spacing: 6,
             runSpacing: 6,
             children: [
-              _featureChip(Icons.mic_rounded, 'Record'),
-              _featureChip(Icons.auto_awesome_rounded, 'Smart Analysis'),
-              _featureChip(Icons.insights_rounded, 'Insights'),
-              _featureChip(Icons.groups_rounded, 'CRM'),
+              _featureChip(context, Icons.mic_rounded, 'Record', const CallRecorderScreen()),
+              _featureChip(context, Icons.auto_awesome_rounded, 'Smart Analysis', const AiInsightsScreen()),
+              _featureChip(context, Icons.insights_rounded, 'Insights', const AnalyticsScreen()),
+              _featureChip(context, Icons.groups_rounded, 'CRM', const CrmScreen()),
             ],
           ),
         ],
@@ -425,28 +432,36 @@ class MenuScreen extends StatelessWidget {
     );
   }
 
-  Widget _featureChip(IconData icon, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+  Widget _featureChip(BuildContext context, IconData icon, String label, Widget screen) {
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => _ModuleWrapper(title: label, child: screen),
+        ),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 11, color: Colors.white.withValues(alpha: 0.5)),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              color: Colors.white.withValues(alpha: 0.5),
-              fontWeight: FontWeight.w500,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 11, color: Colors.white),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 10,
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

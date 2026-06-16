@@ -3,7 +3,7 @@ import '../../main.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../models/user_model.dart';
-import 'crm_lead_detail_screen.dart';
+import '../crm_v2/crm_deal_detail_screen.dart';
 
 class CrmReceptionScreen extends StatefulWidget {
   const CrmReceptionScreen({super.key});
@@ -413,10 +413,9 @@ class _CrmReceptionScreenState extends State<CrmReceptionScreen> {
                   onPressed: () {
                     Navigator.push(context, PageRouteBuilder(
                       opaque: false,
-                      pageBuilder: (_, __, ___) => CrmLeadDetailScreen(
-                        leadId: lead['id'].toString(),
-                        leadName: lead['customerName']?.toString() ?? 'Lead',
-                        isDeal: true,
+                      pageBuilder: (_, __, ___) => CrmDealDetailScreen(
+                        dealId: lead['id'].toString(),
+                        dealName: lead['customerName']?.toString() ?? 'Lead',
                       ),
                       transitionsBuilder: (_, a, __, c) => FadeTransition(opacity: a, child: c),
                     ));
@@ -531,10 +530,9 @@ class _CrmReceptionScreenState extends State<CrmReceptionScreen> {
                 if (_createdLead?['id'] != null) {
                   Navigator.push(context, PageRouteBuilder(
                     opaque: false,
-                    pageBuilder: (_, __, ___) => CrmLeadDetailScreen(
-                      leadId: _createdLead!['id'].toString(),
-                      leadName: _createdLead!['customerName']?.toString() ?? 'Lead',
-                      isDeal: true,
+                    pageBuilder: (_, __, ___) => CrmDealDetailScreen(
+                      dealId: _createdLead!['id'].toString(),
+                      dealName: _createdLead!['customerName']?.toString() ?? 'Lead',
                     ),
                     transitionsBuilder: (_, a, __, c) => FadeTransition(opacity: a, child: c),
                   ));
