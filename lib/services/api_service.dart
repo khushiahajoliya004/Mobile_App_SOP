@@ -1812,6 +1812,18 @@ class ApiService {
         },
       );
 
+  Future<Response> createMaster(String masterType, String name) async =>
+      _dio.post('/crm/masters', data: {'masterType': masterType, 'name': name});
+
+  Future<Response> updateMaster(String id, String name) async =>
+      _dio.patch('/crm/masters/item/$id', data: {'name': name});
+
+  Future<Response> deleteMaster(String id) async =>
+      _dio.delete('/crm/masters/item/$id');
+
+  Future<Response> toggleMasterStatus(String id, String status) async =>
+      _dio.patch('/crm/masters/item/$id/status/$status');
+
   // ─── Team Mapping ───
 
   /// GET /users/seniors  — users who have at least one team member

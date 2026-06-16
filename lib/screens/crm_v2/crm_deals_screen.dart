@@ -1236,15 +1236,13 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
                     color: const Color(0xFF0EA5E9),
                     onTap: () => _navigateToUpload(deal['id'].toString(), name, phone),
                   ),
-                  if (callCount > 0) ...[
-                    const SizedBox(width: 6),
-                    // View Summary
-                    _tinyAction(
-                      icon: Icons.summarize_rounded,
-                      color: AppColors.success,
-                      onTap: () => _showCallSummaryForDeal(deal['id'].toString(), name),
-                    ),
-                  ],
+                  const SizedBox(width: 6),
+                  // View Summary — always visible
+                  _tinyAction(
+                    icon: Icons.summarize_rounded,
+                    color: AppColors.success,
+                    onTap: () => _showCallSummaryForDeal(deal['id'].toString(), name, hasNoCalls: callCount == 0),
+                  ),
                   const SizedBox(width: 2),
                   // Three-dot
                   PopupMenuButton<String>(
@@ -1302,7 +1300,16 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
     return v.toStringAsFixed(0);
   }
 
-  void _showCallSummaryForDeal(String dealId, String dealName) {
+  void _showCallSummaryForDeal(String dealId, String dealName, {bool hasNoCalls = false}) {
+    if (hasNoCalls) {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => _NoCallsSheet(dealName: dealName),
+      );
+      return;
+    }
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1665,5 +1672,100 @@ class _DealCallSummarySheetState extends State<_DealCallSummarySheet> {
         ]),
       )),
     ]);
+  }
+}
+
+// ═══ NO CALLS SHEET ══════════════════════════════════════════════════════════
+class _NoCallsSheet extends StatelessWidget {
+  final String dealName;
+  const _NoCallsSheet({required this.dealName});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: DraggableScrollableSheet(
+        initialChildSize: 0.38,
+        minChildSize: 0.28,
+        maxChildSize: 0.5,
+        builder: (_, ctrl) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              const SizedBox(height: 10),
+              Container(width: 36, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: [
+                    const Icon(Icons.summarize_rounded, color: AppColors.textHint, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        dealName,
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 20, color: AppColors.textHint),
+                      onPressed: () => Navigator.pop(context),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 20),
+              Expanded(
+                child: ListView(
+                  controller: ctrl,
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  children: [
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceLight,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Column(
+                        children: [
+                          Container(
+                            width: 56,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              color: AppColors.textHint.withValues(alpha: 0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.phone_missed_rounded, size: 26, color: AppColors.textHint),
+                          ),
+                          const SizedBox(height: 14),
+                          const Text(
+                            'No Calls Recorded Yet',
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Call summaries and AI insights will appear here once a call has been recorded for this deal.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.5),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
