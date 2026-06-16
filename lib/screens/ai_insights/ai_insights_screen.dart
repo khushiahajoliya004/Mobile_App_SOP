@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../main.dart';
@@ -242,7 +243,13 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
         _msg('Summary generated successfully');
       }
     } catch (e) {
-      if (mounted) _msg('Failed to generate summary: $e', error: true);
+      if (mounted) {
+        String msg = 'Failed to generate summary. Please try again.';
+        if (e is DioException && e.response?.statusCode == 500) {
+          msg = 'Summary generation failed. Please try again later.';
+        }
+        _msg(msg, error: true);
+      }
     }
     if (mounted) setState(() => _summaryGenerating = false);
   }
@@ -265,7 +272,13 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
         _msg('Manager review generated');
       }
     } catch (e) {
-      if (mounted) _msg('Failed to generate review: $e', error: true);
+      if (mounted) {
+        String msg = 'Failed to generate review. Please try again.';
+        if (e is DioException && e.response?.statusCode == 500) {
+          msg = 'Review generation failed. Please try again later.';
+        }
+        _msg(msg, error: true);
+      }
     }
     if (mounted) setState(() => _reviewGenerating = false);
   }
@@ -335,7 +348,9 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
           await _api.bulkDownloadRecordings(_selectedCallIds.toList());
       final bytes = res.data;
       if (bytes is List<int> && bytes.isNotEmpty) {
-        final dir = await getApplicationDocumentsDirectory();
+        final dir = Platform.isAndroid
+            ? (await getExternalStorageDirectory() ?? await getApplicationDocumentsDirectory())
+            : await getApplicationDocumentsDirectory();
         final isSingle = _selectedCallIds.length == 1;
         final ext = isSingle ? 'wav' : 'zip';
         final ts = DateTime.now().millisecondsSinceEpoch;
@@ -364,7 +379,9 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
       final res = await _api.downloadMergedPdf(ids, includeAnalysis: true);
       final bytes = res.data;
       if (bytes is List<int> && bytes.isNotEmpty) {
-        final dir = await getApplicationDocumentsDirectory();
+        final dir = Platform.isAndroid
+            ? (await getExternalStorageDirectory() ?? await getApplicationDocumentsDirectory())
+            : await getApplicationDocumentsDirectory();
         final name =
             (_selectedGroup!['customerName'] as String? ?? 'customer')
                 .replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
