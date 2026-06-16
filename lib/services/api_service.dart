@@ -321,6 +321,7 @@ class ApiService {
     String? description,
     required String companyId,
     int? sortOrder,
+    List<String>? summaryQuestions,
   }) async {
     return _dio.post(
       '/sales-stages',
@@ -329,6 +330,7 @@ class ApiService {
         'companyId': companyId,
         if (description != null) 'description': description,
         if (sortOrder != null) 'sortOrder': sortOrder,
+        if (summaryQuestions != null) 'summaryQuestions': summaryQuestions,
       },
     );
   }
@@ -338,6 +340,7 @@ class ApiService {
     String? name,
     String? description,
     int? sortOrder,
+    List<String>? summaryQuestions,
   }) async {
     return _dio.patch(
       '/sales-stages/$id',
@@ -345,6 +348,7 @@ class ApiService {
         if (name != null) 'name': name,
         if (description != null) 'description': description,
         if (sortOrder != null) 'sortOrder': sortOrder,
+        if (summaryQuestions != null) 'summaryQuestions': summaryQuestions,
       },
     );
   }
@@ -768,6 +772,16 @@ class ApiService {
   Future<Response> getAiInsightDetail(String callId) async {
     return _dio.get('/ai-insights/$callId');
   }
+
+  Future<Response> generateCallSummary(String callId) async =>
+      _dio.post('/ai-insights/summary/$callId', data: {});
+
+  Future<Response> generateManagerReview(String callId) async =>
+      _dio.post('/ai-insights/manager-review/$callId', data: {});
+
+  Future<Response> downloadManagerReviewPdf(String callId) async =>
+      _dio.get('/ai-insights/$callId/manager-review-pdf',
+          options: Options(responseType: ResponseType.bytes));
 
   // ─── Companies ───
 

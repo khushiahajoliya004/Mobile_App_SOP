@@ -376,6 +376,7 @@ class _SalesStagesScreenState extends State<SalesStagesScreen> {
                               name: nameCtrl.text.trim(),
                               description: descCtrl.text.trim(),
                               sortOrder: int.tryParse(sortCtrl.text) ?? 0,
+                              summaryQuestions: summaryQuestions,
                             );
                             _msg('Stage updated');
                           } else {
@@ -384,6 +385,7 @@ class _SalesStagesScreenState extends State<SalesStagesScreen> {
                               companyId: _companyId,
                               description: descCtrl.text.trim(),
                               sortOrder: int.tryParse(sortCtrl.text) ?? 0,
+                              summaryQuestions: summaryQuestions,
                             );
                             _msg('Stage created');
                           }

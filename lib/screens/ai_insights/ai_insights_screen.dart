@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
@@ -59,6 +60,10 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
 
   // Bulk selection
   final Set<String> _selectedCallIds = {};
+
+  // Generate states
+  bool _summaryGenerating = false;
+  bool _reviewGenerating = false;
 
   // Audio player
   AudioPlayer? _audioPlayer;
@@ -166,22 +171,26 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
       _detailLoading = true;
     });
     try {
-      final res = await _api.getAiInsightDetail(call['id']);
+      final res = await _api.getAiInsightDetail(call['id'])
+          .timeout(const Duration(seconds: 15));
       final raw = res.data;
       final detail = raw is Map
           ? Map<String, dynamic>.from(raw['data'] ?? raw)
           : <String, dynamic>{};
-      setState(() {
-        _selected = {...call, ...detail};
-        _detailLoading = false;
-      });
-      // Init audio if available
-      final audioUrl = _selected!['audioUrl'] as String?;
-      if (audioUrl != null && audioUrl.isNotEmpty) {
-        await _initAudioPlayer(audioUrl);
+      if (mounted) {
+        setState(() {
+          _selected = {...call, ...detail};
+          _detailLoading = false;
+        });
+        // Init audio if available
+        final audioUrl = _selected!['audioUrl'] as String?;
+        if (audioUrl != null && audioUrl.isNotEmpty) {
+          await _initAudioPlayer(audioUrl);
+        }
       }
     } catch (_) {
-      setState(() => _detailLoading = false);
+      // On timeout or error, still show what we have from the list
+      if (mounted) setState(() => _detailLoading = false);
     }
   }
 
@@ -213,6 +222,52 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
     } catch (e) {
       _msg('Failed: $e', error: true);
     }
+  }
+
+  Future<void> _generateSummary() async {
+    final callId = _selected?['id']?.toString();
+    if (callId == null) return;
+    setState(() => _summaryGenerating = true);
+    try {
+      await _api.generateCallSummary(callId);
+      // Backend triggers async generation — re-fetch to get actual summary data
+      final detail = await _api.getAiInsightDetail(callId)
+          .timeout(const Duration(seconds: 20));
+      final raw = detail.data;
+      final data = raw is Map
+          ? Map<String, dynamic>.from(raw['data'] ?? raw)
+          : <String, dynamic>{};
+      if (mounted) {
+        setState(() => _selected = {...?_selected, ...data});
+        _msg('Summary generated successfully');
+      }
+    } catch (e) {
+      if (mounted) _msg('Failed to generate summary: $e', error: true);
+    }
+    if (mounted) setState(() => _summaryGenerating = false);
+  }
+
+  Future<void> _generateManagerReview() async {
+    final callId = _selected?['id']?.toString();
+    if (callId == null) return;
+    setState(() => _reviewGenerating = true);
+    try {
+      await _api.generateManagerReview(callId);
+      // Backend triggers async generation — re-fetch to get actual review data
+      final detail = await _api.getAiInsightDetail(callId)
+          .timeout(const Duration(seconds: 20));
+      final raw = detail.data;
+      final data = raw is Map
+          ? Map<String, dynamic>.from(raw['data'] ?? raw)
+          : <String, dynamic>{};
+      if (mounted) {
+        setState(() => _selected = {...?_selected, ...data});
+        _msg('Manager review generated');
+      }
+    } catch (e) {
+      if (mounted) _msg('Failed to generate review: $e', error: true);
+    }
+    if (mounted) setState(() => _reviewGenerating = false);
   }
 
   // ─── Audio Player ─────────────────────────────────────────────────────
@@ -1513,17 +1568,13 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
 
         // Tabs
         if (status == 'COMPLETED' && !_detailLoading)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                _tabBtn('SOP Analysis', Icons.pie_chart_outline, 'analysis'),
-                const SizedBox(width: 8),
-                _tabBtn('Transcript', Icons.subject, 'transcription'),
-                const SizedBox(width: 8),
-                _tabBtn('Summary', Icons.summarize_outlined, 'summary'),
-              ],
-            ),
+          Row(
+            children: [
+              _tabBtn('Analysis', Icons.pie_chart_outline, 'analysis'),
+              _tabBtn('Transcript', Icons.subject, 'transcription'),
+              _tabBtn('Summary', Icons.summarize_outlined, 'summary'),
+              _tabBtn('Review', Icons.rate_review_outlined, 'manager_review'),
+            ],
           ),
         const SizedBox(height: 8),
 
@@ -1739,17 +1790,12 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
           ),
         ),
         // Tabs
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: [
-              _tabBtn('SOP Analysis', Icons.pie_chart_outline, 'analysis'),
-              const SizedBox(width: 8),
-              _tabBtn('Transcript', Icons.subject, 'transcription'),
-              const SizedBox(width: 8),
-              _tabBtn('Summary', Icons.summarize_outlined, 'summary'),
-            ],
-          ),
+        Row(
+          children: [
+            _tabBtn('Analysis', Icons.pie_chart_outline, 'analysis'),
+            _tabBtn('Transcript', Icons.subject, 'transcription'),
+            _tabBtn('Summary', Icons.summarize_outlined, 'summary'),
+          ],
         ),
         const SizedBox(height: 8),
         // Tab content
@@ -1959,6 +2005,7 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
     final c = _selected!;
     if (_activeTab == 'analysis') return _analysisTab(c);
     if (_activeTab == 'transcription') return _transcriptionTab(c);
+    if (_activeTab == 'manager_review') return _managerReviewTab(c);
     return _summaryTab(c);
   }
 
@@ -2346,19 +2393,37 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
   // ─── Summary Tab ───────────────────────────────────────────────────────
 
   Widget _summaryTab(Map<String, dynamic> c) {
-    final items =
-        (c['callSummary'] ?? c['aiAnalysis']?['callSummary'] ?? []) as List;
+    final rawSummary = c['callSummary'] ?? c['aiAnalysis']?['callSummary'];
+    final items = rawSummary is List ? rawSummary : <dynamic>[];
 
     if (items.isEmpty) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.summarize_outlined,
-                size: 48, color: AppColors.textHint),
+            const Icon(Icons.summarize_outlined, size: 48, color: AppColors.textHint),
             const SizedBox(height: 8),
-            const Text('No summary generated yet',
-                style: TextStyle(color: AppColors.textHint)),
+            const Text('No summary generated yet', style: TextStyle(color: AppColors.textHint)),
+            const SizedBox(height: 4),
+            const Text('Tap the button below to generate an AI summary', style: TextStyle(fontSize: 12, color: AppColors.textHint)),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: _summaryGenerating ? null : _generateSummary,
+              icon: _summaryGenerating
+                  ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Icon(Icons.auto_awesome, size: 14),
+              label: Text(
+                _summaryGenerating ? 'Generating...' : 'Generate Summary',
+                style: const TextStyle(fontSize: 13),
+              ),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
           ],
         ),
       );
@@ -2369,14 +2434,28 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
       children: [
         Row(
           children: [
-            const Icon(Icons.auto_awesome,
-                size: 16, color: AppColors.primary),
+            const Icon(Icons.auto_awesome, size: 16, color: AppColors.primary),
             const SizedBox(width: 6),
-            const Text('AI-Generated Call Summary',
-                style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary)),
+            const Expanded(child: Text('AI-Generated Call Summary',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.primary))),
+            // Regenerate button
+            GestureDetector(
+              onTap: _summaryGenerating ? null : _generateSummary,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: AppColors.primarySurface,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: _summaryGenerating
+                    ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2))
+                    : const Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(Icons.refresh_rounded, size: 13, color: AppColors.primary),
+                        SizedBox(width: 4),
+                        Text('Regenerate', style: TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w600)),
+                      ]),
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 12),
@@ -2433,6 +2512,275 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
           );
         }),
       ],
+    );
+  }
+
+  // ─── Manager Review Tab ────────────────────────────────────────────────────
+
+  Widget _managerReviewTab(Map<String, dynamic> c) {
+    final review = c['aiAnalysis']?['salesManagerReview'];
+
+    if (review == null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.rate_review_outlined, size: 48, color: AppColors.textHint),
+            const SizedBox(height: 8),
+            const Text('No manager review yet', style: TextStyle(color: AppColors.textHint)),
+            const SizedBox(height: 4),
+            const Text('Generate an AI-powered sales performance review', style: TextStyle(fontSize: 12, color: AppColors.textHint)),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: _reviewGenerating ? null : _generateManagerReview,
+              icon: _reviewGenerating
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Icon(Icons.auto_awesome, size: 16),
+              label: Text(_reviewGenerating ? 'Generating...' : 'Generate Manager Review'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.accent,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final r = Map<String, dynamic>.from(review as Map);
+    final kd = r['keyDiscussionPoints'] is Map ? r['keyDiscussionPoints'] as Map : {};
+    final ca = r['customerAnalysis'] is Map ? r['customerAnalysis'] as Map : {};
+    final sp = r['salesmanPerformance'] is Map ? r['salesmanPerformance'] as Map : {};
+    final cp = r['conversionProbability'] is Map ? r['conversionProbability'] as Map : {};
+
+    Color interestColor(String? v) {
+      if (v?.toLowerCase() == 'high') return AppColors.success;
+      if (v?.toLowerCase() == 'medium') return AppColors.warning;
+      return AppColors.error;
+    }
+
+    Widget sectionCard(String title, IconData icon, Color color, Widget content) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14),
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))]),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.08),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(14))),
+            child: Row(children: [
+              Icon(icon, size: 15, color: color),
+              const SizedBox(width: 8),
+              Text(title, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
+            ]),
+          ),
+          Padding(padding: const EdgeInsets.all(14), child: content),
+        ]),
+      );
+    }
+
+    Widget kv(String label, dynamic value) {
+      if (value == null || value.toString().isEmpty) return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SizedBox(width: 130, child: Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))),
+          Expanded(child: Text(value.toString(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary))),
+        ]),
+      );
+    }
+
+    Widget badge(String label, Color color) => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
+      child: Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
+    );
+
+    List<String> _toList(dynamic v) {
+      if (v is List) return v.map((e) => e.toString()).toList();
+      if (v is String && v.isNotEmpty) return [v];
+      return [];
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        // Regenerate button row
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          const Text('Manager Review', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+          GestureDetector(
+            onTap: _reviewGenerating ? null : _generateManagerReview,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(color: AppColors.accent.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
+              child: _reviewGenerating
+                  ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.refresh_rounded, size: 13, color: AppColors.accent),
+                      SizedBox(width: 4),
+                      Text('Regenerate', style: TextStyle(fontSize: 11, color: AppColors.accent, fontWeight: FontWeight.w600)),
+                    ]),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 12),
+
+        // Call Summary
+        if (r['callSummary']?.toString().isNotEmpty == true)
+          sectionCard('Call Summary', Icons.summarize_outlined, AppColors.primary,
+              Text(r['callSummary'].toString(), style: const TextStyle(fontSize: 13, color: AppColors.textPrimary, height: 1.5))),
+
+        // Key Discussion Points
+        if (kd.isNotEmpty)
+          sectionCard('Key Discussion Points', Icons.topic_outlined, AppColors.accent, Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              kv('Customer Need', kd['customerRequirement']),
+              kv('Product Discussed', kd['productServiceDiscussed'] ?? kd['carModelVariant']),
+              kv('Budget', kd['budgetDiscussion']),
+              if (kd['financeExchange'] != null) kv('Finance/Exchange', kd['financeExchange']),
+              if (kd['importantQuestions'] is List && (kd['importantQuestions'] as List).isNotEmpty) ...[
+                const Text('Key Questions', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                const SizedBox(height: 6),
+                ...(_toList(kd['importantQuestions']).map((q) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Text('• ', style: TextStyle(color: AppColors.accent)),
+                    Expanded(child: Text(q, style: const TextStyle(fontSize: 12))),
+                  ]),
+                ))),
+              ],
+            ],
+          )),
+
+        // Customer Analysis
+        if (ca.isNotEmpty)
+          sectionCard('Customer Analysis', Icons.person_search_rounded, AppColors.success, Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                const Text('Interest Level', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                const Spacer(),
+                badge(ca['interestLevel']?.toString() ?? '-', interestColor(ca['interestLevel']?.toString())),
+              ]),
+              const SizedBox(height: 8),
+              kv('Buying Intent', ca['buyingIntent']),
+              kv('Budget Clarity', ca['budgetClarity']),
+              if (ca['seriousnessScore'] != null) ...[
+                const SizedBox(height: 4),
+                Row(children: [
+                  const Text('Seriousness', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                  const Spacer(),
+                  Text('${ca['seriousnessScore']}/10', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.primary)),
+                ]),
+              ],
+              if (ca['remarks']?.toString().isNotEmpty == true) ...[
+                const SizedBox(height: 8),
+                Text(ca['remarks'].toString(), style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4)),
+              ],
+            ],
+          )),
+
+        // Salesman Performance
+        if (sp.isNotEmpty)
+          sectionCard('Salesman Performance', Icons.bar_chart_rounded, AppColors.warning, Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              kv('Greeting / Opening', sp['greetingOpening']),
+              kv('Product Knowledge', sp['productKnowledge']),
+              kv('Communication', sp['communicationClarity']),
+              kv('Objection Handling', sp['objectionHandling']),
+              kv('Closing Attempt', sp['closingAttempt']),
+              kv('Follow-up Commitment', sp['followUpCommitment']),
+              if (sp['overallScore'] != null) ...[
+                const Divider(height: 16),
+                Row(children: [
+                  const Text('Overall Score', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                  const Spacer(),
+                  Text('${sp['overallScore']}/10', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.warning)),
+                ]),
+              ],
+              if (sp['remarks']?.toString().isNotEmpty == true) ...[
+                const SizedBox(height: 8),
+                Text(sp['remarks'].toString(), style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4)),
+              ],
+            ],
+          )),
+
+        // What Went Wrong
+        if (_toList(r['whatWentWrong']).isNotEmpty)
+          sectionCard('What Went Wrong', Icons.warning_amber_rounded, AppColors.error, Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: _toList(r['whatWentWrong']).map((w) => Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Icon(Icons.circle, size: 6, color: AppColors.error),
+                const SizedBox(width: 8),
+                Expanded(child: Text(w, style: const TextStyle(fontSize: 12, height: 1.4))),
+              ]),
+            )).toList(),
+          )),
+
+        // What to Improve
+        if (_toList(r['whatToImprove']).isNotEmpty)
+          sectionCard('What to Improve', Icons.tips_and_updates_outlined, AppColors.primary, Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: _toList(r['whatToImprove']).map((w) => Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Icon(Icons.arrow_forward_rounded, size: 12, color: AppColors.primary),
+                const SizedBox(width: 8),
+                Expanded(child: Text(w, style: const TextStyle(fontSize: 12, height: 1.4))),
+              ]),
+            )).toList(),
+          )),
+
+        // Next Action / Suggestion / Conversion
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (r['nextAction']?.toString().isNotEmpty == true)
+            Expanded(child: _miniInfoCard('Next Action', r['nextAction'].toString(), Icons.next_plan_outlined, AppColors.primary)),
+          if (r['nextAction']?.toString().isNotEmpty == true && r['suggestionToCustomer']?.toString().isNotEmpty == true)
+            const SizedBox(width: 8),
+          if (r['suggestionToCustomer']?.toString().isNotEmpty == true)
+            Expanded(child: _miniInfoCard('Suggestion', r['suggestionToCustomer'].toString(), Icons.lightbulb_outline_rounded, AppColors.warning)),
+        ]),
+        if (cp.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          sectionCard('Conversion Probability', Icons.trending_up_rounded, AppColors.success, Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                const Text('Chance', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                const Spacer(),
+                badge(cp['chance']?.toString() ?? '-', AppColors.success),
+              ]),
+              if (cp['reason']?.toString().isNotEmpty == true) ...[
+                const SizedBox(height: 8),
+                Text(cp['reason'].toString(), style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4)),
+              ],
+            ],
+          )),
+        ],
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  Widget _miniInfoCard(String title, String content, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.15)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [Icon(icon, size: 13, color: color), const SizedBox(width: 5),
+          Text(title, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color))]),
+        const SizedBox(height: 6),
+        Text(content, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, height: 1.4)),
+      ]),
     );
   }
 }
