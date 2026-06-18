@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../main.dart';
 import '../services/api_service.dart';
@@ -12,6 +14,7 @@ class CallHistoryScreen extends StatefulWidget {
 class _CallHistoryScreenState extends State<CallHistoryScreen> {
   final _api = ApiService();
   final _searchCtrl = TextEditingController();
+  Timer? _searchDebounce;
 
   List<dynamic> _calls = [];
   bool _loading = true;
@@ -36,6 +39,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -157,9 +161,16 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
                   ),
                   child: TextField(
                     controller: _searchCtrl,
-                    onSubmitted: (_) => _loadCalls(reset: true),
+                    onSubmitted: (_) {
+                      _searchDebounce?.cancel();
+                      _loadCalls(reset: true);
+                    },
                     onChanged: (v) {
-                      if (v.isEmpty) _loadCalls(reset: true);
+                      setState(() {}); // refresh suffix icon
+                      _searchDebounce?.cancel();
+                      _searchDebounce = Timer(const Duration(milliseconds: 500), () {
+                        _loadCalls(reset: true);
+                      });
                     },
                     style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
                     decoration: InputDecoration(
@@ -804,7 +815,16 @@ class _CallQuickSummarySheetState extends State<_CallQuickSummarySheet> {
   Widget _buildSummary() {
     final ai = _detail['aiAnalysis'] as Map<String, dynamic>? ?? {};
     // callSummary lives directly on the call OR inside aiAnalysis
-    final rawSummary = _detail['callSummary'] ?? ai['summary'] ?? ai['callSummary'] ?? '';
+    dynamic rawSummary = _detail['callSummary'] ?? ai['summary'] ?? ai['callSummary'] ?? '';
+    // If the API returned a JSON-encoded string, parse it into a List
+    if (rawSummary is String) {
+      final trimmed = rawSummary.trim();
+      if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+        try {
+          rawSummary = jsonDecode(trimmed);
+        } catch (_) {}
+      }
+    }
     final isEmpty = rawSummary is List ? rawSummary.isEmpty : rawSummary.toString().isEmpty;
     if (isEmpty) return const SizedBox.shrink();
 
