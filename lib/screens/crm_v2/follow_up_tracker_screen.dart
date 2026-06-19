@@ -18,6 +18,7 @@ class _FollowUpTrackerScreenState extends State<FollowUpTrackerScreen> {
 
   UserModel? _user;
   bool _loading = true;
+  String _errorMsg = '';
 
   // Date filter: 'yesterday' | 'today' | 'tomorrow' | 'custom'
   String _datePreset = 'today';
@@ -74,33 +75,51 @@ class _FollowUpTrackerScreenState extends State<FollowUpTrackerScreen> {
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   Future<void> _load() async {
-    setState(() => _loading = true);
+    setState(() { _loading = true; _errorMsg = ''; });
     final dateStr = _dateToIso(_selectedDate);
     try {
-      final res = await _api.getCrmFollowUpsFiltered(
-        fromDate: dateStr,
-        toDate: dateStr,
-        userId: _selectedUserId,
-        branchId: _selectedBranchId,
-      );
-      final raw = res.data;
-      final list = raw is List ? raw : ((raw is Map ? raw['data'] ?? [] : []) as List);
-      final all = list.map((e) => Map<String, dynamic>.from(e)).toList();
+      final results = await Future.wait([
+        _api.getCrmFollowUpsFiltered(
+          fromDate: dateStr,
+          toDate: dateStr,
+          status: 'PENDING',
+          userId: _selectedUserId,
+          branchId: _selectedBranchId,
+          limit: 200,
+        ),
+        _api.getCrmFollowUpsFiltered(
+          fromDate: dateStr,
+          toDate: dateStr,
+          status: 'COMPLETED',
+          userId: _selectedUserId,
+          branchId: _selectedBranchId,
+          limit: 200,
+        ),
+      ]);
+
+      List<Map<String, dynamic>> extractList(dynamic raw) {
+        final list = raw is List ? raw : ((raw is Map ? (raw['data'] ?? raw['items'] ?? []) : []) as List);
+        return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      }
+
+      final pending = extractList(results[0].data)
+        ..sort((a, b) {
+          final da = DateTime.tryParse(a['scheduledAt']?.toString() ?? '') ?? DateTime(2099);
+          final db = DateTime.tryParse(b['scheduledAt']?.toString() ?? '') ?? DateTime(2099);
+          return da.compareTo(db);
+        });
+      final completed = extractList(results[1].data);
+
       setState(() {
-        _pending = all.where((f) {
-          final s = (f['status'] ?? '').toString().toUpperCase();
-          return s == 'PENDING' || s == 'SCHEDULED';
-        }).toList()
-          ..sort((a, b) {
-            final da = DateTime.tryParse(a['scheduledAt']?.toString() ?? '') ?? DateTime(2099);
-            final db = DateTime.tryParse(b['scheduledAt']?.toString() ?? '') ?? DateTime(2099);
-            return da.compareTo(db);
-          });
-        _completed = all.where((f) => (f['status'] ?? '').toString().toUpperCase() == 'COMPLETED').toList();
+        _pending = pending;
+        _completed = completed;
         _loading = false;
       });
     } catch (e) {
-      setState(() => _loading = false);
+      setState(() {
+        _loading = false;
+        _errorMsg = e.toString();
+      });
     }
   }
 
@@ -430,6 +449,8 @@ class _FollowUpTrackerScreenState extends State<FollowUpTrackerScreen> {
             Expanded(
               child: _loading
                   ? const Center(child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 3))
+                  : _errorMsg.isNotEmpty
+                      ? _buildError(_errorMsg)
                   : (_pending.isEmpty && _completed.isEmpty)
                       ? _buildEmpty()
                       : RefreshIndicator(
@@ -742,6 +763,30 @@ class _FollowUpTrackerScreenState extends State<FollowUpTrackerScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildError(String msg) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline_rounded, size: 48, color: AppColors.error),
+            const SizedBox(height: 12),
+            const Text('Failed to load follow-ups', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.error)),
+            const SizedBox(height: 8),
+            Text(msg, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary), textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: _load,
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('Retry'),
+            ),
+          ],
+        ),
       ),
     );
   }

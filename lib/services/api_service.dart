@@ -10,6 +10,7 @@ class ApiService {
   // For Android emulator use 10.0.2.2, for real device use your machine IP
   static const String baseUrl = 'https://apimysterymentorqa.mysterymentor.in';
   // static const String baseUrl = 'https://api.mysterymentor.in';
+  // static const String baseUrl = 'http://192.168.1.8:3001';
 
   late final Dio _dio;
   final AuthService _auth = AuthService();
@@ -1293,6 +1294,7 @@ class ApiService {
     String? status,
     String? userId,
     String? branchId,
+    int limit = 200,
   }) async {
     return _dio.get(
       '/crm/follow-ups',
@@ -1302,6 +1304,7 @@ class ApiService {
         if (status != null && status.isNotEmpty) 'status': status,
         if (userId != null && userId.isNotEmpty) 'userId': userId,
         if (branchId != null && branchId.isNotEmpty) 'branchId': branchId,
+        'limit': limit,
       },
     );
   }
