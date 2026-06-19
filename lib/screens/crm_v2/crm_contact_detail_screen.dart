@@ -323,12 +323,23 @@ class _CrmContactDetailScreenState extends State<CrmContactDetailScreen> {
     if (createdAt != null) { try { final dt = DateTime.parse(createdAt).toLocal(); createdStr = '${dt.day}/${dt.month}/${dt.year}'; } catch (_) {} }
     final stageColor = _stageColor(stage);
 
-    return Column(children: [
+    return Material(
+      color: AppColors.scaffoldBg,
+      child: SafeArea(
+        child: Column(children: [
       // Header
       Container(
         color: Colors.white,
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Back button
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: const Padding(
+              padding: EdgeInsets.only(bottom: 8),
+              child: Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: AppColors.textPrimary),
+            ),
+          ),
           // Name row + actions
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             CircleAvatar(
@@ -440,7 +451,9 @@ class _CrmContactDetailScreenState extends State<CrmContactDetailScreen> {
         onRefresh: _load,
         child: _tab == 0 ? _timelineTab() : _tab == 1 ? _dealsTab() : _followUpsTab(),
       )),
-    ]);
+    ]),
+      ),
+    );
   }
 
   Widget _headerBtn(IconData icon, Color bg, Color fg, VoidCallback onTap, {String? tooltip}) => GestureDetector(

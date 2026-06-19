@@ -965,9 +965,11 @@ class _CrmDealDetailScreenState extends State<CrmDealDetailScreen>
             ),
             if (actorName.isNotEmpty) ...[
               const SizedBox(width: 6),
-              Text(actorName, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w500)),
+              Flexible(
+                child: Text(actorName, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis),
+              ),
             ],
-            const Spacer(),
+            const SizedBox(width: 6),
             Text(dateStr, style: const TextStyle(fontSize: 10, color: AppColors.textHint)),
           ]),
           if (notes.toString().isNotEmpty) ...[
@@ -980,6 +982,124 @@ class _CrmDealDetailScreenState extends State<CrmDealDetailScreen>
   }
 
   // ── Follow-ups tab ─────────────────────────────────────────────────────────
+
+  void _completeDealFollowUp(Map<String, dynamic> followUp) {
+    String? selectedOutcome;
+    final notesCtrl = TextEditingController();
+    const outcomes = [
+      'INTERESTED',
+      'CALL_LATER',
+      'VISIT_PLANNED',
+      'TEST_DRIVE_PLANNED',
+      'QUOTATION_REQUIRED',
+      'BOOKING_EXPECTED',
+      'NOT_INTERESTED',
+      'LOST',
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Padding(
+          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.success.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.check_circle_outline, color: AppColors.success, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text('Complete Follow-Up',
+                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                ]),
+                const SizedBox(height: 20),
+                const Text('Notes',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textHint)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: notesCtrl,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    hintText: 'Add notes about this follow-up...',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    contentPadding: const EdgeInsets.all(12),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text('Select Outcome *',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textHint)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: outcomes.map((o) => GestureDetector(
+                    onTap: () => setSheetState(() => selectedOutcome = o),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: selectedOutcome == o ? AppColors.primary : AppColors.scaffoldBg,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: selectedOutcome == o ? AppColors.primary : AppColors.textHint.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Text(
+                        o.replaceAll('_', ' '),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: selectedOutcome == o ? Colors.white : AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                  )).toList(),
+                ),
+                const SizedBox(height: 20),
+                FilledButton(
+                  onPressed: () async {
+                    if (selectedOutcome == null) {
+                      ScaffoldMessenger.of(ctx).showSnackBar(
+                        const SnackBar(content: Text('Please select an outcome')),
+                      );
+                      return;
+                    }
+                    try {
+                      await _api.completeCrmFollowUp(
+                        followUp['id'].toString(),
+                        outcome: selectedOutcome!,
+                        notes: notesCtrl.text.trim().isEmpty ? null : notesCtrl.text.trim(),
+                      );
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      _msg('Follow-up completed');
+                      _load();
+                    } catch (e) {
+                      if (ctx.mounted) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text('Failed: $e')));
+                      }
+                    }
+                  },
+                  style: FilledButton.styleFrom(backgroundColor: AppColors.success),
+                  child: const Text('Mark as Done'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _followUpsTab() {
     return ListView(
@@ -1021,17 +1141,22 @@ class _CrmDealDetailScreenState extends State<CrmDealDetailScreen>
                 color: Colors.white, borderRadius: BorderRadius.circular(12),
                 boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 6, offset: const Offset(0, 1))],
               ),
-              child: Row(children: [
+              child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
                 Container(width: 34, height: 34, decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
                     child: Icon(isDone ? Icons.check_circle_rounded : Icons.schedule_rounded, size: 16, color: color)),
                 const SizedBox(width: 10),
                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Row(children: [
                     Text('$type', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color)),
-                    const Spacer(),
-                    Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(5)),
-                        child: Text(fStatus, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: color))),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                      child: Text(fStatus, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: color)),
+                    ),
                   ]),
                   if (scheduled.isNotEmpty) ...[
                     const SizedBox(height: 3),
@@ -1042,6 +1167,23 @@ class _CrmDealDetailScreenState extends State<CrmDealDetailScreen>
                     Text('$notes', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                   ],
                 ])),
+                if (!isDone) ...[
+                  const SizedBox(width: 10),
+                  GestureDetector(
+                    onTap: () => _completeDealFollowUp(f),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppColors.success,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Text(
+                        'Done',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ],
               ]),
             );
           }),
