@@ -10,6 +10,7 @@ import '../crm_v2/crm_activities_screen.dart';
 import '../crm_v2/crm_pipeline_settings_screen.dart';
 import '../crm_v2/crm_custom_properties_screen.dart';
 import '../crm_v2/crm_master_data_screen.dart';
+import '../crm_v2/follow_up_tracker_screen.dart';
 
 /// CRM Hub — shows sub-modules as a menu grid (permission-based)
 class CrmScreen extends StatefulWidget {
@@ -138,6 +139,14 @@ class _CrmScreenState extends State<CrmScreen> {
           'Sources, stages & lookup values',
           const CrmMasterDataScreen(),
         ),
+      _CrmModule(
+        'Follow-up Tracker',
+        Icons.track_changes_rounded,
+        const Color(0xFFEA580C),
+        const Color(0xFFFB923C),
+        "Today's follow-ups at a glance",
+        const FollowUpTrackerScreen(),
+      ),
     ];
 
     return RefreshIndicator(

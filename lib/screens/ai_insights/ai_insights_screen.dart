@@ -65,6 +65,7 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
   // Generate states
   bool _summaryGenerating = false;
   bool _reviewGenerating = false;
+  String? _summaryError;
 
   // Audio player
   AudioPlayer? _audioPlayer;
@@ -228,7 +229,7 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
   Future<void> _generateSummary() async {
     final callId = _selected?['id']?.toString();
     if (callId == null) return;
-    setState(() => _summaryGenerating = true);
+    setState(() { _summaryGenerating = true; _summaryError = null; });
     try {
       await _api.generateCallSummary(callId);
       // Backend triggers async generation — re-fetch to get actual summary data
@@ -245,10 +246,13 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
     } catch (e) {
       if (mounted) {
         String msg = 'Failed to generate summary. Please try again.';
-        if (e is DioException && e.response?.statusCode == 500) {
-          msg = 'Summary generation failed. Please try again later.';
+        if (e is DioException) {
+          final serverMsg = e.response?.data?['message']?.toString() ?? '';
+          if (serverMsg.isNotEmpty && serverMsg.toLowerCase() != 'internal server error') {
+            msg = serverMsg;
+          }
         }
-        _msg(msg, error: true);
+        setState(() => _summaryError = msg);
       }
     }
     if (mounted) setState(() => _summaryGenerating = false);
@@ -274,8 +278,11 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
     } catch (e) {
       if (mounted) {
         String msg = 'Failed to generate review. Please try again.';
-        if (e is DioException && e.response?.statusCode == 500) {
-          msg = 'Review generation failed. Please try again later.';
+        if (e is DioException) {
+          final serverMsg = e.response?.data?['message']?.toString() ?? '';
+          if (serverMsg.isNotEmpty && serverMsg.toLowerCase() != 'internal server error') {
+            msg = serverMsg;
+          }
         }
         _msg(msg, error: true);
       }
@@ -2415,33 +2422,59 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
 
     if (items.isEmpty) {
       return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.summarize_outlined, size: 48, color: AppColors.textHint),
-            const SizedBox(height: 8),
-            const Text('No summary generated yet', style: TextStyle(color: AppColors.textHint)),
-            const SizedBox(height: 4),
-            const Text('Tap the button below to generate an AI summary', style: TextStyle(fontSize: 12, color: AppColors.textHint)),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: _summaryGenerating ? null : _generateSummary,
-              icon: _summaryGenerating
-                  ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : const Icon(Icons.auto_awesome, size: 14),
-              label: Text(
-                _summaryGenerating ? 'Generating...' : 'Generate Summary',
-                style: const TextStyle(fontSize: 13),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.summarize_outlined, size: 48, color: AppColors.textHint),
+              const SizedBox(height: 8),
+              const Text('No summary generated yet', style: TextStyle(color: AppColors.textHint)),
+              const SizedBox(height: 4),
+              const Text('Tap the button below to generate an AI summary', style: TextStyle(fontSize: 12, color: AppColors.textHint)),
+              if (_summaryError != null) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.error.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.error.withValues(alpha: 0.4)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline, color: AppColors.error, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _summaryError!,
+                          style: const TextStyle(color: AppColors.error, fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: _summaryGenerating ? null : _generateSummary,
+                icon: _summaryGenerating
+                    ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Icon(Icons.auto_awesome, size: 14),
+                label: Text(
+                  _summaryGenerating ? 'Generating...' : 'Generate Summary',
+                  style: const TextStyle(fontSize: 13),
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
               ),
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       );
     }

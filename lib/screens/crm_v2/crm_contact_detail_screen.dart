@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../main.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
 import 'crm_deal_detail_screen.dart';
 
 class CrmContactDetailScreen extends StatefulWidget {
@@ -323,12 +325,23 @@ class _CrmContactDetailScreenState extends State<CrmContactDetailScreen> {
     if (createdAt != null) { try { final dt = DateTime.parse(createdAt).toLocal(); createdStr = '${dt.day}/${dt.month}/${dt.year}'; } catch (_) {} }
     final stageColor = _stageColor(stage);
 
-    return Column(children: [
+    return Material(
+      color: AppColors.scaffoldBg,
+      child: SafeArea(
+        child: Column(children: [
       // Header
       Container(
         color: Colors.white,
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Back button
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: const Padding(
+              padding: EdgeInsets.only(bottom: 8),
+              child: Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: AppColors.textPrimary),
+            ),
+          ),
           // Name row + actions
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             CircleAvatar(
@@ -440,7 +453,9 @@ class _CrmContactDetailScreenState extends State<CrmContactDetailScreen> {
         onRefresh: _load,
         child: _tab == 0 ? _timelineTab() : _tab == 1 ? _dealsTab() : _followUpsTab(),
       )),
-    ]);
+    ]),
+      ),
+    );
   }
 
   Widget _headerBtn(IconData icon, Color bg, Color fg, VoidCallback onTap, {String? tooltip}) => GestureDetector(
@@ -581,6 +596,160 @@ class _CrmContactDetailScreenState extends State<CrmContactDetailScreen> {
     ]);
   }
 
+  Future<void> _cancelContactFollowUp(Map<String, dynamic> followUp) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel Follow-up'),
+        content: const Text('Are you sure you want to cancel this follow-up?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Yes, Cancel', style: TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await _api.cancelCrmFollowUp(followUp['id'].toString());
+      _msg('Follow-up cancelled');
+      _load();
+    } catch (e) {
+      _msg('Failed: $e', error: true);
+    }
+  }
+
+  void _completeContactFollowUp(Map<String, dynamic> followUp) {
+    String? selectedOutcome;
+    final notesCtrl = TextEditingController();
+    PlatformFile? selectedFile;
+    bool scheduleNext = false;
+    DateTime? nextDate;
+    String nextType = 'CALL';
+    const outcomes = ['INTERESTED', 'CALL_LATER', 'VISIT_PLANNED', 'TEST_DRIVE_PLANNED', 'QUOTATION_REQUIRED', 'BOOKING_EXPECTED', 'NOT_INTERESTED', 'LOST'];
+    const followUpTypes = ['CALL', 'MEETING', 'EMAIL', 'VISIT', 'WHATSAPP'];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSS) => Padding(
+          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text('Complete Follow-Up', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 16),
+                const Text('Select Outcome *', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textHint)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8, runSpacing: 8,
+                  children: outcomes.map((o) => GestureDetector(
+                    onTap: () => setSS(() => selectedOutcome = o),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: selectedOutcome == o ? AppColors.primary : AppColors.scaffoldBg,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: selectedOutcome == o ? AppColors.primary : AppColors.textHint.withValues(alpha: 0.3)),
+                      ),
+                      child: Text(o.replaceAll('_', ' '), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: selectedOutcome == o ? Colors.white : AppColors.textSecondary)),
+                    ),
+                  )).toList(),
+                ),
+                const SizedBox(height: 12),
+                TextField(controller: notesCtrl, maxLines: 2, decoration: const InputDecoration(labelText: 'Notes (optional)')),
+                const SizedBox(height: 16),
+                const Text('Upload Call Recording (optional)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textHint)),
+                const SizedBox(height: 8),
+                GestureDetector(
+                  onTap: () async {
+                    final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['mp3', 'm4a', 'wav', 'aac']);
+                    if (result != null && result.files.isNotEmpty) setSS(() => selectedFile = result.files.first);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(color: AppColors.surfaceLight, borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.textHint.withValues(alpha: 0.2))),
+                    child: Row(children: [
+                      const Icon(Icons.attach_file_rounded, size: 16, color: AppColors.textSecondary),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(selectedFile != null ? selectedFile!.name : 'Choose audio file...', style: TextStyle(fontSize: 13, color: selectedFile != null ? AppColors.textPrimary : AppColors.textHint), overflow: TextOverflow.ellipsis)),
+                      if (selectedFile != null) GestureDetector(onTap: () => setSS(() => selectedFile = null), child: const Icon(Icons.close, size: 16, color: AppColors.textHint)),
+                    ]),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(children: [
+                  const Expanded(child: Text('Schedule Next Follow-up', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
+                  Switch(value: scheduleNext, activeColor: AppColors.primary, onChanged: (v) => setSS(() => scheduleNext = v)),
+                ]),
+                if (scheduleNext) ...[
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: () async {
+                      final d = await showDatePicker(context: ctx, initialDate: DateTime.now().add(const Duration(days: 1)), firstDate: DateTime.now(), lastDate: DateTime.now().add(const Duration(days: 365)));
+                      if (d != null) setSS(() => nextDate = d);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(color: AppColors.surfaceLight, borderRadius: BorderRadius.circular(10)),
+                      child: Row(children: [
+                        const Icon(Icons.calendar_today_rounded, size: 14, color: AppColors.textHint),
+                        const SizedBox(width: 8),
+                        Text(nextDate != null ? '${nextDate!.day}/${nextDate!.month}/${nextDate!.year}' : 'Pick next date', style: TextStyle(fontSize: 13, color: nextDate != null ? AppColors.textPrimary : AppColors.textHint)),
+                      ]),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8, runSpacing: 6,
+                    children: followUpTypes.map((t) {
+                      final sel = nextType == t;
+                      return GestureDetector(
+                        onTap: () => setSS(() => nextType = t),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(color: sel ? AppColors.primary : AppColors.scaffoldBg, borderRadius: BorderRadius.circular(20), border: Border.all(color: sel ? AppColors.primary : AppColors.textHint.withValues(alpha: 0.3))),
+                          child: Text(t, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: sel ? Colors.white : AppColors.textSecondary)),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: () async {
+                    if (selectedOutcome == null) { ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Please select an outcome'))); return; }
+                    try {
+                      await _api.completeCrmFollowUp(followUp['id'].toString(), outcome: selectedOutcome!, notes: notesCtrl.text.trim().isEmpty ? null : notesCtrl.text.trim(), nextFollowUpDate: scheduleNext && nextDate != null ? nextDate!.toIso8601String() : null, nextFollowUpType: scheduleNext ? nextType : null);
+                      if (selectedFile != null) {
+                        try {
+                          final user = await AuthService().getUser();
+                          await _api.createCall(customerName: _contact?['name']?.toString() ?? widget.contactName, companyId: user?.companyId ?? '', userId: user?.id ?? '', audioFilePath: selectedFile!.path, audioFileName: selectedFile!.name, followUpId: followUp['id'].toString());
+                        } catch (_) {}
+                      }
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      _msg('Follow-up completed');
+                      _load();
+                    } catch (e) {
+                      if (ctx.mounted) ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text('Failed: $e')));
+                    }
+                  },
+                  child: const Text('Complete Follow-Up'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _followUpsTab() {
     if (_followUps.isEmpty) return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
       const Text('No follow-ups scheduled', style: TextStyle(color: AppColors.textHint)),
@@ -653,11 +822,19 @@ class _CrmContactDetailScreenState extends State<CrmContactDetailScreen> {
                 ])),
                 if (!isDone) ...[
                   const SizedBox(width: 8),
-                  GestureDetector(
-                    onTap: () async {
-                      try { await _api.completeCrmFollowUp(f['id'].toString(), outcome: 'Done'); _msg('Follow-up completed'); _load(); } catch (e) { _msg('Failed: $e', error: true); }
-                    },
-                    child: Container(width: 34, height: 34, decoration: BoxDecoration(color: AppColors.success.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.check_rounded, size: 16, color: AppColors.success)),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      GestureDetector(
+                        onTap: () => _completeContactFollowUp(f),
+                        child: Container(width: 34, height: 34, decoration: BoxDecoration(color: AppColors.success.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.check_rounded, size: 16, color: AppColors.success)),
+                      ),
+                      const SizedBox(height: 4),
+                      GestureDetector(
+                        onTap: () => _cancelContactFollowUp(f),
+                        child: Container(width: 34, height: 34, decoration: BoxDecoration(color: AppColors.error.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.close_rounded, size: 16, color: AppColors.error)),
+                      ),
+                    ],
                   ),
                 ],
               ]),

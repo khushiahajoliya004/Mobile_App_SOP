@@ -8,8 +8,10 @@ import '../utils/navigator_key.dart';
 class ApiService {
   // Backend runs on port 3000, no /api prefix
   // For Android emulator use 10.0.2.2, for real device use your machine IP
-  static const String baseUrl = 'https://apimysterymentorqa.mysterymentor.in';
+  // static const String baseUrl = 'https://apimysterymentorqa.mysterymentor.in';
   // static const String baseUrl = 'https://api.mysterymentor.in';
+  // static const String baseUrl = 'http://192.168.1.8:3001';
+  static const String baseUrl = 'http://192.168.1.24:3000';
 
   late final Dio _dio;
   final AuthService _auth = AuthService();
@@ -184,6 +186,7 @@ class ApiService {
     String? leadId,
     String? dealId,
     String? phoneNumber,
+    String? followUpId,
   }) async {
     final map = <String, dynamic>{
       'customerName': customerName,
@@ -197,6 +200,7 @@ class ApiService {
       if (dealId != null && dealId.isNotEmpty) 'dealId': dealId,
       if (phoneNumber != null && phoneNumber.isNotEmpty)
         'phoneNumber': phoneNumber,
+      if (followUpId != null && followUpId.isNotEmpty) 'followUpId': followUpId,
     };
 
     if (audioFilePath != null) {
@@ -1267,11 +1271,47 @@ class ApiService {
     );
   }
 
+  Future<Response> cancelCrmFollowUp(String id) async {
+    return _dio.post('/crm/follow-ups/$id/cancel');
+  }
+
+  Future<Response> rescheduleCrmFollowUp(String id, String scheduledAt) async {
+    return _dio.post(
+      '/crm/follow-ups/$id/reschedule',
+      data: {'scheduledAt': scheduledAt},
+    );
+  }
+
   Future<Response> rescheduleFollowUp(String id, String scheduledAt) async {
     return _dio.post(
       '/follow-ups/$id/reschedule',
       data: {'scheduledAt': scheduledAt},
     );
+  }
+
+  Future<Response> getCrmFollowUpsFiltered({
+    String? fromDate,
+    String? toDate,
+    String? status,
+    String? userId,
+    String? branchId,
+    int limit = 200,
+  }) async {
+    return _dio.get(
+      '/crm/follow-ups',
+      queryParameters: {
+        if (fromDate != null) 'fromDate': fromDate,
+        if (toDate != null) 'toDate': toDate,
+        if (status != null && status.isNotEmpty) 'status': status,
+        if (userId != null && userId.isNotEmpty) 'userId': userId,
+        if (branchId != null && branchId.isNotEmpty) 'branchId': branchId,
+        'limit': limit,
+      },
+    );
+  }
+
+  Future<Response> getUsersByBranch(String branchId) async {
+    return _dio.get('/users', queryParameters: {'branchId': branchId});
   }
 
   Future<Response> getVisits({String? status, String? branchId}) async {
