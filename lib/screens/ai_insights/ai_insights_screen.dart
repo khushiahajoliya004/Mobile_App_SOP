@@ -222,7 +222,11 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
       _msg('Analysis triggered');
       _load();
     } catch (e) {
-      _msg('Failed: $e', error: true);
+      if (e is DioException && e.response?.statusCode == 503) {
+        _msg('AI model is temporarily busy. Please try again in a few seconds.', error: true);
+      } else {
+        _msg('Failed: $e', error: true);
+      }
     }
   }
 
