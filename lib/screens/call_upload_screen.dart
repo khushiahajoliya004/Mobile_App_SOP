@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -28,12 +29,12 @@ class _MediaStoreFile {
   });
 
   factory _MediaStoreFile.fromMap(Map map) => _MediaStoreFile(
-        name: map['name'] as String? ?? 'Unknown',
-        path: map['path'] as String? ?? '',
-        size: (map['size'] as num?)?.toInt() ?? 0,
-        durationMs: (map['duration'] as num?)?.toInt() ?? 0,
-        dateModifiedSec: (map['dateModified'] as num?)?.toInt() ?? 0,
-      );
+    name: map['name'] as String? ?? 'Unknown',
+    path: map['path'] as String? ?? '',
+    size: (map['size'] as num?)?.toInt() ?? 0,
+    durationMs: (map['duration'] as num?)?.toInt() ?? 0,
+    dateModifiedSec: (map['dateModified'] as num?)?.toInt() ?? 0,
+  );
 
   DateTime get dateTime =>
       DateTime.fromMillisecondsSinceEpoch(dateModifiedSec * 1000);
@@ -45,15 +46,22 @@ class CallUploadScreen extends StatefulWidget {
   final String? leadName;
   final String? leadPhone;
 
-  const CallUploadScreen({super.key, this.leadId, this.dealId, this.leadName, this.leadPhone});
+  const CallUploadScreen({
+    super.key,
+    this.leadId,
+    this.dealId,
+    this.leadName,
+    this.leadPhone,
+  });
 
   @override
   State<CallUploadScreen> createState() => _CallUploadScreenState();
 }
 
 class _CallUploadScreenState extends State<CallUploadScreen> {
-  static const _recorderChannel =
-      MethodChannel('com.callrecorder/native_recorder');
+  static const _recorderChannel = MethodChannel(
+    'com.callrecorder/native_recorder',
+  );
 
   final _api = ApiService();
   final _auth = AuthService();
@@ -171,8 +179,9 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
       if (Platform.isAndroid) {
         await [Permission.audio, Permission.storage].request();
       }
-      final List? result =
-          await _recorderChannel.invokeMethod('queryAudioFiles');
+      final List? result = await _recorderChannel.invokeMethod(
+        'queryAudioFiles',
+      );
       if (result == null) return [];
       return result.map((e) => _MediaStoreFile.fromMap(e as Map)).toList();
     } catch (e) {
@@ -229,9 +238,10 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
         final filtered = query.isEmpty
             ? files
             : files
-                .where((f) =>
-                    f.name.toLowerCase().contains(query.toLowerCase()))
-                .toList();
+                  .where(
+                    (f) => f.name.toLowerCase().contains(query.toLowerCase()),
+                  )
+                  .toList();
         return DraggableScrollableSheet(
           initialChildSize: 0.75,
           maxChildSize: 0.95,
@@ -255,8 +265,10 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
                   ),
                 ),
                 Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 4,
+                  ),
                   child: Row(
                     children: [
                       const Text(
@@ -279,24 +291,23 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
                   ),
                 ),
                 Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
                   child: TextField(
                     onChanged: (v) => setSheetState(() => query = v),
                     decoration: InputDecoration(
                       hintText: 'Search audio files...',
                       prefixIcon: const Icon(Icons.search_rounded, size: 20),
-                      contentPadding:
-                          const EdgeInsets.symmetric(vertical: 10),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 10),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide:
-                            BorderSide(color: Colors.grey.shade200),
+                        borderSide: BorderSide(color: Colors.grey.shade200),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide:
-                            BorderSide(color: Colors.grey.shade200),
+                        borderSide: BorderSide(color: Colors.grey.shade200),
                       ),
                     ),
                   ),
@@ -306,24 +317,20 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
                       ? const Center(
                           child: Text(
                             'No files found',
-                            style:
-                                TextStyle(color: AppColors.textHint),
+                            style: TextStyle(color: AppColors.textHint),
                           ),
                         )
                       : ListView.separated(
                           controller: scrollController,
                           padding: const EdgeInsets.only(bottom: 20),
                           itemCount: filtered.length + 1,
-                          separatorBuilder: (_, __) => Divider(
-                            color: Colors.grey.shade100,
-                            height: 1,
-                          ),
+                          separatorBuilder: (_, __) =>
+                              Divider(color: Colors.grey.shade100, height: 1),
                           itemBuilder: (_, i) {
                             if (i == filtered.length) {
                               return _buildFallbackButton(ctx);
                             }
-                            return _buildAudioFileItem(
-                                filtered[i], ctx);
+                            return _buildAudioFileItem(filtered[i], ctx);
                           },
                         ),
                 ),
@@ -335,8 +342,7 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
     );
   }
 
-  Widget _buildAudioFileItem(
-      _MediaStoreFile file, BuildContext sheetCtx) {
+  Widget _buildAudioFileItem(_MediaStoreFile file, BuildContext sheetCtx) {
     final d = file.dateTime;
     final dateStr =
         '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
@@ -346,8 +352,7 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
         ? '  •  ${dur.inMinutes}:${(dur.inSeconds % 60).toString().padLeft(2, '0')}'
         : '';
     return ListTile(
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       leading: Container(
         width: 44,
         height: 44,
@@ -355,8 +360,11 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
           color: AppColors.primarySurface,
           borderRadius: BorderRadius.circular(10),
         ),
-        child: const Icon(Icons.audio_file_rounded,
-            color: AppColors.primary, size: 22),
+        child: const Icon(
+          Icons.audio_file_rounded,
+          color: AppColors.primary,
+          size: 22,
+        ),
       ),
       title: Text(
         file.name,
@@ -370,8 +378,7 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
       ),
       subtitle: Text(
         '$sizeStr$durationStr  •  $dateStr',
-        style:
-            const TextStyle(fontSize: 11, color: AppColors.textHint),
+        style: const TextStyle(fontSize: 11, color: AppColors.textHint),
       ),
       onTap: () {
         setState(() {
@@ -442,15 +449,25 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
 
     try {
       debugPrint('[Upload] companyId=${_user!.companyId} userId=${_user!.id}');
-      debugPrint('[Upload] categoryId=$_sopCategoryId salesStageId=$_sopSalesStageId');
-      debugPrint('[Upload] audioPath=$_audioFilePath audioName=$_audioFileName');
-      debugPrint('[Upload] leadId=$_linkedLeadId phone=${_phoneController.text.trim()}');
+      debugPrint(
+        '[Upload] categoryId=$_sopCategoryId salesStageId=$_sopSalesStageId',
+      );
+      debugPrint(
+        '[Upload] audioPath=$_audioFilePath audioName=$_audioFileName',
+      );
+      debugPrint(
+        '[Upload] leadId=$_linkedLeadId phone=${_phoneController.text.trim()}',
+      );
 
       final customerName = _customerNameController.text.trim();
       final companyId = _user!.companyId!;
       final userId = _user!.id;
-      final notes = _notesController.text.trim().isNotEmpty ? _notesController.text.trim() : null;
-      final phone = _phoneController.text.trim().isNotEmpty ? _phoneController.text.trim() : null;
+      final notes = _notesController.text.trim().isNotEmpty
+          ? _notesController.text.trim()
+          : null;
+      final phone = _phoneController.text.trim().isNotEmpty
+          ? _phoneController.text.trim()
+          : null;
 
       try {
         await _api.createCall(
@@ -469,7 +486,9 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
       } on DioException catch (e1) {
         if (e1.response?.statusCode == 500) {
           // Retry without optional relational IDs that may not exist in prod DB
-          debugPrint('[Upload] 500 on full payload, retrying without optional IDs...');
+          debugPrint(
+            '[Upload] 500 on full payload, retrying without optional IDs...',
+          );
           await _api.createCall(
             customerName: customerName,
             companyId: companyId,
@@ -502,20 +521,67 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
       if (mounted) {
         String errMsg = 'Upload failed. Try again.';
         if (e is DioException) {
-          final data = e.response?.data;
+          var data = e.response?.data;
+          final statusCode = e.response?.statusCode;
+
+          // If data is a JSON string, try to parse it
+          if (data is String && data.startsWith('{')) {
+            try {
+              data = jsonDecode(data);
+            } catch (_) {}
+          }
+
+          // Extract real error message from backend response
           if (data is Map) {
-            errMsg = data['message']?.toString() ?? data['error']?.toString() ?? errMsg;
+            final msg = data['message'];
+            if (msg is List && msg.isNotEmpty) {
+              errMsg = msg.join(', ');
+            } else if (msg is String && msg.isNotEmpty) {
+              errMsg = msg;
+            } else if (data['error'] is String &&
+                data['error'] != 'Bad Request') {
+              errMsg = data['error'];
+            }
           } else if (data is String && data.isNotEmpty) {
             errMsg = data;
-          } else if (e.response?.statusCode != null) {
-            errMsg = 'Server error ${e.response!.statusCode}. Try again.';
+          } else if (e.type == DioExceptionType.connectionTimeout ||
+              e.type == DioExceptionType.sendTimeout ||
+              e.type == DioExceptionType.receiveTimeout) {
+            errMsg = 'Connection timed out. Check your internet and try again.';
+          } else if (e.type == DioExceptionType.connectionError) {
+            errMsg =
+                'Cannot connect to server. Check your internet connection.';
+          } else if (e.type == DioExceptionType.badCertificate) {
+            errMsg = 'Server certificate expired. Contact support.';
+          } else if (statusCode != null) {
+            switch (statusCode) {
+              case 400:
+                errMsg = 'Invalid request. Please check the recording.';
+                break;
+              case 401:
+                errMsg = 'Session expired. Please login again.';
+                break;
+              case 403:
+                errMsg = 'You do not have permission for this action.';
+                break;
+              case 413:
+                errMsg = 'Recording file is too large to upload.';
+                break;
+              case 500:
+                errMsg = 'Server error. Please try again later.';
+                break;
+              default:
+                errMsg = 'Upload failed (Error $statusCode). Try again.';
+            }
           }
         }
-        if (e is DioException) {
-          debugPrint('[Upload] status: ${e.response?.statusCode}');
-          debugPrint('[Upload] response body: ${e.response?.data}');
-        }
-        debugPrint('[Upload] error: $e');
+        debugPrint(
+          '[Upload] status: ${e is DioException ? e.response?.statusCode : "N/A"}',
+        );
+        debugPrint(
+          '[Upload] response body: ${e is DioException ? e.response?.data : e}',
+        );
+        debugPrint('[Upload] error message shown: $errMsg');
         setState(() {
           _statusMessage = errMsg;
           _isError = true;
@@ -830,7 +896,11 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
                           color: AppColors.primary.withValues(alpha: 0.6),
                         ),
                         suffixIcon: _linkedLeadId != null
-                            ? const Icon(Icons.link_rounded, color: AppColors.success, size: 20)
+                            ? const Icon(
+                                Icons.link_rounded,
+                                color: AppColors.success,
+                                size: 20,
+                              )
                             : null,
                       ),
                     ),
@@ -856,7 +926,11 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
                                 color: AppColors.primary,
                               ),
                             )
-                          : const Icon(Icons.search_rounded, color: AppColors.primary, size: 20),
+                          : const Icon(
+                              Icons.search_rounded,
+                              color: AppColors.primary,
+                              size: 20,
+                            ),
                     ),
                   ),
                 ],
@@ -864,15 +938,24 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
               if (_linkedLeadName != null) ...[
                 const SizedBox(height: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.success.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.success.withValues(alpha: 0.2)),
+                    border: Border.all(
+                      color: AppColors.success.withValues(alpha: 0.2),
+                    ),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.check_circle_rounded, size: 14, color: AppColors.success),
+                      const Icon(
+                        Icons.check_circle_rounded,
+                        size: 14,
+                        color: AppColors.success,
+                      ),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
@@ -889,7 +972,11 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
                           _linkedLeadId = null;
                           _linkedLeadName = null;
                         }),
-                        child: const Icon(Icons.close_rounded, size: 14, color: AppColors.success),
+                        child: const Icon(
+                          Icons.close_rounded,
+                          size: 14,
+                          color: AppColors.success,
+                        ),
                       ),
                     ],
                   ),
@@ -1341,8 +1428,7 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
                   SizedBox(height: 8),
                   Text(
                     'Loading audio files...',
-                    style:
-                        TextStyle(color: AppColors.textHint, fontSize: 12),
+                    style: TextStyle(color: AppColors.textHint, fontSize: 12),
                   ),
                 ],
               )

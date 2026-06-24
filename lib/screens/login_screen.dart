@@ -72,7 +72,10 @@ class _LoginScreenState extends State<LoginScreen>
       _error = null;
     });
     try {
-      final response = await _api.login(_emailCtrl.text.trim(), _passCtrl.text.trim());
+      final response = await _api.login(
+        _emailCtrl.text.trim(),
+        _passCtrl.text.trim(),
+      );
       final data = response.data['data'] ?? response.data;
       await _auth.saveToken(data['token'] ?? '');
       if (data['user'] != null) {
@@ -110,10 +113,13 @@ class _LoginScreenState extends State<LoginScreen>
         if (e is DioException) {
           final body = e.response?.data;
           if (body is Map) {
-            serverMsg = body['message']?.toString() ?? body['error']?.toString();
+            serverMsg =
+                body['message']?.toString() ?? body['error']?.toString();
           }
         }
-        if (msg.contains('SocketException') || msg.contains('Connection refused') || msg.contains('Network')) {
+        if (msg.contains('SocketException') ||
+            msg.contains('Connection refused') ||
+            msg.contains('Network')) {
           _error = 'Cannot connect to server. Check your WiFi or server IP.';
         } else if (msg.contains('401') || msg.contains('Invalid credentials')) {
           _error = serverMsg ?? 'Invalid email or password';
@@ -244,11 +250,7 @@ class _LoginScreenState extends State<LoginScreen>
               width: 88,
               height: 88,
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFF6366F1), Color(0xFF818CF8)],
-                ),
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(26),
                 boxShadow: [
                   BoxShadow(
@@ -258,10 +260,12 @@ class _LoginScreenState extends State<LoginScreen>
                   ),
                 ],
               ),
-              child: const Icon(
-                Icons.psychology_rounded,
-                size: 44,
-                color: Colors.white,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(26),
+                child: Image.asset(
+                  'assets/images/app_icon.png',
+                  fit: BoxFit.cover,
+                ),
               ),
             ),
           ),

@@ -220,10 +220,10 @@ class CallRecorderApp extends StatelessWidget {
           backgroundColor: AppColors.textPrimary,
         ),
         dividerTheme: DividerThemeData(color: Colors.grey.shade100),
-        pageTransitionsTheme: const PageTransitionsTheme(
+        pageTransitionsTheme: PageTransitionsTheme(
           builders: {
             TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
-            TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+            TargetPlatform.iOS: ZoomPageTransitionsBuilder(),
           },
         ),
       ),

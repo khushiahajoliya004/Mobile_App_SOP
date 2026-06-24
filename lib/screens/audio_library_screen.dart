@@ -1,12 +1,15 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:file_picker/file_picker.dart';
 import '../main.dart';
 import '../models/audio_file_model.dart';
 import '../services/audio_file_service.dart';
 
 class AudioLibraryScreen extends StatefulWidget {
-  const AudioLibraryScreen({super.key});
+  final bool showAppBar;
+  const AudioLibraryScreen({super.key, this.showAppBar = false});
 
   @override
   State<AudioLibraryScreen> createState() => _AudioLibraryScreenState();
@@ -105,9 +108,50 @@ class _AudioLibraryScreenState extends State<AudioLibraryScreen> {
       }
     } catch (e) {
       if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error playing audio: $e')));
+      }
+    }
+  }
+
+  Future<void> _downloadAudio(AudioFile file) async {
+    try {
+      final sourceFile = File(file.path);
+      if (!await sourceFile.exists()) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('File not found')));
+        }
+        return;
+      }
+
+      // Let user pick the folder to save
+      final selectedDir = await FilePicker.platform.getDirectoryPath(
+        dialogTitle: 'Select folder to save audio',
+      );
+
+      if (selectedDir == null) return; // User cancelled
+
+      final fileName = '${file.name}.m4a';
+      final destPath = '$selectedDir/$fileName';
+      await sourceFile.copy(destPath);
+
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error playing audio: $e')),
+          SnackBar(
+            content: Text('Saved: $fileName'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
         );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Download failed: $e')));
       }
     }
   }
@@ -170,6 +214,31 @@ class _AudioLibraryScreenState extends State<AudioLibraryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.scaffoldBg,
+      appBar: widget.showAppBar
+          ? AppBar(
+              backgroundColor: Colors.white,
+              surfaceTintColor: Colors.transparent,
+              elevation: 0,
+              title: const Text(
+                'Audio Library',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              actions: [
+                IconButton(
+                  onPressed: _loadAudioFiles,
+                  icon: const Icon(
+                    Icons.refresh_rounded,
+                    color: AppColors.textSecondary,
+                  ),
+                  tooltip: 'Refresh',
+                ),
+              ],
+            )
+          : null,
       body: _loading
           ? const Center(
               child: CircularProgressIndicator(
@@ -355,6 +424,24 @@ class _AudioLibraryScreenState extends State<AudioLibraryScreen> {
                 ),
               ),
               const SizedBox(width: 8),
+              // Download button
+              GestureDetector(
+                onTap: () => _downloadAudio(audio),
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.download_rounded,
+                    size: 15,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
               // Delete button
               GestureDetector(
                 onTap: () => _deleteAudio(audio),

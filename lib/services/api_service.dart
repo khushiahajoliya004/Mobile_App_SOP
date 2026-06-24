@@ -9,9 +9,9 @@ class ApiService {
   // Backend runs on port 3000, no /api prefix
   // For Android emulator use 10.0.2.2, for real device use your machine IP
   // static const String baseUrl = 'https://apimysterymentorqa.mysterymentor.in';
-  // static const String baseUrl = 'https://api.mysterymentor.in';
+  static const String baseUrl = 'https://api.mysterymentor.in';
   // static const String baseUrl = 'http://192.168.1.8:3001';
-  static const String baseUrl = 'http://192.168.1.24:3000';
+  // static const String baseUrl = 'http://192.168.1.24:3000';
 
   late final Dio _dio;
   final AuthService _auth = AuthService();
@@ -55,8 +55,13 @@ class ApiService {
         },
         onError: (DioException e, handler) async {
           final path = e.requestOptions.path;
-          final isAuthCall = path.contains('/auth/login') || path.contains('/notifications/register-token') || path.contains('/notifications/unregister-token');
-          if (e.response?.statusCode == 401 && !_sessionExpiredDialogOpen && !isAuthCall) {
+          final isAuthCall =
+              path.contains('/auth/login') ||
+              path.contains('/notifications/register-token') ||
+              path.contains('/notifications/unregister-token');
+          if (e.response?.statusCode == 401 &&
+              !_sessionExpiredDialogOpen &&
+              !isAuthCall) {
             _sessionExpiredDialogOpen = true;
             await _auth.logout();
             final context = navigatorKey.currentContext;
@@ -226,7 +231,8 @@ class ApiService {
   }) async {
     final params = <String, dynamic>{'page': page, 'limit': limit};
     if (search != null && search.isNotEmpty) params['search'] = search;
-    if (duration != null && duration.isNotEmpty && duration != 'all') params['duration'] = duration;
+    if (duration != null && duration.isNotEmpty && duration != 'all')
+      params['duration'] = duration;
     if (fromDate != null) params['fromDate'] = fromDate;
     if (toDate != null) params['toDate'] = toDate;
     if (leadId != null && leadId.isNotEmpty) params['leadId'] = leadId;
@@ -684,28 +690,52 @@ class ApiService {
     return _dio.get('/analytics/trend', queryParameters: {'period': period});
   }
 
-  Future<Response> getAnalyticsCategoryBreakdown({String period = '30d'}) async {
-    return _dio.get('/analytics/category-breakdown', queryParameters: {'period': period});
+  Future<Response> getAnalyticsCategoryBreakdown({
+    String period = '30d',
+  }) async {
+    return _dio.get(
+      '/analytics/category-breakdown',
+      queryParameters: {'period': period},
+    );
   }
 
-  Future<Response> getAnalyticsSalesStageBreakdown({String period = '30d'}) async {
-    return _dio.get('/analytics/sales-stage-breakdown', queryParameters: {'period': period});
+  Future<Response> getAnalyticsSalesStageBreakdown({
+    String period = '30d',
+  }) async {
+    return _dio.get(
+      '/analytics/sales-stage-breakdown',
+      queryParameters: {'period': period},
+    );
   }
 
-  Future<Response> getAnalyticsScoreDistribution({String period = '30d'}) async {
-    return _dio.get('/analytics/score-distribution', queryParameters: {'period': period});
+  Future<Response> getAnalyticsScoreDistribution({
+    String period = '30d',
+  }) async {
+    return _dio.get(
+      '/analytics/score-distribution',
+      queryParameters: {'period': period},
+    );
   }
 
   Future<Response> getAnalyticsUserCallAnalysis({String period = '30d'}) async {
-    return _dio.get('/analytics/user-call-analysis', queryParameters: {'period': period});
+    return _dio.get(
+      '/analytics/user-call-analysis',
+      queryParameters: {'period': period},
+    );
   }
 
   Future<Response> getAnalyticsSopMatrix({String period = '30d'}) async {
-    return _dio.get('/analytics/sop-matrix', queryParameters: {'period': period});
+    return _dio.get(
+      '/analytics/sop-matrix',
+      queryParameters: {'period': period},
+    );
   }
 
   Future<Response> getAnalyticsUserSopMatrix({String period = '30d'}) async {
-    return _dio.get('/analytics/user-sop-matrix', queryParameters: {'period': period});
+    return _dio.get(
+      '/analytics/user-sop-matrix',
+      queryParameters: {'period': period},
+    );
   }
 
   // ─── AI Insights (additional) ───
@@ -783,9 +813,10 @@ class ApiService {
   Future<Response> generateManagerReview(String callId) async =>
       _dio.post('/ai-insights/manager-review/$callId', data: {});
 
-  Future<Response> downloadManagerReviewPdf(String callId) async =>
-      _dio.get('/ai-insights/$callId/manager-review-pdf',
-          options: Options(responseType: ResponseType.bytes));
+  Future<Response> downloadManagerReviewPdf(String callId) async => _dio.get(
+    '/ai-insights/$callId/manager-review-pdf',
+    options: Options(responseType: ResponseType.bytes),
+  );
 
   // ─── Companies ───
 
@@ -908,8 +939,8 @@ class ApiService {
   Future<Response> getAssignableUsers() async =>
       _dio.get('/crm-dashboard/assignable-users');
 
-  Future<Response> getUsersByReportingTo(String teamLeaderUserId) async =>
-      _dio.get('/users', queryParameters: {'reportingToUserId': teamLeaderUserId});
+  Future<Response> getUsersByReportingTo(String teamLeaderUserId) async => _dio
+      .get('/users', queryParameters: {'reportingToUserId': teamLeaderUserId});
 
   Future<Response> getMyCrmPermissions() async =>
       _dio.get('/crm/my-permissions');
@@ -1968,8 +1999,7 @@ class ApiService {
   // ─── Force Update ───
 
   /// GET /app/version-config
-  Future<Response> getVersionConfig() async =>
-      _dio.get('/app/version-config');
+  Future<Response> getVersionConfig() async => _dio.get('/app/version-config');
 
   /// POST /app/version-config
   Future<Response> saveVersionConfig({
@@ -2162,7 +2192,10 @@ class ApiService {
     );
   }
 
-  Future<Response> getEmployeeAiTrend(String userId, {bool refresh = false}) async {
+  Future<Response> getEmployeeAiTrend(
+    String userId, {
+    bool refresh = false,
+  }) async {
     return _dio.get(
       '/employee-performance/$userId/ai-trend',
       queryParameters: {if (refresh) 'refresh': 'true'},
@@ -2506,8 +2539,10 @@ class ApiService {
   Future<Response> deleteCrmPipeline(String id) async =>
       _dio.delete('/crm/pipelines/$id');
 
-  Future<Response> deleteCrmPipelineStage(String pipelineId, String stageId) async =>
-      _dio.delete('/crm/pipelines/$pipelineId/stages/$stageId');
+  Future<Response> deleteCrmPipelineStage(
+    String pipelineId,
+    String stageId,
+  ) async => _dio.delete('/crm/pipelines/$pipelineId/stages/$stageId');
 
   // ─── CRM v2 Follow-ups by Contact ───
 

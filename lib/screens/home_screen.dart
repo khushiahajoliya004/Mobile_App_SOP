@@ -7,6 +7,7 @@ import 'login_screen.dart';
 import 'dashboard/dashboard_screen.dart';
 import 'call_recorder_screen.dart';
 import 'menu_screen.dart';
+import 'audio_library_screen.dart';
 import 'profile/profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -35,11 +36,15 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final screens = [
       const DashboardScreen(),
+      MenuScreen(
+        user: _user,
+        onProfileTap: () => setState(() => _currentTab = 4),
+      ),
       Scaffold(
         backgroundColor: AppColors.scaffoldBg,
         body: const CallRecorderScreen(),
       ),
-      MenuScreen(user: _user, onProfileTap: () => setState(() => _currentTab = 3)),
+      const AudioLibraryScreen(),
       ProfileScreen(user: _user, onLogout: _logout),
     ];
 
@@ -61,9 +66,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildBottomNav() {
     final items = [
-      const _NavItem(Icons.dashboard_outlined, Icons.dashboard_rounded, 'Home'),
-      const _NavItem(Icons.mic_outlined, Icons.mic_rounded, 'Record'),
+      const _NavItem(Icons.home, Icons.home_outlined, 'Home'),
       const _NavItem(Icons.grid_view_outlined, Icons.grid_view_rounded, 'Menu'),
+      const _NavItem(Icons.mic_outlined, Icons.mic_rounded, 'Record'),
+      const _NavItem(
+        Icons.library_music_outlined,
+        Icons.library_music_rounded,
+        'Library',
+      ),
       const _NavItem(Icons.person_outline, Icons.person_rounded, 'Profile'),
     ];
 
@@ -88,8 +98,8 @@ class _HomeScreenState extends State<HomeScreen> {
               final item = e.value;
               final active = i == _currentTab;
 
-              // Special record button
-              if (i == 1) {
+              // Special record button (center)
+              if (i == 2) {
                 return Expanded(
                   child: GestureDetector(
                     onTap: () => setState(() => _currentTab = i),

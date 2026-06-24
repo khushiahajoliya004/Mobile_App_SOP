@@ -18,7 +18,13 @@ class CallRecorderScreen extends StatefulWidget {
   final String? dealId;
   final String? leadCustomerName;
   final String? leadPhone;
-  const CallRecorderScreen({super.key, this.leadId, this.dealId, this.leadCustomerName, this.leadPhone});
+  const CallRecorderScreen({
+    super.key,
+    this.leadId,
+    this.dealId,
+    this.leadCustomerName,
+    this.leadPhone,
+  });
   @override
   State<CallRecorderScreen> createState() => _CallRecorderScreenState();
 }
@@ -273,13 +279,57 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
       if (mounted) {
         String err = 'Upload failed';
         if (e is DioException) {
-          final sm = e.response?.data?['message'];
-          if (sm != null) {
-            err = sm is List ? sm.join(', ') : sm.toString();
-          } else if (e.type == DioExceptionType.connectionTimeout) {
-            err = 'Timed out';
+          var data = e.response?.data;
+          final statusCode = e.response?.statusCode;
+
+          // If data is a JSON string, try to parse it
+          if (data is String && data.startsWith('{')) {
+            try {
+              data = jsonDecode(data);
+            } catch (_) {}
+          }
+
+          // Extract real error message from backend response
+          if (data is Map) {
+            final msg = data['message'];
+            if (msg is List && msg.isNotEmpty) {
+              err = msg.join(', ');
+            } else if (msg is String && msg.isNotEmpty) {
+              err = msg;
+            } else if (data['error'] is String &&
+                data['error'] != 'Bad Request') {
+              err = data['error'];
+            }
+          } else if (data is String && data.isNotEmpty) {
+            err = data;
+          } else if (e.type == DioExceptionType.connectionTimeout ||
+              e.type == DioExceptionType.sendTimeout ||
+              e.type == DioExceptionType.receiveTimeout) {
+            err = 'Connection timed out. Check your internet.';
           } else if (e.type == DioExceptionType.connectionError) {
-            err = 'No internet';
+            err = 'Cannot connect to server. Check your internet.';
+          } else if (e.type == DioExceptionType.badCertificate) {
+            err = 'Server certificate expired. Contact support.';
+          } else if (statusCode != null) {
+            switch (statusCode) {
+              case 400:
+                err = 'Invalid request.';
+                break;
+              case 401:
+                err = 'Session expired. Please login again.';
+                break;
+              case 403:
+                err = 'Permission denied.';
+                break;
+              case 413:
+                err = 'File too large.';
+                break;
+              case 500:
+                err = 'Server error. Try again later.';
+                break;
+              default:
+                err = 'Upload failed (Error $statusCode)';
+            }
           }
         }
         setState(() {

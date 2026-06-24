@@ -83,12 +83,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     return Container(
       color: AppColors.scaffoldBg,
       child: _loading
-          ? const Center(
-              child: CircularProgressIndicator(
-                color: AppColors.primary,
-                strokeWidth: 3,
-              ),
-            )
+          ? _buildSkeletonLoader()
           : _error != null
           ? Center(
               child: Padding(
@@ -122,7 +117,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                     const SizedBox(height: 24),
                     FilledButton.icon(
                       onPressed: () {
-                        setState(() { _error = null; });
+                        setState(() {
+                          _error = null;
+                        });
                         _loadAll();
                       },
                       icon: const Icon(Icons.refresh),
@@ -154,6 +151,82 @@ class _DashboardScreenState extends State<DashboardScreen>
                 ),
               ),
             ),
+    );
+  }
+
+  // ═══ SKELETON LOADER ════════════════════════════════════════════════════
+  Widget _buildSkeletonLoader() {
+    return SingleChildScrollView(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header skeleton
+          _skeletonBox(height: 140, borderRadius: 24),
+          const SizedBox(height: 20),
+          // Score section skeleton
+          _skeletonBox(height: 110, borderRadius: 20),
+          const SizedBox(height: 16),
+          // Stats grid skeleton
+          Row(
+            children: [
+              Expanded(child: _skeletonBox(height: 100, borderRadius: 16)),
+              const SizedBox(width: 10),
+              Expanded(child: _skeletonBox(height: 100, borderRadius: 16)),
+              const SizedBox(width: 10),
+              Expanded(child: _skeletonBox(height: 100, borderRadius: 16)),
+            ],
+          ),
+          const SizedBox(height: 20),
+          // Quick actions label skeleton
+          _skeletonBox(height: 12, width: 120, borderRadius: 6),
+          const SizedBox(height: 12),
+          // Quick actions skeleton
+          Row(
+            children: [
+              Expanded(child: _skeletonBox(height: 90, borderRadius: 16)),
+              const SizedBox(width: 10),
+              Expanded(child: _skeletonBox(height: 90, borderRadius: 16)),
+              const SizedBox(width: 10),
+              Expanded(child: _skeletonBox(height: 90, borderRadius: 16)),
+            ],
+          ),
+          const SizedBox(height: 20),
+          // CRM section skeleton
+          _skeletonBox(height: 12, width: 100, borderRadius: 6),
+          const SizedBox(height: 12),
+          _skeletonBox(height: 130, borderRadius: 16),
+          const SizedBox(height: 20),
+          // Recent calls skeleton
+          _skeletonBox(height: 12, width: 130, borderRadius: 6),
+          const SizedBox(height: 12),
+          _skeletonBox(height: 70, borderRadius: 14),
+          const SizedBox(height: 10),
+          _skeletonBox(height: 70, borderRadius: 14),
+          const SizedBox(height: 10),
+          _skeletonBox(height: 70, borderRadius: 14),
+        ],
+      ),
+    );
+  }
+
+  Widget _skeletonBox({
+    required double height,
+    double? width,
+    double borderRadius = 12,
+  }) {
+    return Container(
+      height: height,
+      width: width,
+      decoration: BoxDecoration(
+        color: Colors.grey.shade200,
+        borderRadius: BorderRadius.circular(borderRadius),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(borderRadius),
+        child: const _ShimmerEffect(),
+      ),
     );
   }
 
@@ -288,18 +361,29 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  Widget _headerStat(String value, String label, IconData icon, {String? filterStatus}) {
+  Widget _headerStat(
+    String value,
+    String label,
+    IconData icon, {
+    String? filterStatus,
+  }) {
     return Expanded(
       child: GestureDetector(
         onTap: () {
           final now = DateTime.now();
           final from30d = now.subtract(const Duration(days: 30));
-          _navigateTo(AiInsightsScreen(
-            initialStatus: filterStatus ?? '',
-            initialUserId: (_user?.isCompanyAdmin == true || _user?.isSuperAdmin == true) ? null : _user?.id,
-            initialFromDate: from30d,
-            initialToDate: now,
-          ), 'Call Analysis');
+          _navigateTo(
+            AiInsightsScreen(
+              initialStatus: filterStatus ?? '',
+              initialUserId:
+                  (_user?.isCompanyAdmin == true || _user?.isSuperAdmin == true)
+                  ? null
+                  : _user?.id,
+              initialFromDate: from30d,
+              initialToDate: now,
+            ),
+            'Call Analysis',
+          );
         },
         child: Column(
           children: [
@@ -354,136 +438,142 @@ class _DashboardScreenState extends State<DashboardScreen>
         onTap: () {
           final now = DateTime.now();
           final from30d = now.subtract(const Duration(days: 30));
-          _navigateTo(AiInsightsScreen(
-            initialStatus: 'COMPLETED',
-            initialUserId: (_user?.isCompanyAdmin == true || _user?.isSuperAdmin == true) ? null : _user?.id,
-            initialFromDate: from30d,
-            initialToDate: now,
-          ), 'Call Analysis');
+          _navigateTo(
+            AiInsightsScreen(
+              initialStatus: 'COMPLETED',
+              initialUserId:
+                  (_user?.isCompanyAdmin == true || _user?.isSuperAdmin == true)
+                  ? null
+                  : _user?.id,
+              initialFromDate: from30d,
+              initialToDate: now,
+            ),
+            'Call Analysis',
+          );
         },
         child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            AnimatedBuilder(
-              animation: _ringCtrl,
-              builder: (_, __) {
-                final progress =
-                    Curves.easeOutCubic.transform(_ringCtrl.value) *
-                    avgScore /
-                    100;
-                return SizedBox(
-                  width: 90,
-                  height: 90,
-                  child: CustomPaint(
-                    painter: _ScoreRingPainter(
-                      progress: progress,
-                      color: scoreColor,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              AnimatedBuilder(
+                animation: _ringCtrl,
+                builder: (_, __) {
+                  final progress =
+                      Curves.easeOutCubic.transform(_ringCtrl.value) *
+                      avgScore /
+                      100;
+                  return SizedBox(
+                    width: 90,
+                    height: 90,
+                    child: CustomPaint(
+                      painter: _ScoreRingPainter(
+                        progress: progress,
+                        color: scoreColor,
+                      ),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '${(progress * 100).round()}',
+                              style: TextStyle(
+                                fontSize: 26,
+                                fontWeight: FontWeight.w800,
+                                color: scoreColor,
+                              ),
+                            ),
+                            Text(
+                              '%',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: scoreColor.withValues(alpha: 0.6),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            '${(progress * 100).round()}',
+                  );
+                },
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            'My Performance',
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: scoreColor.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            scoreLabel,
                             style: TextStyle(
-                              fontSize: 26,
-                              fontWeight: FontWeight.w800,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
                               color: scoreColor,
                             ),
                           ),
-                          Text(
-                            '%',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: scoreColor.withValues(alpha: 0.6),
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(width: 20),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          'My Performance',
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: scoreColor.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          scoreLabel,
-                          style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            color: scoreColor,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  _miniProgress(
-                    'Analyzed',
-                    (_data['analyzedCalls'] ?? 0) /
-                        math.max(1, _data['totalCalls'] ?? 1),
-                    AppColors.primary,
-                  ),
-                  const SizedBox(height: 6),
-                  _miniProgress(
-                    'High Score',
-                    (_data['highPerformers'] ?? 0) /
-                        math.max(1, _data['totalCalls'] ?? 1),
-                    AppColors.success,
-                  ),
-                  const SizedBox(height: 6),
-                  _miniProgress(
-                    'Pending',
-                    (_data['pendingCalls'] ?? 0) /
-                        math.max(1, _data['totalCalls'] ?? 1),
-                    AppColors.warning,
-                  ),
-                ],
+                    const SizedBox(height: 8),
+                    _miniProgress(
+                      'Analyzed',
+                      (_data['analyzedCalls'] ?? 0) /
+                          math.max(1, _data['totalCalls'] ?? 1),
+                      AppColors.primary,
+                    ),
+                    const SizedBox(height: 6),
+                    _miniProgress(
+                      'High Score',
+                      (_data['highPerformers'] ?? 0) /
+                          math.max(1, _data['totalCalls'] ?? 1),
+                      AppColors.success,
+                    ),
+                    const SizedBox(height: 6),
+                    _miniProgress(
+                      'Pending',
+                      (_data['pendingCalls'] ?? 0) /
+                          math.max(1, _data['totalCalls'] ?? 1),
+                      AppColors.warning,
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
       ),
     );
   }
@@ -1231,7 +1321,9 @@ class _CallDetailSheetState extends State<_CallDetailSheet> {
   }
 
   Widget _buildSheetHeader() {
-    final score = _detail['sopScore'] != null ? num.tryParse(_detail['sopScore'].toString()) : null;
+    final score = _detail['sopScore'] != null
+        ? num.tryParse(_detail['sopScore'].toString())
+        : null;
     final name = _detail['customerName'] ?? 'Unknown';
     final status = _detail['analysisStatus'] ?? '';
     final category = _detail['category']?['name'] ?? '';
@@ -1334,7 +1426,8 @@ class _CallDetailSheetState extends State<_CallDetailSheet> {
 
   Widget _buildSectionScores() {
     final ai = _detail['aiAnalysis'] as Map<String, dynamic>? ?? {};
-    final sections = (_detail['sectionScores'] ?? ai['sectionScores'] ?? []) as List;
+    final sections =
+        (_detail['sectionScores'] ?? ai['sectionScores'] ?? []) as List;
     if (sections.isEmpty) return const SizedBox.shrink();
 
     return Column(
@@ -1405,10 +1498,12 @@ class _CallDetailSheetState extends State<_CallDetailSheet> {
 
   Widget _buildSummary() {
     final ai = _detail['aiAnalysis'] as Map<String, dynamic>? ?? {};
-    dynamic summary = ai['summary'] ?? ai['callSummary']
-        ?? _detail['callSummary']?['summary']
-        ?? _detail['callSummary']
-        ?? '';
+    dynamic summary =
+        ai['summary'] ??
+        ai['callSummary'] ??
+        _detail['callSummary']?['summary'] ??
+        _detail['callSummary'] ??
+        '';
     // Parse JSON-encoded string into a List if needed
     if (summary is String) {
       final trimmed = summary.trim();
@@ -1418,7 +1513,9 @@ class _CallDetailSheetState extends State<_CallDetailSheet> {
         } catch (_) {}
       }
     }
-    final isEmpty = summary is List ? summary.isEmpty : summary.toString().isEmpty;
+    final isEmpty = summary is List
+        ? summary.isEmpty
+        : summary.toString().isEmpty;
     if (isEmpty) return const SizedBox.shrink();
 
     return Column(
@@ -1426,43 +1523,78 @@ class _CallDetailSheetState extends State<_CallDetailSheet> {
       children: [
         Row(
           children: [
-            const Icon(Icons.summarize_rounded, size: 14, color: AppColors.primary),
+            const Icon(
+              Icons.summarize_rounded,
+              size: 14,
+              color: AppColors.primary,
+            ),
             const SizedBox(width: 6),
             const Text(
               'Quick Summary',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
             ),
           ],
         ),
         const SizedBox(height: 8),
         Container(
           padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(color: AppColors.primarySurface, borderRadius: BorderRadius.circular(12)),
+          decoration: BoxDecoration(
+            color: AppColors.primarySurface,
+            borderRadius: BorderRadius.circular(12),
+          ),
           child: summary is List
               ? Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: summary.asMap().entries.map((e) {
-                    final item = e.value is Map ? Map<String, dynamic>.from(e.value as Map) : <String, dynamic>{};
+                    final item = e.value is Map
+                        ? Map<String, dynamic>.from(e.value as Map)
+                        : <String, dynamic>{};
                     final answer = item['answer']?.toString() ?? '';
                     final question = item['question']?.toString() ?? '';
                     if (answer.isEmpty) return const SizedBox.shrink();
                     return Padding(
-                      padding: EdgeInsets.only(bottom: e.key < summary.length - 1 ? 8 : 0),
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        if (question.isNotEmpty) ...[
-                          Text(question,
+                      padding: EdgeInsets.only(
+                        bottom: e.key < summary.length - 1 ? 8 : 0,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (question.isNotEmpty) ...[
+                            Text(
+                              question,
                               style: const TextStyle(
-                                  fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-                          const SizedBox(height: 2),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                          ],
+                          Text(
+                            answer,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                              height: 1.5,
+                            ),
+                          ),
                         ],
-                        Text(answer,
-                            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.5)),
-                      ]),
+                      ),
                     );
                   }).toList(),
                 )
-              : Text(summary.toString(),
-                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.5)),
+              : Text(
+                  summary.toString(),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                    height: 1.5,
+                  ),
+                ),
         ),
       ],
     );
@@ -1470,9 +1602,15 @@ class _CallDetailSheetState extends State<_CallDetailSheet> {
 
   Widget _buildKeyPoints() {
     final ai = _detail['aiAnalysis'] as Map<String, dynamic>? ?? {};
-    final callSummary = _detail['callSummary'] is Map ? _detail['callSummary'] as Map<String, dynamic> : <String, dynamic>{};
+    final callSummary = _detail['callSummary'] is Map
+        ? _detail['callSummary'] as Map<String, dynamic>
+        : <String, dynamic>{};
     final keyPoints =
-        (ai['keyDiscussionPoints'] ?? ai['keyPoints'] ?? callSummary['keyPoints'] ?? []) as List;
+        (ai['keyDiscussionPoints'] ??
+                ai['keyPoints'] ??
+                callSummary['keyPoints'] ??
+                [])
+            as List;
     if (keyPoints.isEmpty) return const SizedBox.shrink();
 
     // Handle both list of strings and map format
@@ -1655,4 +1793,55 @@ class _ScoreRingPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _ScoreRingPainter old) =>
       old.progress != progress || old.color != color;
+}
+
+// ═══ SHIMMER EFFECT WIDGET ═══════════════════════════════════════════════
+class _ShimmerEffect extends StatefulWidget {
+  const _ShimmerEffect();
+
+  @override
+  State<_ShimmerEffect> createState() => _ShimmerEffectState();
+}
+
+class _ShimmerEffectState extends State<_ShimmerEffect>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (_, __) {
+        return Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment(-1.0 + 2.0 * _controller.value, 0),
+              end: Alignment(-1.0 + 2.0 * _controller.value + 1.0, 0),
+              colors: [
+                Colors.grey.shade200,
+                Colors.grey.shade100,
+                Colors.grey.shade200,
+              ],
+              stops: const [0.0, 0.5, 1.0],
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
