@@ -491,12 +491,23 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
                           final dupRes = await _api.checkDuplicateCrmContact(phone);
                           final raw = dupRes.data;
                           final list = raw is List ? raw : (raw is Map ? (raw['data'] ?? raw['contacts'] ?? []) : []);
-                          if (list is List && list.isNotEmpty) {
+                          if (list is List && list.isNotEmpty && ctx.mounted) {
                             final first = list.first;
                             final existingName = first is Map ? (first['name'] ?? 'another contact') : 'another contact';
-                            if (ctx.mounted) {
-                              _msg('Phone $phone already exists as "$existingName"', error: true);
-                            }
+                            await showDialog<void>(
+                              context: ctx,
+                              builder: (dlgCtx) => AlertDialog(
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                title: const Text('Duplicate Phone', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                                content: Text('Phone $phone already exists as "$existingName". Please use a different number.'),
+                                actions: [
+                                  FilledButton(
+                                    onPressed: () => Navigator.pop(dlgCtx),
+                                    child: const Text('OK'),
+                                  ),
+                                ],
+                              ),
+                            );
                             return;
                           }
                         } catch (_) {}

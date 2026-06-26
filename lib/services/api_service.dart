@@ -12,6 +12,7 @@ class ApiService {
   static const String baseUrl = 'https://api.mysterymentor.in';
   // static const String baseUrl = 'http://192.168.1.8:3001';
   // static const String baseUrl = 'http://192.168.1.24:3000';
+  static const String baseUrl = 'http://192.168.1.13:3001';
 
   late final Dio _dio;
   final AuthService _auth = AuthService();

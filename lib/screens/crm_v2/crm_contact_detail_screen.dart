@@ -223,7 +223,8 @@ class _CrmContactDetailScreenState extends State<CrmContactDetailScreen> {
                   onPressed: () async {
                     Navigator.pop(ctx);
                     try {
-                      await _api.createCrmFollowUp(contactId: widget.contactId, scheduledAt: scheduledAt, type: selectedType, notes: notesCtrl.text.trim().isNotEmpty ? notesCtrl.text.trim() : null);
+                      final currentUser = await AuthService().getUser();
+                      await _api.createCrmFollowUp(contactId: widget.contactId, scheduledAt: scheduledAt, type: selectedType, notes: notesCtrl.text.trim().isNotEmpty ? notesCtrl.text.trim() : null, assignedToUserId: currentUser?.id);
                       _msg('Follow-up scheduled');
                       _load();
                     } catch (e) { _msg('Failed: $e', error: true); }

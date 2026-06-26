@@ -509,14 +509,33 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                       } catch (e) {
                         if (ctx.mounted) {
                           String msg = 'Failed to create lead';
+                          int? statusCode;
                           if (e is DioException) {
+                            statusCode = e.response?.statusCode;
                             final body = e.response?.data;
-                            final serverMsg = body is Map
-                                ? (body['message'] ?? body['error'] ?? body['msg'])?.toString()
+                            final raw = body is Map
+                                ? (body['message'] ?? body['error'] ?? body['msg'])
                                 : null;
-                            msg = serverMsg ?? msg;
+                            msg = raw is List ? raw.join(', ') : raw?.toString() ?? msg;
                           }
-                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(msg)));
+                          if (statusCode == 409) {
+                            await showDialog<void>(
+                              context: ctx,
+                              builder: (dlgCtx) => AlertDialog(
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                title: const Text('Duplicate Phone'),
+                                content: Text(msg),
+                                actions: [
+                                  FilledButton(
+                                    onPressed: () => Navigator.pop(dlgCtx),
+                                    child: const Text('OK'),
+                                  ),
+                                ],
+                              ),
+                            );
+                          } else {
+                            ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(msg)));
+                          }
                         }
                       }
                     },
