@@ -3,7 +3,6 @@ import 'package:csv/csv.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../main.dart';
 import '../../services/api_service.dart';
@@ -1068,19 +1067,22 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
       final fileName = _csvFileName();
 
       if (choice == 'download') {
-        // Request storage permission on Android < 10
-        if (Platform.isAndroid) {
-          final status = await Permission.storage.request();
-          if (!status.isGranted && mounted) {
-            _msg('Storage permission denied', error: true);
-            return;
+        File? savedFile;
+        // Try public Downloads folder first (works on Android 10+ without permission)
+        try {
+          final downloadsDir = Directory('/storage/emulated/0/Download');
+          if (downloadsDir.existsSync()) {
+            savedFile = File('${downloadsDir.path}/$fileName');
+            await savedFile.writeAsString(csvString);
           }
+        } catch (_) {}
+        // Fallback: app external storage (always accessible, no permission needed)
+        if (savedFile == null) {
+          final fallbackDir = await getExternalStorageDirectory() ?? await getTemporaryDirectory();
+          savedFile = File('${fallbackDir.path}/$fileName');
+          await savedFile.writeAsString(csvString);
         }
-        final downloadsDir = Directory('/storage/emulated/0/Download');
-        final saveDir = downloadsDir.existsSync() ? downloadsDir : await getExternalStorageDirectory() ?? await getTemporaryDirectory();
-        final file = File('${saveDir.path}/$fileName');
-        await file.writeAsString(csvString);
-        if (mounted) _msg('Saved to Downloads: $fileName');
+        if (mounted) _msg('Saved: $fileName — check your Downloads folder');
       } else {
         final dir = await getTemporaryDirectory();
         final file = File('${dir.path}/$fileName');
