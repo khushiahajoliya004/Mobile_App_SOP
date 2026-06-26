@@ -3,6 +3,7 @@ import 'package:csv/csv.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../main.dart';
 import '../../services/api_service.dart';
@@ -1028,70 +1029,36 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
   }
 
   Future<void> _exportLeads() async {
-    // Show action sheet: Download to device OR Share
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 16),
-            const Text('Export Leads', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-            const SizedBox(height: 8),
-            ListTile(
-              leading: const CircleAvatar(backgroundColor: Color(0xFFE0F2FE), child: Icon(Icons.download_rounded, color: Color(0xFF0284C7))),
-              title: const Text('Save to Downloads', style: TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: const Text('Save CSV file to your device'),
-              onTap: () => Navigator.pop(ctx, 'download'),
-            ),
-            ListTile(
-              leading: const CircleAvatar(backgroundColor: Color(0xFFEDE9FE), child: Icon(Icons.share_rounded, color: Color(0xFF7C3AED))),
-              title: const Text('Share via...', style: TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: const Text('WhatsApp, Email, Google Drive, etc.'),
-              onTap: () => Navigator.pop(ctx, 'share'),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-    if (choice == null) return;
-
     setState(() => _exporting = true);
     try {
       final rows = await _buildCsvRows();
       final csvString = const ListToCsvConverter().convert(rows);
       final fileName = _csvFileName();
 
-      if (choice == 'download') {
-        File? savedFile;
-        // Try public Downloads folder first (works on Android 10+ without permission)
+      // On Android API 22–32, attempt to write directly to the public Downloads folder.
+      // On API 33+ the WRITE_EXTERNAL_STORAGE permission is not declared, so we fall
+      // through to the Share sheet which lets the OS handle saving.
+      final status = await Permission.storage.request();
+      if (status.isGranted) {
         try {
           final downloadsDir = Directory('/storage/emulated/0/Download');
           if (downloadsDir.existsSync()) {
-            savedFile = File('${downloadsDir.path}/$fileName');
-            await savedFile.writeAsString(csvString);
+            final f = File('${downloadsDir.path}/$fileName');
+            await f.writeAsString(csvString);
+            if (mounted) _msg('Saved: $fileName — check your Downloads folder');
+            return;
           }
         } catch (_) {}
-        // Fallback: app external storage (always accessible, no permission needed)
-        if (savedFile == null) {
-          final fallbackDir = await getExternalStorageDirectory() ?? await getTemporaryDirectory();
-          savedFile = File('${fallbackDir.path}/$fileName');
-          await savedFile.writeAsString(csvString);
-        }
-        if (mounted) _msg('Saved: $fileName — check your Downloads folder');
-      } else {
-        final dir = await getTemporaryDirectory();
-        final file = File('${dir.path}/$fileName');
-        await file.writeAsString(csvString);
-        await Share.shareXFiles(
-          [XFile(file.path, mimeType: 'text/csv')],
-          subject: 'Leads Export — $fileName',
-        );
       }
+
+      // Fallback / Android 13+: share sheet lets user pick where to save.
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/$fileName');
+      await file.writeAsString(csvString);
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'text/csv')],
+        subject: 'Leads Export — $fileName',
+      );
     } catch (e) {
       if (mounted) _msg('Export failed: $e', error: true);
     } finally {
