@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../main.dart';
 import '../../services/api_service.dart';
@@ -484,12 +485,27 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
                       onPressed: () async {
                         if (nameCtrl.text.trim().isEmpty) { _msg('Name is required', error: true); return; }
                         if (phoneCtrl.text.trim().isEmpty) { _msg('Phone is required', error: true); return; }
+                        final phone = phoneCtrl.text.trim();
+                        // Duplicate phone pre-check
+                        try {
+                          final dupRes = await _api.checkDuplicateCrmContact(phone);
+                          final raw = dupRes.data;
+                          final list = raw is List ? raw : (raw is Map ? (raw['data'] ?? raw['contacts'] ?? []) : []);
+                          if (list is List && list.isNotEmpty) {
+                            final first = list.first;
+                            final existingName = first is Map ? (first['name'] ?? 'another contact') : 'another contact';
+                            if (ctx.mounted) {
+                              _msg('Phone $phone already exists as "$existingName"', error: true);
+                            }
+                            return;
+                          }
+                        } catch (_) {}
                         Navigator.pop(ctx);
                         setState(() => _loading = true);
                         try {
                           final res = await _api.createCrmQuickLead(
                             name: nameCtrl.text.trim(),
-                            phone: phoneCtrl.text.trim(),
+                            phone: phone,
                             email: emailCtrl.text.trim().isNotEmpty ? emailCtrl.text.trim() : null,
                             source: selectedSource,
                             branchId: selectedBranchId,
@@ -513,10 +529,36 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
                               }
                             }
                             if (mounted && newDealId != null) {
-                              _showRecordingSheet(newDealId, nameCtrl.text.trim(), phoneCtrl.text.trim(), isNew: true);
+                              _showRecordingSheet(newDealId, nameCtrl.text.trim(), phone, isNew: true);
                             }
                           }
-                        } catch (e) { _msg('Failed: $e', error: true); setState(() => _loading = false); }
+                        } catch (e) {
+                          setState(() => _loading = false);
+                          if (e is DioException && e.response?.statusCode == 409 && ctx.mounted) {
+                            final body = e.response?.data;
+                            final serverMsg = (body is Map ? body['message'] : null)?.toString() ?? '';
+                            showDialog<void>(
+                              context: ctx,
+                              builder: (d) => AlertDialog(
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                title: const Text('Lead Already Exists', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                                content: Text(
+                                  serverMsg.isNotEmpty
+                                      ? 'A lead with this phone number already exists.\n\n$serverMsg'
+                                      : 'A lead with phone "$phone" already exists in the system.',
+                                ),
+                                actions: [
+                                  FilledButton(
+                                    onPressed: () => Navigator.pop(d),
+                                    child: const Text('OK'),
+                                  ),
+                                ],
+                              ),
+                            );
+                          } else {
+                            _msg('Failed to create lead', error: true);
+                          }
+                        }
                       },
                       style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                       child: const Text('Create Lead', style: TextStyle(fontWeight: FontWeight.w700)),
@@ -1267,7 +1309,16 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
                                 FilledButton(
                                   onPressed: () async {
                                     Navigator.pop(d);
-                                    try { await _api.deleteCrmDeal(deal['id'] as String); _msg('Deal deleted'); _load(); } catch (e) { _msg('Failed: $e', error: true); }
+                                    try {
+                                      await _api.deleteCrmDeal(deal['id'] as String);
+                                      // Also delete the contact so its phone number is freed
+                                      final contactId = deal['contactId']?.toString() ?? (deal['contact'] is Map ? deal['contact']['id']?.toString() : null);
+                                      if (contactId != null && contactId.isNotEmpty) {
+                                        try { await _api.deleteCrmContact(contactId); } catch (_) {}
+                                      }
+                                      _msg('Deal deleted');
+                                      _load();
+                                    } catch (e) { _msg('Failed: $e', error: true); }
                                   },
                                   style: FilledButton.styleFrom(backgroundColor: AppColors.error),
                                   child: const Text('Delete'),

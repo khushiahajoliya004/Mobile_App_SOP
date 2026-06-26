@@ -461,27 +461,21 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                           final dupRes = await _api.checkDuplicateCrmContact(phone);
                           final raw = dupRes.data;
                           final list = raw is List ? raw : (raw is Map ? (raw['data'] ?? raw['contacts'] ?? []) : []);
-                          final isDuplicate = list is List && list.isNotEmpty;
-                          if (isDuplicate && ctx.mounted) {
+                          if (list is List && list.isNotEmpty && ctx.mounted) {
                             final first = list.first;
                             final existingName = first is Map ? (first['name'] ?? 'another contact') : 'another contact';
-                            final proceed = await showDialog<bool>(
+                            await showDialog<void>(
                               context: ctx,
                               builder: (dlgCtx) => AlertDialog(
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                                 title: const Text('Duplicate Phone'),
-                                content: Text('Phone $phone already exists as "$existingName". Create anyway?'),
+                                content: Text('Phone $phone already exists as "$existingName". Please use a different number.'),
                                 actions: [
-                                  TextButton(onPressed: () => Navigator.pop(dlgCtx, false), child: const Text('Cancel')),
-                                  FilledButton(
-                                    onPressed: () => Navigator.pop(dlgCtx, true),
-                                    style: FilledButton.styleFrom(backgroundColor: AppColors.warning),
-                                    child: const Text('Create Anyway'),
-                                  ),
+                                  FilledButton(onPressed: () => Navigator.pop(dlgCtx), child: const Text('OK')),
                                 ],
                               ),
                             );
-                            if (proceed != true) return;
+                            return;
                           }
                         } catch (_) {}
                       }

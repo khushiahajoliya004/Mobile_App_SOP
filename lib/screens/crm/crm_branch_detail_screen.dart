@@ -197,7 +197,8 @@ class _CrmBranchDetailScreenState extends State<CrmBranchDetailScreen> {
       setState(() {
         _selectedUser = picked;
         if (_selectedRole == null && autoRole != null) {
-          _selectedRole = autoRole;
+          final exists = _roles.any((r) => r['value'] == autoRole);
+          _selectedRole = exists ? autoRole : null;
           _selectedReportingTo = null;
         }
       });

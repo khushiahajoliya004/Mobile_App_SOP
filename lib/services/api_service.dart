@@ -2399,7 +2399,7 @@ class ApiService {
       _dio.get('/crm/pipelines/$id');
 
   Future<Response> checkDuplicateCrmContact(String phone) async =>
-      _dio.get('/crm/contacts', queryParameters: {'phone': phone});
+      _dio.get('/crm/contacts', queryParameters: {'search': phone, 'limit': 5});
 
   // ─── CRM v2 Activities ───
 
