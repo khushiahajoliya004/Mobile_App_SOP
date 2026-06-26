@@ -1006,9 +1006,21 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
         final status = (deal['status'] ?? '').toString();
         final stage = (deal['stage']?['name'] ?? deal['stageName'] ?? '').toString();
         final pipeline = (deal['pipeline']?['name'] ?? deal['pipelineName'] ?? '').toString();
-        final source = (deal['source'] ?? '').toString();
+
+        // Source is on the contact object; convert value to human label
+        final sourceRaw = (deal['contact']?['source'] ?? deal['source'] ?? '').toString();
+        final source = _leadSources.firstWhere(
+          (s) => s['value'] == sourceRaw,
+          orElse: () => {'label': sourceRaw},
+        )['label'] ?? sourceRaw;
+
         final owner = '${deal['owner']?['firstName'] ?? ''} ${deal['owner']?['lastName'] ?? ''}'.trim();
-        final branch = (deal['branch']?['name'] ?? deal['branchName'] ?? '').toString();
+
+        // Branch: try nested object first, then look up branchId in loaded _branches list
+        final branchId = (deal['branchId'] ?? deal['branch']?['id'] ?? '').toString();
+        final branch = (deal['branch']?['name'] ?? deal['branchName'] ??
+            (_branches.firstWhere((b) => b['id']?.toString() == branchId, orElse: () => {})['name'] ?? '')).toString();
+
         final expectedValue = deal['expectedValue'] ?? deal['value'] ?? '';
         final callCount = deal['callCount'] ?? deal['totalCalls'] ?? 0;
         final createdAt = deal['createdAt'] != null
