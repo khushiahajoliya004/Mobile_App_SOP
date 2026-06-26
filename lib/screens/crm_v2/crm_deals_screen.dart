@@ -3,6 +3,7 @@ import 'package:csv/csv.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../main.dart';
 import '../../services/api_service.dart';
@@ -973,73 +974,122 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
     );
   }
 
+  Future<List<List<dynamic>>> _buildCsvRows() async {
+    final (fromDate, toDate) = _resolvedDates;
+    final res = await _api.getCrmDeals(
+      pipelineId: _selectedPipelineId,
+      search: _search.isNotEmpty ? _search : null,
+      status: _statusFilter,
+      branchId: _filterBranchId,
+      ownerUserId: _filterOwnerUserId,
+      fromDate: fromDate,
+      toDate: toDate,
+      page: 1,
+      limit: 1000,
+    );
+    final raw = res.data;
+    final allDeals = (raw is List
+            ? raw
+            : ((raw is Map ? (raw['data'] ?? []) : []) as List))
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+
+    final rows = <List<dynamic>>[
+      ['Name', 'Phone', 'Email', 'Status', 'Stage', 'Pipeline', 'Source', 'Assigned To', 'Branch', 'Expected Value', 'Call Count', 'Created Date'],
+    ];
+    for (final deal in allDeals) {
+      final name = (deal['contact']?['name'] ?? deal['contactName'] ?? deal['name'] ?? '').toString();
+      final phone = (deal['contact']?['phone'] ?? deal['phone'] ?? '').toString();
+      final email = (deal['contact']?['email'] ?? deal['email'] ?? '').toString();
+      final status = (deal['status'] ?? '').toString();
+      final stage = (deal['stage']?['name'] ?? deal['stageName'] ?? '').toString();
+      final pipeline = (deal['pipeline']?['name'] ?? deal['pipelineName'] ?? '').toString();
+      final sourceRaw = (deal['contact']?['source'] ?? deal['source'] ?? '').toString();
+      final source = _leadSources.firstWhere(
+        (s) => s['value'] == sourceRaw,
+        orElse: () => {'label': sourceRaw},
+      )['label'] ?? sourceRaw;
+      final owner = '${deal['owner']?['firstName'] ?? ''} ${deal['owner']?['lastName'] ?? ''}'.trim();
+      final branchId = (deal['branchId'] ?? deal['branch']?['id'] ?? '').toString();
+      final branch = (deal['branch']?['name'] ?? deal['branchName'] ??
+          (_branches.firstWhere((b) => b['id']?.toString() == branchId, orElse: () => {})['name'] ?? '')).toString();
+      final expectedValue = deal['expectedValue'] ?? deal['value'] ?? '';
+      final callCount = deal['callCount'] ?? deal['totalCalls'] ?? 0;
+      final createdAt = deal['createdAt'] != null
+          ? (DateTime.tryParse(deal['createdAt'].toString())?.toLocal().toString().split(' ').first ?? '')
+          : '';
+      rows.add([name, phone, email, status, stage, pipeline, source, owner, branch, expectedValue, callCount, createdAt]);
+    }
+    return rows;
+  }
+
+  String _csvFileName() {
+    final now = DateTime.now();
+    return 'leads_${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}.csv';
+  }
+
   Future<void> _exportLeads() async {
+    // Show action sheet: Download to device OR Share
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 16),
+            const Text('Export Leads', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const CircleAvatar(backgroundColor: Color(0xFFE0F2FE), child: Icon(Icons.download_rounded, color: Color(0xFF0284C7))),
+              title: const Text('Save to Downloads', style: TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: const Text('Save CSV file to your device'),
+              onTap: () => Navigator.pop(ctx, 'download'),
+            ),
+            ListTile(
+              leading: const CircleAvatar(backgroundColor: Color(0xFFEDE9FE), child: Icon(Icons.share_rounded, color: Color(0xFF7C3AED))),
+              title: const Text('Share via...', style: TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: const Text('WhatsApp, Email, Google Drive, etc.'),
+              onTap: () => Navigator.pop(ctx, 'share'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (choice == null) return;
+
     setState(() => _exporting = true);
     try {
-      final (fromDate, toDate) = _resolvedDates;
-      final res = await _api.getCrmDeals(
-        pipelineId: _selectedPipelineId,
-        search: _search.isNotEmpty ? _search : null,
-        status: _statusFilter,
-        branchId: _filterBranchId,
-        ownerUserId: _filterOwnerUserId,
-        fromDate: fromDate,
-        toDate: toDate,
-        page: 1,
-        limit: 1000,
-      );
-      final raw = res.data;
-      final allDeals = (raw is List
-              ? raw
-              : ((raw is Map ? (raw['data'] ?? []) : []) as List))
-          .map((e) => Map<String, dynamic>.from(e))
-          .toList();
-
-      final rows = <List<dynamic>>[
-        ['Name', 'Phone', 'Email', 'Status', 'Stage', 'Pipeline', 'Source', 'Assigned To', 'Branch', 'Expected Value', 'Call Count', 'Created Date'],
-      ];
-
-      for (final deal in allDeals) {
-        final name = (deal['contact']?['name'] ?? deal['contactName'] ?? deal['name'] ?? '').toString();
-        final phone = (deal['contact']?['phone'] ?? deal['phone'] ?? '').toString();
-        final email = (deal['contact']?['email'] ?? deal['email'] ?? '').toString();
-        final status = (deal['status'] ?? '').toString();
-        final stage = (deal['stage']?['name'] ?? deal['stageName'] ?? '').toString();
-        final pipeline = (deal['pipeline']?['name'] ?? deal['pipelineName'] ?? '').toString();
-
-        // Source is on the contact object; convert value to human label
-        final sourceRaw = (deal['contact']?['source'] ?? deal['source'] ?? '').toString();
-        final source = _leadSources.firstWhere(
-          (s) => s['value'] == sourceRaw,
-          orElse: () => {'label': sourceRaw},
-        )['label'] ?? sourceRaw;
-
-        final owner = '${deal['owner']?['firstName'] ?? ''} ${deal['owner']?['lastName'] ?? ''}'.trim();
-
-        // Branch: try nested object first, then look up branchId in loaded _branches list
-        final branchId = (deal['branchId'] ?? deal['branch']?['id'] ?? '').toString();
-        final branch = (deal['branch']?['name'] ?? deal['branchName'] ??
-            (_branches.firstWhere((b) => b['id']?.toString() == branchId, orElse: () => {})['name'] ?? '')).toString();
-
-        final expectedValue = deal['expectedValue'] ?? deal['value'] ?? '';
-        final callCount = deal['callCount'] ?? deal['totalCalls'] ?? 0;
-        final createdAt = deal['createdAt'] != null
-            ? (DateTime.tryParse(deal['createdAt'].toString())?.toLocal().toString().split(' ').first ?? '')
-            : '';
-        rows.add([name, phone, email, status, stage, pipeline, source, owner, branch, expectedValue, callCount, createdAt]);
-      }
-
+      final rows = await _buildCsvRows();
       final csvString = const ListToCsvConverter().convert(rows);
-      final dir = await getTemporaryDirectory();
-      final now = DateTime.now();
-      final fileName = 'leads_${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}.csv';
-      final file = File('${dir.path}/$fileName');
-      await file.writeAsString(csvString);
+      final fileName = _csvFileName();
 
-      await Share.shareXFiles(
-        [XFile(file.path, mimeType: 'text/csv')],
-        subject: 'Leads Export — $fileName',
-      );
+      if (choice == 'download') {
+        // Request storage permission on Android < 10
+        if (Platform.isAndroid) {
+          final status = await Permission.storage.request();
+          if (!status.isGranted && mounted) {
+            _msg('Storage permission denied', error: true);
+            return;
+          }
+        }
+        final downloadsDir = Directory('/storage/emulated/0/Download');
+        final saveDir = downloadsDir.existsSync() ? downloadsDir : await getExternalStorageDirectory() ?? await getTemporaryDirectory();
+        final file = File('${saveDir.path}/$fileName');
+        await file.writeAsString(csvString);
+        if (mounted) _msg('Saved to Downloads: $fileName');
+      } else {
+        final dir = await getTemporaryDirectory();
+        final file = File('${dir.path}/$fileName');
+        await file.writeAsString(csvString);
+        await Share.shareXFiles(
+          [XFile(file.path, mimeType: 'text/csv')],
+          subject: 'Leads Export — $fileName',
+        );
+      }
     } catch (e) {
       if (mounted) _msg('Export failed: $e', error: true);
     } finally {
