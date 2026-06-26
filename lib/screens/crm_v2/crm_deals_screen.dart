@@ -1,5 +1,9 @@
+import 'dart:io';
+import 'package:csv/csv.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../main.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
@@ -45,6 +49,7 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
   late String _datePreset; // 'all','today','yesterday','week','month','custom'
   late String _statusFilter; // 'OPEN','WON','LOST'
   bool get _hasActiveFilters => _filterBranchId != null || _filterOwnerUserId != null || _datePreset != 'all';
+  bool _exporting = false;
   // Pagination
   int _page = 1;
   int _total = 0;
@@ -968,6 +973,68 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
     );
   }
 
+  Future<void> _exportLeads() async {
+    setState(() => _exporting = true);
+    try {
+      final (fromDate, toDate) = _resolvedDates;
+      final res = await _api.getCrmDeals(
+        pipelineId: _selectedPipelineId,
+        search: _search.isNotEmpty ? _search : null,
+        status: _statusFilter,
+        branchId: _filterBranchId,
+        ownerUserId: _filterOwnerUserId,
+        fromDate: fromDate,
+        toDate: toDate,
+        page: 1,
+        limit: 1000,
+      );
+      final raw = res.data;
+      final allDeals = (raw is List
+              ? raw
+              : ((raw is Map ? (raw['data'] ?? []) : []) as List))
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+
+      final rows = <List<dynamic>>[
+        ['Name', 'Phone', 'Email', 'Status', 'Stage', 'Pipeline', 'Source', 'Assigned To', 'Branch', 'Expected Value', 'Call Count', 'Created Date'],
+      ];
+
+      for (final deal in allDeals) {
+        final name = (deal['contact']?['name'] ?? deal['contactName'] ?? deal['name'] ?? '').toString();
+        final phone = (deal['contact']?['phone'] ?? deal['phone'] ?? '').toString();
+        final email = (deal['contact']?['email'] ?? deal['email'] ?? '').toString();
+        final status = (deal['status'] ?? '').toString();
+        final stage = (deal['stage']?['name'] ?? deal['stageName'] ?? '').toString();
+        final pipeline = (deal['pipeline']?['name'] ?? deal['pipelineName'] ?? '').toString();
+        final source = (deal['source'] ?? '').toString();
+        final owner = '${deal['owner']?['firstName'] ?? ''} ${deal['owner']?['lastName'] ?? ''}'.trim();
+        final branch = (deal['branch']?['name'] ?? deal['branchName'] ?? '').toString();
+        final expectedValue = deal['expectedValue'] ?? deal['value'] ?? '';
+        final callCount = deal['callCount'] ?? deal['totalCalls'] ?? 0;
+        final createdAt = deal['createdAt'] != null
+            ? (DateTime.tryParse(deal['createdAt'].toString())?.toLocal().toString().split(' ').first ?? '')
+            : '';
+        rows.add([name, phone, email, status, stage, pipeline, source, owner, branch, expectedValue, callCount, createdAt]);
+      }
+
+      final csvString = const ListToCsvConverter().convert(rows);
+      final dir = await getTemporaryDirectory();
+      final now = DateTime.now();
+      final fileName = 'leads_${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}.csv';
+      final file = File('${dir.path}/$fileName');
+      await file.writeAsString(csvString);
+
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'text/csv')],
+        subject: 'Leads Export — $fileName',
+      );
+    } catch (e) {
+      if (mounted) _msg('Export failed: $e', error: true);
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
   Color _stageColor(String? status) {
     switch (status) {
       case 'WON': return AppColors.success;
@@ -995,6 +1062,17 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: AppColors.surfaceLight)),
                 enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: AppColors.surfaceLight)),
               ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: _exporting ? null : _exportLeads,
+            child: Container(
+              width: 44, height: 44,
+              decoration: BoxDecoration(color: AppColors.surfaceLight, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.surfaceLight)),
+              child: _exporting
+                  ? const Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.download_rounded, color: AppColors.primary, size: 22),
             ),
           ),
           const SizedBox(width: 8),
