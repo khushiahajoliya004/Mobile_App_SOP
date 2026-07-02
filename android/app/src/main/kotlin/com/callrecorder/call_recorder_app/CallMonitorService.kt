@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.PowerManager
 import android.telephony.TelephonyManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -62,6 +63,7 @@ class CallMonitorService : Service() {
     private var savedNumber: String? = null
     private var lastState = TelephonyManager.CALL_STATE_IDLE
     private var autoRecordedPath: String? = null
+    private var wakeLock: PowerManager.WakeLock? = null
 
     // File polling for overlay button commands (backward compat)
     private val handler = Handler(Looper.getMainLooper())
@@ -80,6 +82,7 @@ class CallMonitorService : Service() {
         try {
             createNotificationChannel()
             startForeground(NOTIFICATION_ID, buildNotification("Ready"))
+            acquireWakeLock()
             registerPhoneStateReceiver()
             startPolling()
             isMonitoring = true
@@ -105,10 +108,10 @@ class CallMonitorService : Service() {
     override fun onDestroy() {
         stopPolling()
         unregisterPhoneStateReceiver()
-        // Stop any active recording
         if (CallRecorderEngine.isRecording) {
             CallRecorderEngine.stopRecording()
         }
+        releaseWakeLock()
         isMonitoring = false
         Log.i(TAG, "CallMonitorService destroyed")
         super.onDestroy()
@@ -327,6 +330,36 @@ class CallMonitorService : Service() {
         } catch (e: Exception) {
             Log.e(TAG, "Poll error: ${e.message}")
         }
+    }
+
+    // ── WakeLock ──
+
+    private fun acquireWakeLock() {
+        try {
+            val pm = getSystemService(POWER_SERVICE) as PowerManager
+            wakeLock = pm.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "CallMonitor::RecordingLock"
+            ).also {
+                // 60-minute safety cap — more than enough for any call
+                it.acquire(60 * 60 * 1000L)
+            }
+            Log.d(TAG, "WakeLock acquired")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to acquire WakeLock: ${e.message}")
+        }
+    }
+
+    private fun releaseWakeLock() {
+        try {
+            if (wakeLock?.isHeld == true) {
+                wakeLock?.release()
+                Log.d(TAG, "WakeLock released")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to release WakeLock: ${e.message}")
+        }
+        wakeLock = null
     }
 
     // ── Notification ──

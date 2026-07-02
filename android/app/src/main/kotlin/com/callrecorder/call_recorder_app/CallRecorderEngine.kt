@@ -3,6 +3,8 @@ package com.callrecorder.call_recorder_app
 import android.content.Context
 import android.media.MediaRecorder
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import java.io.File
@@ -35,6 +37,7 @@ object CallRecorderEngine {
     var activeSource: String = "none"
         private set
     private var startTimeMs: Long = 0L
+    private var lastContext: Context? = null
 
     /**
      * Start recording to the given file path.
@@ -62,6 +65,8 @@ object CallRecorderEngine {
             }
         }
 
+        lastContext = context
+
         // Build ordered list of audio sources to try
         val sources = buildSourceList(preferredSource)
         var lastError: Exception? = null
@@ -70,10 +75,22 @@ object CallRecorderEngine {
             var recorder: MediaRecorder? = null
             try {
                 recorder = createRecorder(context)
-                
-                // Configure recorder with proper error handling
+
+                // Auto-restart recording if the audio server dies (common on Oppo/Vivo
+                // when the screen turns off and the audio focus is interrupted)
                 recorder.setOnErrorListener { _, what, extra ->
                     Log.e(TAG, "MediaRecorder error: what=$what, extra=$extra, source=$sourceName")
+                    if (what == MediaRecorder.MEDIA_RECORDER_ERROR_UNKNOWN || what == 1) {
+                        val restartPath = currentPath
+                        val restartSource = activeSource
+                        val ctx = lastContext
+                        if (restartPath != null && ctx != null) {
+                            Handler(Looper.getMainLooper()).postDelayed({
+                                Log.w(TAG, "Auto-restarting recording after error")
+                                startRecording(restartPath, restartSource, ctx)
+                            }, 500)
+                        }
+                    }
                 }
                 
                 recorder.setOnInfoListener { _, what, extra ->

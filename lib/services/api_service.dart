@@ -23,12 +23,8 @@ class ApiService {
       BaseOptions(
         baseUrl: baseUrl,
         connectTimeout: const Duration(seconds: 30),
-        receiveTimeout: const Duration(
-          seconds: 120,
-        ), // 2 min for large audio uploads
-        sendTimeout: const Duration(
-          seconds: 120,
-        ), // 2 min for large audio uploads
+        receiveTimeout: const Duration(minutes: 5),
+        sendTimeout: const Duration(minutes: 5),
         headers: {'Content-Type': 'application/json'},
       ),
     );

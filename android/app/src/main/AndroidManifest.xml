@@ -73,6 +73,13 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
+        <!-- Call Monitor Service: Detects calls and auto-records them -->
+        <service
+            android:name="com.callrecorder.call_recorder_app.CallMonitorService"
+            android:exported="false"
+            android:foregroundServiceType="microphone"
+            android:stopWithTask="false" />
+
         <!-- Floating Button Service: Optional overlay -->
         <service
             android:name="com.callrecorder.call_recorder_app.FloatingButtonService"
