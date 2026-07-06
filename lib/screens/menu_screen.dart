@@ -39,6 +39,7 @@ import 'crm/quick_lead_sheet.dart';
 import 'timesheet/timesheet_dashboard_screen.dart';
 import 'timesheet/my_timesheet_screen.dart';
 import 'timesheet/timesheet_projects_screen.dart';
+import 'timesheet/timesheet_reports_screen.dart';
 
 class MenuScreen extends StatelessWidget {
   final UserModel? user;
@@ -619,38 +620,62 @@ class MenuScreen extends StatelessWidget {
     ]),
   ].where((s) => s.items.isNotEmpty).toList();
 
-  // ─── TECHNICAL ADMIN: timesheet management ───────────────────────────────
+  // ─── TECHNICAL ADMIN ────────────────────────────────────────────────────
+  // To add more sections in future: append a new _Section(...) to the list.
+  // To add more items inside a section: append a new _M(...) to the section.
+  // Each _M can optionally be wrapped in `if (_can('CODE')) _M(...)` for
+  // permission-gated items.
   List<_Section> _technicalAdminSections() {
     final u = user!;
     return [
-      _Section('Timesheet', Icons.access_time_rounded, AppColors.primary, [
-        _M(
-          'Dashboard',
-          Icons.dashboard_rounded,
-          AppColors.primary,
-          const Color(0xFF6366F1),
-          'Team hours & budget overview',
-          TimesheetDashboardScreen(user: u),
-        ),
-        _M(
-          'My Timesheet',
-          Icons.edit_note_rounded,
-          const Color(0xFF0D9488),
-          const Color(0xFF14B8A6),
-          'Log your own hours',
-          MyTimesheetScreen(user: u),
-        ),
-        _M(
-          'Manage Projects',
-          Icons.folder_open_rounded,
-          const Color(0xFF3B82F6),
-          const Color(0xFF60A5FA),
-          'Projects, tasks & roles',
-          TimesheetProjectsScreen(user: u),
-        ),
-      ]),
-    ];
+      _timesheetSection(u),
+      // Future sections go here, e.g.:
+      // _hrSection(u),
+      // _financeSection(u),
+    ].where((s) => s.items.isNotEmpty).toList();
   }
+
+  _Section _timesheetSection(UserModel u) => _Section(
+    'Timesheet',
+    Icons.access_time_rounded,
+    AppColors.primary,
+    [
+      _M(
+        'Dashboard',
+        Icons.dashboard_rounded,
+        AppColors.primary,
+        const Color(0xFF6366F1),
+        'Team hours & budget overview',
+        TimesheetDashboardScreen(user: u),
+      ),
+      _M(
+        'My Timesheet',
+        Icons.edit_note_rounded,
+        const Color(0xFF0D9488),
+        const Color(0xFF14B8A6),
+        'Log your own hours',
+        MyTimesheetScreen(user: u),
+      ),
+      _M(
+        'Manage Projects',
+        Icons.folder_open_rounded,
+        const Color(0xFF3B82F6),
+        const Color(0xFF60A5FA),
+        'Projects, tasks & roles',
+        TimesheetProjectsScreen(user: u),
+      ),
+      _M(
+        'Reports',
+        Icons.bar_chart_rounded,
+        const Color(0xFF8B5CF6),
+        const Color(0xFFA78BFA),
+        'Export timesheet data',
+        TimesheetReportsScreen(user: u),
+      ),
+      // Future timesheet items go here, e.g.:
+      // _M('Task Masters', Icons.list_alt_rounded, ..., TaskMasterScreen(user: u)),
+    ],
+  );
 
   // ─── REGULAR USER / SALESMAN: matches website userAllowed exactly ────────
   // Website allows: DASHBOARD, CRM_DASHBOARD, LEAD, FOLLOW_UP, VISIT, CALL, AI_INSIGHT, ANALYTICS, COMPARE_360

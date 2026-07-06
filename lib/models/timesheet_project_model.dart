@@ -27,7 +27,7 @@ class TimesheetProject {
     type: j['type'] ?? '',
     status: j['status'] ?? 'ACTIVE',
     companyId: j['companyId'] ?? '',
-    totalEstimatedHours: (j['totalEstimatedHours'] ?? 0).toDouble(),
+    totalEstimatedHours: double.tryParse(j['totalEstimatedHours']?.toString() ?? '0') ?? 0.0,
     clientName: j['clientName'],
     startDate: j['startDate'],
     endDate: j['endDate'],
@@ -104,7 +104,7 @@ class ProjectTechRole {
     roleName: j['roleName'] ?? '',
     description: j['description'],
     users:
-        (j['users'] as List?)
+        ((j['assignedUsers'] ?? j['users']) as List?)
             ?.map((u) => ProjectTechRoleUser.fromJson(u))
             .toList() ??
         [],
@@ -161,9 +161,9 @@ class SubtaskRoleAssignment {
         id: j['id'] ?? '',
         projectSubtaskId: j['projectSubtaskId'] ?? '',
         projectTechRoleId: j['projectTechRoleId'] ?? '',
-        minHours: (j['minHours'] ?? 0.25).toDouble(),
-        maxHours: (j['maxHours'] ?? 1.5).toDouble(),
-        estimatedHours: (j['estimatedHours'] ?? 0.25).toDouble(),
+        minHours: double.tryParse(j['minHours']?.toString() ?? '0.25') ?? 0.25,
+        maxHours: double.tryParse(j['maxHours']?.toString() ?? '1.5') ?? 1.5,
+        estimatedHours: double.tryParse(j['estimatedHours']?.toString() ?? '0.25') ?? 0.25,
         roleName: j['techRole']?['roleName'] ?? j['roleName'],
         subtaskName: j['subtask']?['name'] ?? j['subtaskName'],
       );

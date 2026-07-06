@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../main.dart';
 import '../../models/user_model.dart';
@@ -18,6 +19,7 @@ class _TimesheetProjectsScreenState extends State<TimesheetProjectsScreen> {
   final _api = ApiService();
   List<TimesheetProject> _projects = [];
   bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -26,7 +28,7 @@ class _TimesheetProjectsScreenState extends State<TimesheetProjectsScreen> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
+    setState(() { _loading = true; _error = null; });
     try {
       final res = await _api.getTimesheetProjects(widget.user.companyId ?? '');
       setState(() {
@@ -36,8 +38,23 @@ class _TimesheetProjectsScreenState extends State<TimesheetProjectsScreen> {
                 .toList();
         _loading = false;
       });
-    } catch (_) {
-      setState(() => _loading = false);
+    } catch (e) {
+      String msg = 'Failed to load projects. Tap to retry.';
+      if (e is DioException) {
+        final status = e.response?.statusCode;
+        final serverMsg = e.response?.data is Map
+            ? (e.response!.data['message'] ?? '')
+            : '';
+        if (status != null) {
+          msg = 'Error $status${serverMsg.isNotEmpty ? ': $serverMsg' : ''}. Tap to retry.';
+        } else {
+          msg = 'Cannot reach server. Check connection and tap to retry.';
+        }
+      }
+      setState(() {
+        _loading = false;
+        _error = msg;
+      });
     }
   }
 
@@ -73,19 +90,47 @@ class _TimesheetProjectsScreenState extends State<TimesheetProjectsScreen> {
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _load,
-              child: _projects.isEmpty
-                  ? const Center(
-                      child: Text(
-                        'No projects yet.\nTap + to create one.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.grey),
-                      ),
+              child: _error != null
+                  ? ListView(
+                      children: [
+                        const SizedBox(height: 120),
+                        Center(
+                          child: Column(
+                            children: [
+                              const Icon(Icons.error_outline_rounded,
+                                  color: Colors.red, size: 48),
+                              const SizedBox(height: 12),
+                              GestureDetector(
+                                onTap: _load,
+                                child: Text(
+                                  _error!,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(color: Colors.red),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     )
-                  : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                      itemCount: _projects.length,
-                      itemBuilder: (_, i) => _buildCard(_projects[i]),
-                    ),
+                  : _projects.isEmpty
+                      ? ListView(
+                          children: const [
+                            SizedBox(height: 120),
+                            Center(
+                              child: Text(
+                                'No projects yet.\nTap + to create one.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Colors.grey),
+                              ),
+                            ),
+                          ],
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                          itemCount: _projects.length,
+                          itemBuilder: (_, i) => _buildCard(_projects[i]),
+                        ),
             ),
     );
   }
@@ -276,7 +321,16 @@ class _CreateProjectSheetState extends State<_CreateProjectSheet> {
         if (_clientCtrl.text.isNotEmpty) 'clientName': _clientCtrl.text.trim(),
       });
       widget.onCreated();
-      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        final messenger = ScaffoldMessenger.of(context);
+        Navigator.pop(context);
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Project created successfully'),
+            backgroundColor: Color(0xFF10B981),
+          ),
+        );
+      }
     } catch (_) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

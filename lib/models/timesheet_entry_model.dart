@@ -39,7 +39,7 @@ class TimesheetEntry {
     projectSubtaskId: j['projectSubtaskId'] ?? '',
     userId: j['userId'] ?? '',
     companyId: j['companyId'] ?? '',
-    hours: (j['hours'] ?? 0).toDouble(),
+    hours: double.tryParse(j['hours']?.toString() ?? '0') ?? 0.0,
     narration: j['narration'] ?? '',
     projectName: j['projectName'] ?? j['project']?['name'],
     taskName: j['taskName'] ?? j['projectTask']?['name'],
@@ -60,8 +60,8 @@ class HourRange {
   HourRange({required this.minHours, required this.maxHours});
 
   factory HourRange.fromJson(Map<String, dynamic> j) => HourRange(
-    minHours: (j['minHours'] ?? 0.25).toDouble(),
-    maxHours: (j['maxHours'] ?? 1.5).toDouble(),
+    minHours: double.tryParse(j['minHours']?.toString() ?? '0.25') ?? 0.25,
+    maxHours: double.tryParse(j['maxHours']?.toString() ?? '1.5') ?? 1.5,
   );
 }
 
@@ -90,8 +90,8 @@ class AvailableSubtask {
     category: j['category'] ?? '',
     taskId: j['taskId'] ?? '',
     taskName: j['taskName'] ?? '',
-    minHours: (j['minHours'] ?? 0.25).toDouble(),
-    maxHours: (j['maxHours'] ?? 1.5).toDouble(),
+    minHours: double.tryParse(j['minHours']?.toString() ?? '0.25') ?? 0.25,
+    maxHours: double.tryParse(j['maxHours']?.toString() ?? '1.5') ?? 1.5,
   );
 }
 
@@ -116,10 +116,10 @@ class TimesheetDashboardStats {
 
   factory TimesheetDashboardStats.fromJson(Map<String, dynamic> j) =>
       TimesheetDashboardStats(
-        totalHoursLogged: (j['totalHoursLogged'] ?? 0).toDouble(),
+        totalHoursLogged: double.tryParse(j['totalHoursLogged']?.toString() ?? '0') ?? 0.0,
         activeMembers: j['activeMembers'] ?? 0,
         activeProjects: j['activeProjects'] ?? 0,
-        budgetUsedPercent: (j['budgetUsedPercent'] ?? 0).toDouble(),
+        budgetUsedPercent: double.tryParse(j['budgetUsedPercent']?.toString() ?? '0') ?? 0.0,
         recentEntries:
             (j['recentEntries'] as List?)
                 ?.map((e) => TimesheetEntry.fromJson(e))
@@ -146,7 +146,7 @@ class HoursByRole {
 
   factory HoursByRole.fromJson(Map<String, dynamic> j) => HoursByRole(
     roleName: j['roleName'] ?? '',
-    hours: (j['hours'] ?? 0).toDouble(),
+    hours: double.tryParse(j['hours']?.toString() ?? '0') ?? 0.0,
   );
 }
 
@@ -163,8 +163,8 @@ class HoursByProject {
 
   factory HoursByProject.fromJson(Map<String, dynamic> j) => HoursByProject(
     projectName: j['projectName'] ?? '',
-    hours: (j['hours'] ?? 0).toDouble(),
-    estimatedHours: (j['estimatedHours'] ?? 0).toDouble(),
+    hours: double.tryParse(j['hours']?.toString() ?? '0') ?? 0.0,
+    estimatedHours: double.tryParse(j['estimatedHours']?.toString() ?? '0') ?? 0.0,
   );
 }
 
@@ -182,9 +182,9 @@ class MyTimesheetStats {
   });
 
   factory MyTimesheetStats.fromJson(Map<String, dynamic> j) => MyTimesheetStats(
-    myHoursThisWeek: (j['myHoursThisWeek'] ?? 0).toDouble(),
+    myHoursThisWeek: double.tryParse(j['myHoursThisWeek']?.toString() ?? '0') ?? 0.0,
     myActiveProjects: j['myActiveProjects'] ?? 0,
-    myTotalHoursAllTime: (j['myTotalHoursAllTime'] ?? 0).toDouble(),
+    myTotalHoursAllTime: double.tryParse(j['myTotalHoursAllTime']?.toString() ?? '0') ?? 0.0,
     recentEntries:
         (j['recentEntries'] as List?)
             ?.map((e) => TimesheetEntry.fromJson(e))
