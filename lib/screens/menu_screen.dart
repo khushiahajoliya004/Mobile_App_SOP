@@ -36,6 +36,9 @@ import 'salesman_sop/salesman_sop_screen.dart';
 import 'analytics/analytics_compare_screen.dart';
 import 'force_update/force_update_settings_screen.dart';
 import 'crm/quick_lead_sheet.dart';
+import 'timesheet/timesheet_dashboard_screen.dart';
+import 'timesheet/my_timesheet_screen.dart';
+import 'timesheet/timesheet_projects_screen.dart';
 
 class MenuScreen extends StatelessWidget {
   final UserModel? user;
@@ -86,6 +89,7 @@ class MenuScreen extends StatelessWidget {
     if (user?.isSuperAdmin == true) return _superAdminSections();
     if (user?.isCompanyAdmin == true) return _companyAdminSections();
     if (user?.userType == 'DISTRIBUTOR') return _distributorSections();
+    if (user?.isTechnicalAdmin == true) return _technicalAdminSections();
     return _userSections();
   }
 
@@ -615,6 +619,39 @@ class MenuScreen extends StatelessWidget {
     ]),
   ].where((s) => s.items.isNotEmpty).toList();
 
+  // ─── TECHNICAL ADMIN: timesheet management ───────────────────────────────
+  List<_Section> _technicalAdminSections() {
+    final u = user!;
+    return [
+      _Section('Timesheet', Icons.access_time_rounded, AppColors.primary, [
+        _M(
+          'Dashboard',
+          Icons.dashboard_rounded,
+          AppColors.primary,
+          const Color(0xFF6366F1),
+          'Team hours & budget overview',
+          TimesheetDashboardScreen(user: u),
+        ),
+        _M(
+          'My Timesheet',
+          Icons.edit_note_rounded,
+          const Color(0xFF0D9488),
+          const Color(0xFF14B8A6),
+          'Log your own hours',
+          MyTimesheetScreen(user: u),
+        ),
+        _M(
+          'Manage Projects',
+          Icons.folder_open_rounded,
+          const Color(0xFF3B82F6),
+          const Color(0xFF60A5FA),
+          'Projects, tasks & roles',
+          TimesheetProjectsScreen(user: u),
+        ),
+      ]),
+    ];
+  }
+
   // ─── REGULAR USER / SALESMAN: matches website userAllowed exactly ────────
   // Website allows: DASHBOARD, CRM_DASHBOARD, LEAD, FOLLOW_UP, VISIT, CALL, AI_INSIGHT, ANALYTICS, COMPARE_360
   List<_Section> _userSections() => [
@@ -692,12 +729,37 @@ class MenuScreen extends StatelessWidget {
         const AudioLibraryScreen(showAppBar: true),
       ),
     ]),
+    if (user != null)
+      _Section(
+        'Timesheet',
+        Icons.access_time_rounded,
+        AppColors.primary,
+        [
+          _M(
+            'My Timesheet',
+            Icons.edit_note_rounded,
+            AppColors.primary,
+            const Color(0xFF6366F1),
+            'Log your daily hours',
+            MyTimesheetScreen(user: user!),
+          ),
+          _M(
+            'Overview',
+            Icons.bar_chart_rounded,
+            const Color(0xFF0D9488),
+            const Color(0xFF14B8A6),
+            'Your hours summary',
+            TimesheetDashboardScreen(user: user!),
+          ),
+        ],
+      ),
   ].where((s) => s.items.isNotEmpty).toList();
 
   String get _roleLabel {
     if (user?.isSuperAdmin == true) return 'Super Admin';
     if (user?.isCompanyAdmin == true) return 'Company Admin';
     if (user?.userType == 'DISTRIBUTOR') return 'Distributor';
+    if (user?.isTechnicalAdmin == true) return 'Tech Admin';
     return 'User';
   }
 
@@ -705,6 +767,7 @@ class MenuScreen extends StatelessWidget {
     if (user?.isSuperAdmin == true) return const Color(0xFFF59E0B);
     if (user?.isCompanyAdmin == true) return const Color(0xFF10B981);
     if (user?.userType == 'DISTRIBUTOR') return const Color(0xFF0EA5E9);
+    if (user?.isTechnicalAdmin == true) return AppColors.primary;
     return const Color(0xFF8B5CF6);
   }
 
