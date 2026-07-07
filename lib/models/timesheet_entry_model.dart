@@ -84,15 +84,19 @@ class AvailableSubtask {
     required this.maxHours,
   });
 
-  factory AvailableSubtask.fromJson(Map<String, dynamic> j) => AvailableSubtask(
-    subtaskId: j['subtaskId'] ?? '',
-    subtaskName: j['subtaskName'] ?? '',
-    category: j['category'] ?? '',
-    taskId: j['taskId'] ?? '',
-    taskName: j['taskName'] ?? '',
-    minHours: double.tryParse(j['minHours']?.toString() ?? '0.25') ?? 0.25,
-    maxHours: double.tryParse(j['maxHours']?.toString() ?? '1.5') ?? 1.5,
-  );
+  factory AvailableSubtask.fromJson(Map<String, dynamic> j) {
+    final subtask = j['subtask'] as Map<String, dynamic>?;
+    final task = subtask?['projectTask'] as Map<String, dynamic>?;
+    return AvailableSubtask(
+      subtaskId: subtask?['id'] ?? j['subtaskId'] ?? '',
+      subtaskName: subtask?['name'] ?? j['subtaskName'] ?? '',
+      category: subtask?['category'] ?? j['category'] ?? '',
+      taskId: task?['id'] ?? subtask?['projectTaskId'] ?? j['taskId'] ?? '',
+      taskName: task?['name'] ?? j['taskName'] ?? '',
+      minHours: double.tryParse(j['minHours']?.toString() ?? '0.25') ?? 0.25,
+      maxHours: double.tryParse(j['maxHours']?.toString() ?? '1.5') ?? 1.5,
+    );
+  }
 }
 
 class TimesheetDashboardStats {

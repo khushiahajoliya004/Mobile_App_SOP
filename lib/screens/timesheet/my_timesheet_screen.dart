@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../main.dart';
 import '../../models/user_model.dart';
@@ -133,7 +134,11 @@ class _MyTimesheetScreenState extends State<MyTimesheetScreen> {
       });
       _load();
     } catch (e) {
-      _showSnack('Failed to log entry', isError: true);
+      debugPrint('[Timesheet] Create entry error: $e');
+      final msg = e is DioException
+          ? (e.response?.data?['message'] ?? e.response?.data?['error'] ?? 'Failed to log entry')
+          : 'Failed to log entry';
+      _showSnack('$msg', isError: true);
     } finally {
       setState(() => _submitting = false);
     }
@@ -310,6 +315,9 @@ class _MyTimesheetScreenState extends State<MyTimesheetScreen> {
                       ? 'Select project first'
                       : 'Select subtask',
                 ),
+                selectedItemBuilder: (_) => _availableSubtasks
+                    .map((s) => Text(s.subtaskName, overflow: TextOverflow.ellipsis))
+                    .toList(),
                 items: _availableSubtasks
                     .map(
                       (s) => DropdownMenuItem(
@@ -439,61 +447,71 @@ class _MyTimesheetScreenState extends State<MyTimesheetScreen> {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        leading: Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: AppColors.primary.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Center(
-            child: Text(
-              '${e.hours}h',
-              style: const TextStyle(
-                fontWeight: FontWeight.w800,
-                color: AppColors.primary,
-                fontSize: 13,
-              ),
-            ),
-          ),
-        ),
-        title: Text(
-          e.projectName ?? e.projectId,
-          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-        ),
-        subtitle: Column(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '${e.taskName ?? ''} · ${e.subtaskName ?? ''}',
-              style: const TextStyle(fontSize: 12),
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Center(
+                child: Text(
+                  '${e.hours}h',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.primary,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
             ),
-            Text(
-              e.narration,
-              style: const TextStyle(fontSize: 11, color: Colors.grey),
-              overflow: TextOverflow.ellipsis,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    e.projectName ?? e.projectId,
+                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${e.taskName ?? ''} · ${e.subtaskName ?? ''}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  Text(
+                    e.narration,
+                    style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  e.date,
+                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+                const SizedBox(height: 4),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
+                  onPressed: () => _deleteEntry(e),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
             ),
           ],
         ),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              e.date,
-              style: const TextStyle(fontSize: 11, color: Colors.grey),
-            ),
-            IconButton(
-              icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
-              onPressed: () => _deleteEntry(e),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-            ),
-          ],
-        ),
-        isThreeLine: true,
       ),
     );
   }
