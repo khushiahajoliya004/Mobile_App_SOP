@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'auth_service.dart';
@@ -186,7 +185,6 @@ class ApiService {
     String? audioFilePath,
     String? audioFileName,
     String? leadId,
-    String? dealId,
     String? phoneNumber,
     String? followUpId,
   }) async {
@@ -199,7 +197,6 @@ class ApiService {
         'salesStageId': salesStageId,
       if (notes != null) 'notes': notes,
       if (leadId != null && leadId.isNotEmpty) 'leadId': leadId,
-      if (dealId != null && dealId.isNotEmpty) 'dealId': dealId,
       if (phoneNumber != null && phoneNumber.isNotEmpty)
         'phoneNumber': phoneNumber,
       if (followUpId != null && followUpId.isNotEmpty) 'followUpId': followUpId,
@@ -328,7 +325,6 @@ class ApiService {
     String? description,
     required String companyId,
     int? sortOrder,
-    List<String>? summaryQuestions,
   }) async {
     return _dio.post(
       '/sales-stages',
@@ -337,7 +333,6 @@ class ApiService {
         'companyId': companyId,
         if (description != null) 'description': description,
         if (sortOrder != null) 'sortOrder': sortOrder,
-        if (summaryQuestions != null) 'summaryQuestions': summaryQuestions,
       },
     );
   }
@@ -347,7 +342,6 @@ class ApiService {
     String? name,
     String? description,
     int? sortOrder,
-    List<String>? summaryQuestions,
   }) async {
     return _dio.patch(
       '/sales-stages/$id',
@@ -355,7 +349,6 @@ class ApiService {
         if (name != null) 'name': name,
         if (description != null) 'description': description,
         if (sortOrder != null) 'sortOrder': sortOrder,
-        if (summaryQuestions != null) 'summaryQuestions': summaryQuestions,
       },
     );
   }
@@ -787,16 +780,14 @@ class ApiService {
     String? status,
     String? startDate,
     String? endDate,
-    String? userId,
   }) async {
     final params = <String, dynamic>{'page': page, 'limit': limit};
     if (search != null && search.isNotEmpty) params['search'] = search;
     if (userSearch != null && userSearch.isNotEmpty)
       params['userSearch'] = userSearch;
     if (status != null && status.isNotEmpty) params['status'] = status;
-    if (startDate != null) params['fromDate'] = startDate;
-    if (endDate != null) params['toDate'] = endDate;
-    if (userId != null && userId.isNotEmpty) params['userId'] = userId;
+    if (startDate != null) params['startDate'] = startDate;
+    if (endDate != null) params['endDate'] = endDate;
     return _dio.get('/ai-insights', queryParameters: params);
   }
 
@@ -968,54 +959,29 @@ class ApiService {
     String? pipelineId,
     String? branchId,
     String? ownerUserId,
-    String? fromDate,
-    String? toDate,
-    int page = 1,
-    int limit = 50,
   }) async {
     return _dio.get(
       '/crm/deals',
       queryParameters: {
-        'page': page,
-        'limit': limit,
         if (search != null && search.isNotEmpty) 'search': search,
         if (status != null) 'status': status,
         if (pipelineId != null) 'pipelineId': pipelineId,
         if (branchId != null) 'branchId': branchId,
         if (ownerUserId != null) 'ownerUserId': ownerUserId,
-        if (fromDate != null) 'fromDate': fromDate,
-        if (toDate != null) 'toDate': toDate,
       },
     );
   }
 
   Future<Response> getCrmDeal(String id) async => _dio.get('/crm/deals/$id');
 
-  Future<Response> getCallsByDeal(String dealId) async =>
-      _dio.get('/calls', queryParameters: {'dealId': dealId});
-
   Future<Response> updateCrmDeal(String id, Map<String, dynamic> data) async =>
       _dio.patch('/crm/deals/$id', data: data);
 
-  Future<Response> getCrmContacts({
-    String? search,
-    int page = 1,
-    int limit = 20,
-    String? lifecycleStage,
-    String? source,
-    String? ownerUserId,
-  }) async {
+  Future<Response> getCrmContacts({String? search}) async {
     return _dio.get(
       '/crm/contacts',
       queryParameters: {
-        'page': page,
-        'limit': limit,
         if (search != null && search.isNotEmpty) 'search': search,
-        if (lifecycleStage != null && lifecycleStage.isNotEmpty)
-          'lifecycleStage': lifecycleStage,
-        if (source != null && source.isNotEmpty) 'source': source,
-        if (ownerUserId != null && ownerUserId.isNotEmpty)
-          'ownerUserId': ownerUserId,
       },
     );
   }
@@ -1032,14 +998,12 @@ class ApiService {
     String? ownerUserId,
     String? branchId,
     String? notes,
-    double? expectedValue,
-    bool createDeal = true,
   }) async {
     return _dio.post(
       '/crm/contacts/quick-lead',
       data: {
         'name': name,
-        'createDeal': createDeal,
+        'createDeal': true,
         if (phone != null && phone.isNotEmpty) 'phone': phone,
         if (email != null && email.isNotEmpty) 'email': email,
         if (source != null && source.isNotEmpty) 'source': source,
@@ -1049,7 +1013,6 @@ class ApiService {
           'ownerUserId': ownerUserId,
         if (branchId != null && branchId.isNotEmpty) 'branchId': branchId,
         if (notes != null && notes.isNotEmpty) 'notes': notes,
-        if (expectedValue != null) 'expectedValue': expectedValue,
       },
     );
   }
@@ -1894,18 +1857,6 @@ class ApiService {
         },
       );
 
-  Future<Response> createMaster(String masterType, String name) async =>
-      _dio.post('/crm/masters', data: {'masterType': masterType, 'name': name});
-
-  Future<Response> updateMaster(String id, String name) async =>
-      _dio.patch('/crm/masters/item/$id', data: {'name': name});
-
-  Future<Response> deleteMaster(String id) async =>
-      _dio.delete('/crm/masters/item/$id');
-
-  Future<Response> toggleMasterStatus(String id, String status) async =>
-      _dio.patch('/crm/masters/item/$id/status/$status');
-
   // ─── Team Mapping ───
 
   /// GET /users/seniors  — users who have at least one team member
@@ -1933,7 +1884,7 @@ class ApiService {
   Future<Response> registerFcmToken(String token) async {
     return _dio.post(
       '/notifications/register-token',
-      data: {'token': token, 'platform': Platform.isIOS ? 'ios' : 'android'},
+      data: {'token': token, 'platform': 'android'},
     );
   }
 
@@ -2158,7 +2109,6 @@ class ApiService {
     String? toDate,
     String? sortBy,
     String? sortOrder,
-    String? status,
   }) async {
     return _dio.get(
       '/employee-performance',
@@ -2170,7 +2120,6 @@ class ApiService {
         if (toDate != null) 'toDate': toDate,
         if (sortBy != null) 'sortBy': sortBy,
         if (sortOrder != null) 'sortOrder': sortOrder,
-        if (status != null) 'status': status,
       },
     );
   }
@@ -2349,7 +2298,7 @@ class ApiService {
     required String name,
     required String contactId,
     required String pipelineId,
-    String? stageId,
+    required String stageId,
     double? expectedValue,
     String? closeDate,
     String? priority,
@@ -2509,19 +2458,17 @@ class ApiService {
   Future<Response> addCrmPipelineStage(
     String pipelineId, {
     required String name,
-    bool isWon = false,
-    bool isLost = false,
-    int? slaMaxDays,
-    int? sortOrder,
+    String type = 'OPEN',
+    int? slaDays,
+    double? winProbability,
   }) async {
     return _dio.post(
       '/crm/pipelines/$pipelineId/stages',
       data: {
         'name': name,
-        'isWon': isWon,
-        'isLost': isLost,
-        if (slaMaxDays != null) 'slaMaxDays': slaMaxDays,
-        if (sortOrder != null) 'sortOrder': sortOrder,
+        'type': type,
+        if (slaDays != null) 'slaDays': slaDays,
+        if (winProbability != null) 'winProbability': winProbability,
       },
     );
   }
