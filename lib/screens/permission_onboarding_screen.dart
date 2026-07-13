@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart';
 import '../utils/permission_helper.dart';
@@ -43,6 +45,12 @@ class _PermissionOnboardingScreenState
         }
       } catch (_) {}
 
+      // Battery optimization — prompt Oppo/Vivo/Realme users to disable it
+      // so recordings are never interrupted by the OEM's background killer.
+      if (!Platform.isIOS && mounted) {
+        await _requestBatteryOptimizationIfNeeded();
+      }
+
       // Mark onboarding complete and navigate regardless of permission results
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('permissions_onboarding_complete', true);
@@ -60,6 +68,67 @@ class _PermissionOnboardingScreenState
         ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
       }
     }
+  }
+
+  Future<void> _requestBatteryOptimizationIfNeeded() async {
+    try {
+      final status = await Permission.ignoreBatteryOptimizations.status;
+      if (status.isGranted) return;
+
+      final info = await DeviceInfoPlugin().androidInfo;
+      final manufacturer = info.manufacturer.toLowerCase();
+      final isAggressiveOem = manufacturer.contains('oppo') ||
+          manufacturer.contains('vivo') ||
+          manufacturer.contains('realme') ||
+          manufacturer.contains('oneplus') ||
+          manufacturer.contains('xiaomi') ||
+          manufacturer.contains('redmi') ||
+          manufacturer.contains('huawei') ||
+          manufacturer.contains('honor');
+
+      if (!mounted) return;
+
+      // Show an explanation dialog for aggressive OEMs, then request for all
+      if (isAggressiveOem) {
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Row(
+              children: [
+                Icon(Icons.battery_alert, color: Color(0xFFF59E0B)),
+                SizedBox(width: 12),
+                Expanded(child: Text('Important for Recording')),
+              ],
+            ),
+            content: const Text(
+              'Your device\'s battery optimization may stop recordings after 2-3 minutes.\n\n'
+              'On the next screen, tap "Allow" to let this app run in the background without interruption.',
+              style: TextStyle(fontSize: 15, height: 1.5),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Skip'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6366F1),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Text('Continue'),
+              ),
+            ],
+          ),
+        );
+      }
+
+      if (!mounted) return;
+      await Permission.ignoreBatteryOptimizations.request();
+    } catch (_) {}
   }
 
   Future<void> _skip() async {
@@ -160,6 +229,14 @@ class _PermissionOnboardingScreenState
                   'Notifications',
                   'Show recording status',
                 ),
+                if (!Platform.isIOS) ...[
+                  const SizedBox(height: 16),
+                  _buildPermissionItem(
+                    Icons.battery_charging_full_rounded,
+                    'Battery Optimization',
+                    'Prevent recordings from being cut off',
+                  ),
+                ],
 
                 const SizedBox(height: 40),
 

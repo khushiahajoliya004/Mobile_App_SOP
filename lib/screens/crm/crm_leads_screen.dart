@@ -461,27 +461,21 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                           final dupRes = await _api.checkDuplicateCrmContact(phone);
                           final raw = dupRes.data;
                           final list = raw is List ? raw : (raw is Map ? (raw['data'] ?? raw['contacts'] ?? []) : []);
-                          final isDuplicate = list is List && list.isNotEmpty;
-                          if (isDuplicate && ctx.mounted) {
+                          if (list is List && list.isNotEmpty && ctx.mounted) {
                             final first = list.first;
                             final existingName = first is Map ? (first['name'] ?? 'another contact') : 'another contact';
-                            final proceed = await showDialog<bool>(
+                            await showDialog<void>(
                               context: ctx,
                               builder: (dlgCtx) => AlertDialog(
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                                 title: const Text('Duplicate Phone'),
-                                content: Text('Phone $phone already exists as "$existingName". Create anyway?'),
+                                content: Text('Phone $phone already exists as "$existingName". Please use a different number.'),
                                 actions: [
-                                  TextButton(onPressed: () => Navigator.pop(dlgCtx, false), child: const Text('Cancel')),
-                                  FilledButton(
-                                    onPressed: () => Navigator.pop(dlgCtx, true),
-                                    style: FilledButton.styleFrom(backgroundColor: AppColors.warning),
-                                    child: const Text('Create Anyway'),
-                                  ),
+                                  FilledButton(onPressed: () => Navigator.pop(dlgCtx), child: const Text('OK')),
                                 ],
                               ),
                             );
-                            if (proceed != true) return;
+                            return;
                           }
                         } catch (_) {}
                       }
@@ -515,14 +509,33 @@ class _CrmLeadsScreenState extends State<CrmLeadsScreen> {
                       } catch (e) {
                         if (ctx.mounted) {
                           String msg = 'Failed to create lead';
+                          int? statusCode;
                           if (e is DioException) {
+                            statusCode = e.response?.statusCode;
                             final body = e.response?.data;
-                            final serverMsg = body is Map
-                                ? (body['message'] ?? body['error'] ?? body['msg'])?.toString()
+                            final raw = body is Map
+                                ? (body['message'] ?? body['error'] ?? body['msg'])
                                 : null;
-                            msg = serverMsg ?? msg;
+                            msg = raw is List ? raw.join(', ') : raw?.toString() ?? msg;
                           }
-                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(msg)));
+                          if (statusCode == 409) {
+                            await showDialog<void>(
+                              context: ctx,
+                              builder: (dlgCtx) => AlertDialog(
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                title: const Text('Duplicate Phone'),
+                                content: Text(msg),
+                                actions: [
+                                  FilledButton(
+                                    onPressed: () => Navigator.pop(dlgCtx),
+                                    child: const Text('OK'),
+                                  ),
+                                ],
+                              ),
+                            );
+                          } else {
+                            ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(msg)));
+                          }
                         }
                       }
                     },

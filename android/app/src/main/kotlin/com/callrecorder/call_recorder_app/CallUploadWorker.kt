@@ -23,8 +23,7 @@ class CallUploadWorker(
         const val KEY_FILE_PATH = "filePath"
         const val KEY_META_PATH = "metaPath"
 
-        // Must match api_service.dart baseUrl
-        private const val BASE_URL = "http://192.168.1.20:3000"
+        private const val BASE_URL = "https://api.mysterymentor.in"
         private const val UPLOAD_PATH = "/calls"
 
         // SharedPreferences keys — must match Flutter's auth_service.dart
@@ -79,11 +78,16 @@ class CallUploadWorker(
 
         Log.i(TAG, "Uploading call: $filePath | phone: $phoneNumber | type: $callType")
 
+        // Use phone number as customerName so it appears in the UI;
+        // the backend will normalize it to the phoneNumber field automatically.
+        val customerName = if (phoneNumber != "unknown") phoneNumber else "Auto-recorded call"
+
         return@withContext try {
             val success = uploadCall(
                 token = token,
                 audioFile = audioFile,
                 phoneNumber = if (phoneNumber != "unknown") phoneNumber else null,
+                customerName = customerName,
                 userId = userId,
                 companyId = companyId,
                 notes = "Auto-recorded $callType call | Duration: ${durationMs / 1000}s"
@@ -108,6 +112,7 @@ class CallUploadWorker(
         token: String,
         audioFile: File,
         phoneNumber: String?,
+        customerName: String,
         userId: String,
         companyId: String,
         notes: String
@@ -134,6 +139,7 @@ class CallUploadWorker(
             out.writeBytes("$value\r\n")
         }
 
+        writeField("customerName", customerName)
         if (!phoneNumber.isNullOrEmpty()) writeField("phoneNumber", phoneNumber)
         writeField("userId", userId)
         writeField("companyId", companyId)

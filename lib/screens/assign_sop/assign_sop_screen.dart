@@ -30,10 +30,15 @@ class _AssignSopScreenState extends State<AssignSopScreen> {
       _users = _p(
         results[0].data,
       ).where((u) => u['userType'] == 'USER').toList();
-      _sops = _p(results[1].data);
+      // Deduplicate SOPs by id
+      final raw = _p(results[1].data);
+      final seen = <String>{};
+      _sops = raw.where((s) => seen.add(s['id'] as String)).toList();
       // Pre-populate map
+      final sopIds = _sops.map((s) => s['id'] as String).toSet();
       for (final u in _users) {
-        _selectedSopMap[u['id']] = u['sopId'] ?? '';
+        final sopId = u['sopId'] ?? '';
+        _selectedSopMap[u['id']] = sopIds.contains(sopId) ? sopId : '';
       }
     } catch (_) {
       _users = [];
@@ -205,7 +210,9 @@ class _AssignSopScreenState extends State<AssignSopScreen> {
   Widget _userTile(Map<String, dynamic> user) {
     final name = _fullName(user);
     final email = user['email'] ?? '';
-    final currentSopId = _selectedSopMap[user['id']] ?? '';
+    final rawSopId = _selectedSopMap[user['id']] ?? '';
+    final sopIds = _sops.map((s) => s['id'] as String).toSet();
+    final currentSopId = sopIds.contains(rawSopId) ? rawSopId : '';
     final isSaving = _savingMap[user['id']] == true;
     final changed = _hasChanged(user);
 

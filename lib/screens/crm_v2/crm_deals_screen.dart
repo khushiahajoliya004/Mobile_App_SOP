@@ -1,4 +1,10 @@
+import 'dart:io';
+import 'package:csv/csv.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../main.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
@@ -44,6 +50,7 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
   late String _datePreset; // 'all','today','yesterday','week','month','custom'
   late String _statusFilter; // 'OPEN','WON','LOST'
   bool get _hasActiveFilters => _filterBranchId != null || _filterOwnerUserId != null || _datePreset != 'all';
+  bool _exporting = false;
   // Pagination
   int _page = 1;
   int _total = 0;
@@ -484,12 +491,38 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
                       onPressed: () async {
                         if (nameCtrl.text.trim().isEmpty) { _msg('Name is required', error: true); return; }
                         if (phoneCtrl.text.trim().isEmpty) { _msg('Phone is required', error: true); return; }
+                        final phone = phoneCtrl.text.trim();
+                        // Duplicate phone pre-check
+                        try {
+                          final dupRes = await _api.checkDuplicateCrmContact(phone);
+                          final raw = dupRes.data;
+                          final list = raw is List ? raw : (raw is Map ? (raw['data'] ?? raw['contacts'] ?? []) : []);
+                          if (list is List && list.isNotEmpty && ctx.mounted) {
+                            final first = list.first;
+                            final existingName = first is Map ? (first['name'] ?? 'another contact') : 'another contact';
+                            await showDialog<void>(
+                              context: ctx,
+                              builder: (dlgCtx) => AlertDialog(
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                title: const Text('Duplicate Phone', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                                content: Text('Phone $phone already exists as "$existingName". Please use a different number.'),
+                                actions: [
+                                  FilledButton(
+                                    onPressed: () => Navigator.pop(dlgCtx),
+                                    child: const Text('OK'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            return;
+                          }
+                        } catch (_) {}
                         Navigator.pop(ctx);
                         setState(() => _loading = true);
                         try {
                           final res = await _api.createCrmQuickLead(
                             name: nameCtrl.text.trim(),
-                            phone: phoneCtrl.text.trim(),
+                            phone: phone,
                             email: emailCtrl.text.trim().isNotEmpty ? emailCtrl.text.trim() : null,
                             source: selectedSource,
                             branchId: selectedBranchId,
@@ -513,10 +546,36 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
                               }
                             }
                             if (mounted && newDealId != null) {
-                              _showRecordingSheet(newDealId, nameCtrl.text.trim(), phoneCtrl.text.trim(), isNew: true);
+                              _showRecordingSheet(newDealId, nameCtrl.text.trim(), phone, isNew: true);
                             }
                           }
-                        } catch (e) { _msg('Failed: $e', error: true); setState(() => _loading = false); }
+                        } catch (e) {
+                          setState(() => _loading = false);
+                          if (e is DioException && e.response?.statusCode == 409 && ctx.mounted) {
+                            final body = e.response?.data;
+                            final serverMsg = (body is Map ? body['message'] : null)?.toString() ?? '';
+                            showDialog<void>(
+                              context: ctx,
+                              builder: (d) => AlertDialog(
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                title: const Text('Lead Already Exists', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                                content: Text(
+                                  serverMsg.isNotEmpty
+                                      ? 'A lead with this phone number already exists.\n\n$serverMsg'
+                                      : 'A lead with phone "$phone" already exists in the system.',
+                                ),
+                                actions: [
+                                  FilledButton(
+                                    onPressed: () => Navigator.pop(d),
+                                    child: const Text('OK'),
+                                  ),
+                                ],
+                              ),
+                            );
+                          } else {
+                            _msg('Failed to create lead', error: true);
+                          }
+                        }
                       },
                       style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                       child: const Text('Create Lead', style: TextStyle(fontWeight: FontWeight.w700)),
@@ -915,6 +974,98 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
     );
   }
 
+  Future<List<List<dynamic>>> _buildCsvRows() async {
+    final (fromDate, toDate) = _resolvedDates;
+    final res = await _api.getCrmDeals(
+      pipelineId: _selectedPipelineId,
+      search: _search.isNotEmpty ? _search : null,
+      status: _statusFilter,
+      branchId: _filterBranchId,
+      ownerUserId: _filterOwnerUserId,
+      fromDate: fromDate,
+      toDate: toDate,
+      page: 1,
+      limit: 1000,
+    );
+    final raw = res.data;
+    final allDeals = (raw is List
+            ? raw
+            : ((raw is Map ? (raw['data'] ?? []) : []) as List))
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+
+    final rows = <List<dynamic>>[
+      ['Name', 'Phone', 'Email', 'Status', 'Stage', 'Pipeline', 'Source', 'Assigned To', 'Branch', 'Expected Value', 'Call Count', 'Created Date'],
+    ];
+    for (final deal in allDeals) {
+      final name = (deal['contact']?['name'] ?? deal['contactName'] ?? deal['name'] ?? '').toString();
+      final phone = (deal['contact']?['phone'] ?? deal['phone'] ?? '').toString();
+      final email = (deal['contact']?['email'] ?? deal['email'] ?? '').toString();
+      final status = (deal['status'] ?? '').toString();
+      final stage = (deal['stage']?['name'] ?? deal['stageName'] ?? '').toString();
+      final pipeline = (deal['pipeline']?['name'] ?? deal['pipelineName'] ?? '').toString();
+      final sourceRaw = (deal['contact']?['source'] ?? deal['source'] ?? '').toString();
+      final source = _leadSources.firstWhere(
+        (s) => s['value'] == sourceRaw,
+        orElse: () => {'label': sourceRaw},
+      )['label'] ?? sourceRaw;
+      final owner = '${deal['owner']?['firstName'] ?? ''} ${deal['owner']?['lastName'] ?? ''}'.trim();
+      final branchId = (deal['branchId'] ?? deal['branch']?['id'] ?? '').toString();
+      final branch = (deal['branch']?['name'] ?? deal['branchName'] ??
+          (_branches.firstWhere((b) => b['id']?.toString() == branchId, orElse: () => {})['name'] ?? '')).toString();
+      final expectedValue = deal['expectedValue'] ?? deal['value'] ?? '';
+      final callCount = deal['callCount'] ?? deal['totalCalls'] ?? 0;
+      final createdAt = deal['createdAt'] != null
+          ? (DateTime.tryParse(deal['createdAt'].toString())?.toLocal().toString().split(' ').first ?? '')
+          : '';
+      rows.add([name, phone, email, status, stage, pipeline, source, owner, branch, expectedValue, callCount, createdAt]);
+    }
+    return rows;
+  }
+
+  String _csvFileName() {
+    final now = DateTime.now();
+    return 'leads_${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}.csv';
+  }
+
+  Future<void> _exportLeads() async {
+    setState(() => _exporting = true);
+    try {
+      final rows = await _buildCsvRows();
+      final csvString = const ListToCsvConverter().convert(rows);
+      final fileName = _csvFileName();
+
+      // On Android API 22–32, attempt to write directly to the public Downloads folder.
+      // On API 33+ the WRITE_EXTERNAL_STORAGE permission is not declared, so we fall
+      // through to the Share sheet which lets the OS handle saving.
+      final status = await Permission.storage.request();
+      if (status.isGranted) {
+        try {
+          final downloadsDir = Directory('/storage/emulated/0/Download');
+          if (downloadsDir.existsSync()) {
+            final f = File('${downloadsDir.path}/$fileName');
+            await f.writeAsString(csvString);
+            if (mounted) _msg('Saved: $fileName — check your Downloads folder');
+            return;
+          }
+        } catch (_) {}
+      }
+
+      // Fallback / Android 13+: share sheet lets user pick where to save.
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/$fileName');
+      await file.writeAsString(csvString);
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'text/csv')],
+        subject: 'Leads Export — $fileName',
+      );
+    } catch (e) {
+      if (mounted) _msg('Export failed: $e', error: true);
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
   Color _stageColor(String? status) {
     switch (status) {
       case 'WON': return AppColors.success;
@@ -942,6 +1093,17 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: AppColors.surfaceLight)),
                 enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: AppColors.surfaceLight)),
               ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: _exporting ? null : _exportLeads,
+            child: Container(
+              width: 44, height: 44,
+              decoration: BoxDecoration(color: AppColors.surfaceLight, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.surfaceLight)),
+              child: _exporting
+                  ? const Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.download_rounded, color: AppColors.primary, size: 22),
             ),
           ),
           const SizedBox(width: 8),
@@ -1267,7 +1429,16 @@ class _CrmDealsScreenState extends State<CrmDealsScreen> {
                                 FilledButton(
                                   onPressed: () async {
                                     Navigator.pop(d);
-                                    try { await _api.deleteCrmDeal(deal['id'] as String); _msg('Deal deleted'); _load(); } catch (e) { _msg('Failed: $e', error: true); }
+                                    try {
+                                      await _api.deleteCrmDeal(deal['id'] as String);
+                                      // Also delete the contact so its phone number is freed
+                                      final contactId = deal['contactId']?.toString() ?? (deal['contact'] is Map ? deal['contact']['id']?.toString() : null);
+                                      if (contactId != null && contactId.isNotEmpty) {
+                                        try { await _api.deleteCrmContact(contactId); } catch (_) {}
+                                      }
+                                      _msg('Deal deleted');
+                                      _load();
+                                    } catch (e) { _msg('Failed: $e', error: true); }
                                   },
                                   style: FilledButton.styleFrom(backgroundColor: AppColors.error),
                                   child: const Text('Delete'),

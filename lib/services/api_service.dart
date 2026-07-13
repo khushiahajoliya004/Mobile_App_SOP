@@ -7,10 +7,11 @@ import '../utils/navigator_key.dart';
 class ApiService {
   // Backend runs on port 3000, no /api prefix
   // For Android emulator use 10.0.2.2, for real device use your machine IP
-  // static const String baseUrl = 'https://apimysterymentorqa.mysterymentor.in';
-  // static const String baseUrl = 'https://api.mysterymentor.in';
+  static const String baseUrl = 'https://apimysterymentorqa.mysterymentor.in';
   // static const String baseUrl = 'http://192.168.1.8:3001';
-  static const String baseUrl = 'http://192.168.1.24:3000';
+  // static const String baseUrl = 'http://192.168.1.13:3001';
+  // static const String baseUrl = 'https://api.mysterymentor.in';
+  // static const String baseUrl = 'http://192.168.1.24:3000'; // local
 
   late final Dio _dio;
   final AuthService _auth = AuthService();
@@ -21,12 +22,8 @@ class ApiService {
       BaseOptions(
         baseUrl: baseUrl,
         connectTimeout: const Duration(seconds: 30),
-        receiveTimeout: const Duration(
-          seconds: 120,
-        ), // 2 min for large audio uploads
-        sendTimeout: const Duration(
-          seconds: 120,
-        ), // 2 min for large audio uploads
+        receiveTimeout: const Duration(minutes: 5),
+        sendTimeout: const Duration(minutes: 5),
         headers: {'Content-Type': 'application/json'},
       ),
     );
@@ -54,8 +51,13 @@ class ApiService {
         },
         onError: (DioException e, handler) async {
           final path = e.requestOptions.path;
-          final isAuthCall = path.contains('/auth/login') || path.contains('/notifications/register-token') || path.contains('/notifications/unregister-token');
-          if (e.response?.statusCode == 401 && !_sessionExpiredDialogOpen && !isAuthCall) {
+          final isAuthCall =
+              path.contains('/auth/login') ||
+              path.contains('/notifications/register-token') ||
+              path.contains('/notifications/unregister-token');
+          if (e.response?.statusCode == 401 &&
+              !_sessionExpiredDialogOpen &&
+              !isAuthCall) {
             _sessionExpiredDialogOpen = true;
             await _auth.logout();
             final context = navigatorKey.currentContext;
@@ -212,8 +214,23 @@ class ApiService {
 
   /// GET /calls
   /// Response: { success, data: [ Call, ... ] }
-  Future<Response> getCalls() async {
-    return _dio.get('/calls');
+  Future<Response> getCalls({
+    String? search,
+    String? duration,
+    String? fromDate,
+    String? toDate,
+    String? leadId,
+    int page = 1,
+    int limit = 20,
+  }) async {
+    final params = <String, dynamic>{'page': page, 'limit': limit};
+    if (search != null && search.isNotEmpty) params['search'] = search;
+    if (duration != null && duration.isNotEmpty && duration != 'all')
+      params['duration'] = duration;
+    if (fromDate != null) params['fromDate'] = fromDate;
+    if (toDate != null) params['toDate'] = toDate;
+    if (leadId != null && leadId.isNotEmpty) params['leadId'] = leadId;
+    return _dio.get('/calls', queryParameters: params);
   }
 
   /// GET /calls/:id
@@ -663,6 +680,54 @@ class ApiService {
     return _dio.get('/analytics/trend', queryParameters: {'period': period});
   }
 
+  Future<Response> getAnalyticsCategoryBreakdown({
+    String period = '30d',
+  }) async {
+    return _dio.get(
+      '/analytics/category-breakdown',
+      queryParameters: {'period': period},
+    );
+  }
+
+  Future<Response> getAnalyticsSalesStageBreakdown({
+    String period = '30d',
+  }) async {
+    return _dio.get(
+      '/analytics/sales-stage-breakdown',
+      queryParameters: {'period': period},
+    );
+  }
+
+  Future<Response> getAnalyticsScoreDistribution({
+    String period = '30d',
+  }) async {
+    return _dio.get(
+      '/analytics/score-distribution',
+      queryParameters: {'period': period},
+    );
+  }
+
+  Future<Response> getAnalyticsUserCallAnalysis({String period = '30d'}) async {
+    return _dio.get(
+      '/analytics/user-call-analysis',
+      queryParameters: {'period': period},
+    );
+  }
+
+  Future<Response> getAnalyticsSopMatrix({String period = '30d'}) async {
+    return _dio.get(
+      '/analytics/sop-matrix',
+      queryParameters: {'period': period},
+    );
+  }
+
+  Future<Response> getAnalyticsUserSopMatrix({String period = '30d'}) async {
+    return _dio.get(
+      '/analytics/user-sop-matrix',
+      queryParameters: {'period': period},
+    );
+  }
+
   // ─── AI Insights (additional) ───
 
   Future<Response> evaluateTranscript({
@@ -729,6 +794,17 @@ class ApiService {
   Future<Response> getAiInsightDetail(String callId) async {
     return _dio.get('/ai-insights/$callId');
   }
+
+  Future<Response> generateCallSummary(String callId) async =>
+      _dio.post('/ai-insights/summary/$callId', data: {});
+
+  Future<Response> generateManagerReview(String callId) async =>
+      _dio.post('/ai-insights/manager-review/$callId', data: {});
+
+  Future<Response> downloadManagerReviewPdf(String callId) async => _dio.get(
+    '/ai-insights/$callId/manager-review-pdf',
+    options: Options(responseType: ResponseType.bytes),
+  );
 
   // ─── Companies ───
 
@@ -850,6 +926,9 @@ class ApiService {
 
   Future<Response> getAssignableUsers() async =>
       _dio.get('/crm-dashboard/assignable-users');
+
+  Future<Response> getUsersByReportingTo(String teamLeaderUserId) async => _dio
+      .get('/users', queryParameters: {'reportingToUserId': teamLeaderUserId});
 
   Future<Response> getMyCrmPermissions() async =>
       _dio.get('/crm/my-permissions');
@@ -1865,6 +1944,33 @@ class ApiService {
     return _dio.delete(endpoint);
   }
 
+  // ─── Force Update ───
+
+  /// GET /app/version-config
+  Future<Response> getVersionConfig() async => _dio.get('/app/version-config');
+
+  /// POST /app/version-config
+  Future<Response> saveVersionConfig({
+    required bool forceUpdateEnabled,
+    required int minAndroidBuild,
+    required int minIosBuild,
+    required String updateMessage,
+    required String androidStoreUrl,
+    required String iosStoreUrl,
+  }) async {
+    return _dio.post(
+      '/app/version-config',
+      data: {
+        'forceUpdateEnabled': forceUpdateEnabled,
+        'minAndroidBuild': minAndroidBuild,
+        'minIosBuild': minIosBuild,
+        'updateMessage': updateMessage,
+        'androidStoreUrl': androidStoreUrl,
+        'iosStoreUrl': iosStoreUrl,
+      },
+    );
+  }
+
   // ─── Modules ───
 
   Future<Response> getModules() async => _dio.get('/modules');
@@ -2029,6 +2135,16 @@ class ApiService {
         if (fromDate != null) 'fromDate': fromDate,
         if (toDate != null) 'toDate': toDate,
       },
+    );
+  }
+
+  Future<Response> getEmployeeAiTrend(
+    String userId, {
+    bool refresh = false,
+  }) async {
+    return _dio.get(
+      '/employee-performance/$userId/ai-trend',
+      queryParameters: {if (refresh) 'refresh': 'true'},
     );
   }
 
@@ -2228,6 +2344,9 @@ class ApiService {
   Future<Response> getCrmPipeline(String id) async =>
       _dio.get('/crm/pipelines/$id');
 
+  Future<Response> checkDuplicateCrmContact(String phone) async =>
+      _dio.get('/crm/contacts', queryParameters: {'search': phone, 'limit': 5});
+
   // ─── CRM v2 Activities ───
 
   Future<Response> getCrmActivities({
@@ -2364,6 +2483,11 @@ class ApiService {
   Future<Response> deleteCrmPipeline(String id) async =>
       _dio.delete('/crm/pipelines/$id');
 
+  Future<Response> deleteCrmPipelineStage(
+    String pipelineId,
+    String stageId,
+  ) async => _dio.delete('/crm/pipelines/$pipelineId/stages/$stageId');
+
   // ─── CRM v2 Follow-ups by Contact ───
 
   Future<Response> getCrmFollowUpsByContact(String contactId) async {
@@ -2389,4 +2513,180 @@ class ApiService {
       },
     );
   }
+
+  // ─── Timesheet: Projects ───
+
+  Future<Response> getTimesheetProjects(String companyId) async =>
+      _dio.get('/projects', queryParameters: {'companyId': companyId});
+
+  /// Returns only projects where [userId] has a ProjectTechRoleUser record
+  Future<Response> getMyTimesheetProjects(String userId) async =>
+      _dio.get('/timesheet-entries/my-projects/$userId');
+
+  Future<Response> getTimesheetProjectDetail(String projectId) async =>
+      _dio.get('/projects/$projectId');
+
+  Future<Response> createTimesheetProject(Map<String, dynamic> data) async =>
+      _dio.post('/projects', data: data);
+
+  Future<Response> updateTimesheetProject(
+    String projectId,
+    Map<String, dynamic> data,
+  ) async =>
+      _dio.patch('/projects/$projectId', data: data);
+
+  Future<Response> getTimesheetCompanyRoles(String companyId) async =>
+      _dio.get('/timesheet/company-roles', queryParameters: {'companyId': companyId});
+
+  Future<Response> getTimesheetCompanyUsers(String companyId, {String? roleName}) async =>
+      _dio.get('/timesheet/company-users', queryParameters: {
+        'companyId': companyId,
+        if (roleName != null) 'roleName': roleName,
+      });
+
+  Future<Response> getProjectTasks(String projectId) async =>
+      _dio.get('/projects/$projectId/tasks');
+
+  Future<Response> getProjectTechRoles(String projectId) async =>
+      _dio.get('/projects/$projectId/tech-roles');
+
+  Future<Response> createProjectTechRole(
+    String projectId,
+    Map<String, dynamic> data,
+  ) async =>
+      _dio.post('/projects/$projectId/tech-roles', data: data);
+
+  Future<Response> assignUserToTechRole(
+    String projectId,
+    String roleId,
+    String userId,
+  ) async =>
+      _dio.post('/tech-roles/$roleId/users', data: {'userId': userId});
+
+  Future<Response> removeUserFromTechRole(
+    String projectId,
+    String roleId,
+    String userId,
+  ) async =>
+      _dio.delete('/tech-roles/$roleId/users/$userId');
+
+  // ─── Timesheet: Entries ───
+
+  Future<Response> getMyTimesheetEntries(String userId) async =>
+      _dio.get('/timesheet-entries/my-entries/$userId');
+
+  Future<Response> getAllTimesheetEntries(
+    String companyId, {
+    String? dateFrom,
+    String? dateTo,
+    String? projectId,
+  }) async =>
+      _dio.get('/timesheet-entries', queryParameters: {
+        'companyId': companyId,
+        if (dateFrom != null) 'dateFrom': dateFrom,
+        if (dateTo != null) 'dateTo': dateTo,
+        if (projectId != null && projectId.isNotEmpty) 'projectId': projectId,
+      });
+
+  Future<Response> createTimesheetEntry(Map<String, dynamic> data) async =>
+      _dio.post('/timesheet-entries', data: data);
+
+  Future<Response> updateTimesheetEntry(
+    String entryId,
+    Map<String, dynamic> data,
+  ) async =>
+      _dio.patch('/timesheet-entries/$entryId', data: data);
+
+  Future<Response> deleteTimesheetEntry(String entryId) async =>
+      _dio.delete('/timesheet-entries/$entryId');
+
+  Future<Response> getAvailableSubtasks(
+    String projectId,
+    String userId,
+  ) async =>
+      _dio.get(
+        '/timesheet-entries/available-subtasks',
+        queryParameters: {'userId': userId, 'projectId': projectId},
+      );
+
+  Future<Response> getTimesheetHourRange(
+    String userId,
+    String subtaskId,
+  ) async =>
+      _dio.get('/timesheet-entries/hour-range', queryParameters: {
+        'userId': userId,
+        'subtaskId': subtaskId,
+      });
+
+  // ─── Timesheet: Dashboard ───
+
+  Future<Response> getTimesheetDashboardStats(
+    String companyId, {
+    String? dateFrom,
+    String? dateTo,
+  }) async =>
+      _dio.get('/timesheet-dashboard/stats', queryParameters: {
+        'companyId': companyId,
+        if (dateFrom != null) 'dateFrom': dateFrom,
+        if (dateTo != null) 'dateTo': dateTo,
+      });
+
+  Future<Response> getMyTimesheetStats(String userId) async =>
+      _dio.get('/timesheet-dashboard/my-stats/$userId');
+
+  // ─── Timesheet: Subtask Role Assignments ───
+
+  Future<Response> getSubtaskRoleAssignments(String subtaskId) async =>
+      _dio.get('/project-subtasks/$subtaskId/role-assignments');
+
+  Future<Response> createSubtaskRoleAssignment(
+    Map<String, dynamic> data,
+  ) async =>
+      _dio.post('/subtask-role-assignments', data: data);
+
+  Future<Response> updateSubtaskRoleAssignment(
+    String id,
+    Map<String, dynamic> data,
+  ) async =>
+      _dio.patch('/subtask-role-assignments/$id', data: data);
+
+  Future<Response> deleteSubtaskRoleAssignment(String id) async =>
+      _dio.delete('/subtask-role-assignments/$id');
+
+  // ─── Timesheet: Task Masters ───
+
+  Future<Response> getTaskMasters(String companyId) async =>
+      _dio.get('/task-masters', queryParameters: {'companyId': companyId});
+
+  Future<Response> createTaskMaster(Map<String, dynamic> data) async =>
+      _dio.post('/task-masters', data: data);
+
+  Future<Response> updateTaskMaster(
+    String id,
+    Map<String, dynamic> data,
+  ) async =>
+      _dio.patch('/task-masters/$id', data: data);
+
+  Future<Response> deleteTaskMaster(String id) async =>
+      _dio.delete('/task-masters/$id');
+
+  // ─── Timesheet: Export ───
+
+  Future<Response> exportTimesheetEntries({
+    required String companyId,
+    String? dateFrom,
+    String? dateTo,
+    String? projectId,
+  }) async =>
+      _dio.get(
+        '/timesheet-entries/export',
+        queryParameters: {
+          'companyId': companyId,
+          if (dateFrom != null) 'dateFrom': dateFrom,
+          if (dateTo != null) 'dateTo': dateTo,
+          if (projectId != null && projectId.isNotEmpty)
+            'projectId': projectId,
+        },
+        options: Options(responseType: ResponseType.bytes),
+      );
 }

@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../main.dart';
@@ -467,9 +468,19 @@ class _CrmDealDetailScreenState extends State<CrmDealDetailScreen>
                   try {
                     DateTime scheduled = DateTime(selectedDate!.year, selectedDate!.month, selectedDate!.day,
                         selectedTime?.hour ?? 9, selectedTime?.minute ?? 0);
-                    await _api.createCrmFollowUp(dealId: widget.dealId, type: selectedType, scheduledAt: scheduled, notes: notesCtrl.text.trim().isNotEmpty ? notesCtrl.text.trim() : null);
+                    await _api.createCrmFollowUp(dealId: widget.dealId, contactId: _deal?['contactId']?.toString(), type: selectedType, scheduledAt: scheduled, notes: notesCtrl.text.trim().isNotEmpty ? notesCtrl.text.trim() : null, assignedToUserId: _currentUser?.id);
                     _msg('Follow-up added'); _load();
-                  } catch (e) { _msg('Failed: $e', error: true); }
+                  } catch (e) {
+                    String errMsg = 'Failed to add follow-up';
+                    if (e is DioException) {
+                      final body = e.response?.data;
+                      if (body is Map) {
+                        final msg = body['message'];
+                        errMsg = (msg is List ? msg.join(', ') : msg?.toString()) ?? errMsg;
+                      }
+                    }
+                    _msg(errMsg, error: true);
+                  }
                 },
                 style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                 child: const Text('Add Follow-up'),

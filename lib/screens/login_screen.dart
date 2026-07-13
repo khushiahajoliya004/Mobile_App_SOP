@@ -72,7 +72,10 @@ class _LoginScreenState extends State<LoginScreen>
       _error = null;
     });
     try {
-      final response = await _api.login(_emailCtrl.text.trim(), _passCtrl.text.trim());
+      final response = await _api.login(
+        _emailCtrl.text.trim(),
+        _passCtrl.text.trim(),
+      );
       final data = response.data['data'] ?? response.data;
       await _auth.saveToken(data['token'] ?? '');
       if (data['user'] != null) {
@@ -83,6 +86,57 @@ class _LoginScreenState extends State<LoginScreen>
         // branchId/branchRole come at top-level of login response, not inside user{}
         userJson['branchId'] ??= data['branchId'];
         userJson['branchRole'] ??= data['branchRole'];
+
+        // If still no branchId, scan branch teams to find this user's branch
+        if ((userJson['branchId'] == null || userJson['branchId'].toString().isEmpty) &&
+            userJson['id'] != null) {
+          try {
+            final userId = userJson['id'].toString();
+            final branchesRes = await _api.getBranches();
+            final branchesRaw = branchesRes.data;
+            final branches = (branchesRaw is List
+                    ? branchesRaw
+                    : (branchesRaw is Map ? (branchesRaw['data'] ?? []) : [])) as List;
+
+            if (branches.isNotEmpty) {
+              final teamResults = await Future.wait(
+                branches.map((b) async {
+                  try {
+                    final bid = b['id']?.toString() ?? '';
+                    if (bid.isEmpty) return null;
+                    final res = await _api.getBranchTeam(bid);
+                    final raw = res.data;
+                    final team = (raw is List ? raw : (raw is Map ? (raw['data'] ?? []) : [])) as List;
+                    return {'branch': b, 'team': team};
+                  } catch (_) {
+                    return null;
+                  }
+                }),
+              );
+
+              for (final result in teamResults) {
+                if (result == null) continue;
+                final branch = result['branch'] as Map;
+                final team = result['team'] as List;
+                for (final member in team) {
+                  if (member is! Map) continue;
+                  final memberUserId = member['userId']?.toString() ??
+                      (member['user'] is Map ? member['user']['id']?.toString() : null) ?? '';
+                  if (memberUserId == userId) {
+                    userJson['branchId'] = branch['id']?.toString();
+                    userJson['branchName'] = branch['name']?.toString();
+                    userJson['branchRole'] = member['branchRole']?.toString();
+                    break;
+                  }
+                }
+                if (userJson['branchId'] != null) break;
+              }
+            }
+          } catch (e) {
+            debugPrint('[Login] branch scan failed: $e');
+          }
+        }
+
         final user = UserModel.fromJson(userJson);
         await _auth.saveUser(user);
         await _auth.saveAllowedModules(user.allowedModules);
@@ -110,10 +164,13 @@ class _LoginScreenState extends State<LoginScreen>
         if (e is DioException) {
           final body = e.response?.data;
           if (body is Map) {
-            serverMsg = body['message']?.toString() ?? body['error']?.toString();
+            serverMsg =
+                body['message']?.toString() ?? body['error']?.toString();
           }
         }
-        if (msg.contains('SocketException') || msg.contains('Connection refused') || msg.contains('Network')) {
+        if (msg.contains('SocketException') ||
+            msg.contains('Connection refused') ||
+            msg.contains('Network')) {
           _error = 'Cannot connect to server. Check your WiFi or server IP.';
         } else if (msg.contains('401') || msg.contains('Invalid credentials')) {
           _error = serverMsg ?? 'Invalid email or password';
@@ -244,11 +301,7 @@ class _LoginScreenState extends State<LoginScreen>
               width: 88,
               height: 88,
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFF6366F1), Color(0xFF818CF8)],
-                ),
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(26),
                 boxShadow: [
                   BoxShadow(
@@ -258,10 +311,12 @@ class _LoginScreenState extends State<LoginScreen>
                   ),
                 ],
               ),
-              child: const Icon(
-                Icons.psychology_rounded,
-                size: 44,
-                color: Colors.white,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(26),
+                child: Image.asset(
+                  'assets/images/app_icon.png',
+                  fit: BoxFit.cover,
+                ),
               ),
             ),
           ),

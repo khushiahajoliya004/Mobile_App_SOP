@@ -105,6 +105,7 @@ class UserModel {
   bool get isSuperAdmin => userType == 'SUPER_ADMIN';
   bool get isCompanyAdmin => userType == 'COMPANY';
   bool get isUser => userType == 'USER';
+  bool get isTechnicalAdmin => userType == 'TECHNICAL_ADMIN';
 }
 
 class RoleModel {

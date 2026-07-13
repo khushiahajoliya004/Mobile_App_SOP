@@ -262,14 +262,20 @@ class _SalesPerformanceScreenState extends State<SalesPerformanceScreen> with Si
         ]),
         const SizedBox(height: 8),
         Row(children: [
-          Expanded(child: _metricCard('Avg Duration', '${(m['avgDuration'] as num?)?.toStringAsFixed(1) ?? '0'} min', AppColors.warning)),
+          Expanded(child: _metricCard('Avg Duration', _formatDuration((m['averageDuration'] as num?)?.toInt() ?? 0), AppColors.warning)),
           const SizedBox(width: 8),
-          Expanded(child: _metricCard('Total Duration', '${(m['totalDuration'] as num?)?.toStringAsFixed(0) ?? '0'} min', AppColors.primary)),
+          Expanded(child: _metricCard('Total Duration', _formatDuration((m['totalDuration'] as num?)?.toInt() ?? 0), AppColors.primary)),
           const SizedBox(width: 8),
           Expanded(child: _metricCard('Uploaded', '${m['uploadedCalls'] ?? 0}', AppColors.success)),
         ]),
       ]),
     );
+  }
+
+  String _formatDuration(int seconds) {
+    final m = seconds ~/ 60;
+    final s = seconds % 60;
+    return '${m}m ${s}s';
   }
 
   Widget _metricCard(String label, String value, Color color) => Container(

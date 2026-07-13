@@ -71,17 +71,23 @@ class _FollowUpTrackerScreenState extends State<FollowUpTrackerScreen> {
     }
   }
 
+  // Start of local day → UTC ISO string (e.g. IST midnight = prev day 18:30 UTC)
   String _dateToIso(DateTime d) =>
-      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      DateTime(d.year, d.month, d.day, 0, 0, 0).toUtc().toIso8601String();
+
+  // End of local day → UTC ISO string
+  String _dateToDayEnd(DateTime d) =>
+      DateTime(d.year, d.month, d.day, 23, 59, 59).toUtc().toIso8601String();
 
   Future<void> _load() async {
     setState(() { _loading = true; _errorMsg = ''; });
     final dateStr = _dateToIso(_selectedDate);
+    final dateEnd = _dateToDayEnd(_selectedDate);
     try {
       final results = await Future.wait([
         _api.getCrmFollowUpsFiltered(
           fromDate: dateStr,
-          toDate: dateStr,
+          toDate: dateEnd,
           status: 'PENDING',
           userId: _selectedUserId,
           branchId: _selectedBranchId,
@@ -89,7 +95,7 @@ class _FollowUpTrackerScreenState extends State<FollowUpTrackerScreen> {
         ),
         _api.getCrmFollowUpsFiltered(
           fromDate: dateStr,
-          toDate: dateStr,
+          toDate: dateEnd,
           status: 'COMPLETED',
           userId: _selectedUserId,
           branchId: _selectedBranchId,
