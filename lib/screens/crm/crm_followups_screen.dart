@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:dio/dio.dart';
 import '../../main.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
@@ -133,10 +134,12 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
                         (l) => DropdownMenuItem(
                           value: l['id']?.toString(),
                           child: Text(
-                            (l['contact'] is Map ? l['contact']['name'] : null)
-                                ?? l['name']?.toString()
-                                ?? l['customerName']?.toString()
-                                ?? 'Unknown',
+                            (l['contact'] is Map
+                                    ? l['contact']['name']
+                                    : null) ??
+                                l['name']?.toString() ??
+                                l['customerName']?.toString() ??
+                                'Unknown',
                           ),
                         ),
                       )
@@ -238,10 +241,16 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
         title: const Text('Cancel Follow-up'),
         content: const Text('Are you sure you want to cancel this follow-up?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('No'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Yes, Cancel', style: TextStyle(color: AppColors.error)),
+            child: const Text(
+              'Yes, Cancel',
+              style: TextStyle(color: AppColors.error),
+            ),
           ),
         ],
       ),
@@ -252,7 +261,9 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
       _load();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed: $e')));
       }
     }
   }
@@ -285,7 +296,10 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheetState) => Padding(
           padding: EdgeInsets.fromLTRB(
-            20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20,
+            20,
+            20,
+            20,
+            MediaQuery.of(ctx).viewInsets.bottom + 20,
           ),
           child: SingleChildScrollView(
             child: Column(
@@ -299,45 +313,68 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
                 const SizedBox(height: 16),
                 const Text(
                   'Select Outcome *',
-                  style: TextStyle(fontSize: 12, color: AppColors.textHint, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textHint,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: outcomes.map((o) => GestureDetector(
-                    onTap: () => setSheetState(() => selectedOutcome = o),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                      decoration: BoxDecoration(
-                        color: selectedOutcome == o ? AppColors.primary : AppColors.scaffoldBg,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: selectedOutcome == o ? AppColors.primary : AppColors.textHint.withValues(alpha: 0.3),
+                  children: outcomes
+                      .map(
+                        (o) => GestureDetector(
+                          onTap: () => setSheetState(() => selectedOutcome = o),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 7,
+                            ),
+                            decoration: BoxDecoration(
+                              color: selectedOutcome == o
+                                  ? AppColors.primary
+                                  : AppColors.scaffoldBg,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: selectedOutcome == o
+                                    ? AppColors.primary
+                                    : AppColors.textHint.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            child: Text(
+                              o.replaceAll('_', ' '),
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: selectedOutcome == o
+                                    ? Colors.white
+                                    : AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                      child: Text(
-                        o.replaceAll('_', ' '),
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: selectedOutcome == o ? Colors.white : AppColors.textSecondary,
-                        ),
-                      ),
-                    ),
-                  )).toList(),
+                      )
+                      .toList(),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: notesCtrl,
                   maxLines: 2,
-                  decoration: const InputDecoration(labelText: 'Notes (optional)'),
+                  decoration: const InputDecoration(
+                    labelText: 'Notes (optional)',
+                  ),
                 ),
                 const SizedBox(height: 16),
                 // Upload call recording
                 const Text(
                   'Upload Call Recording (optional)',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textHint),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textHint,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 GestureDetector(
@@ -351,31 +388,51 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
                     }
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.surfaceLight,
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.textHint.withValues(alpha: 0.2)),
-                    ),
-                    child: Row(children: [
-                      const Icon(Icons.attach_file_rounded, size: 16, color: AppColors.textSecondary),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          selectedFile != null ? selectedFile!.name : 'Choose audio file...',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: selectedFile != null ? AppColors.textPrimary : AppColors.textHint,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                      border: Border.all(
+                        color: AppColors.textHint.withValues(alpha: 0.2),
                       ),
-                      if (selectedFile != null)
-                        GestureDetector(
-                          onTap: () => setSheetState(() => selectedFile = null),
-                          child: const Icon(Icons.close, size: 16, color: AppColors.textHint),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.attach_file_rounded,
+                          size: 16,
+                          color: AppColors.textSecondary,
                         ),
-                    ]),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            selectedFile != null
+                                ? selectedFile!.name
+                                : 'Choose audio file...',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: selectedFile != null
+                                  ? AppColors.textPrimary
+                                  : AppColors.textHint,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (selectedFile != null)
+                          GestureDetector(
+                            onTap: () =>
+                                setSheetState(() => selectedFile = null),
+                            child: const Icon(
+                              Icons.close,
+                              size: 16,
+                              color: AppColors.textHint,
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -385,7 +442,11 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
                     const Expanded(
                       child: Text(
                         'Schedule Next Follow-up',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
                       ),
                     ),
                     Switch(
@@ -401,23 +462,44 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
                     onTap: () async {
                       final d = await showDatePicker(
                         context: ctx,
-                        initialDate: DateTime.now().add(const Duration(days: 1)),
+                        initialDate: DateTime.now().add(
+                          const Duration(days: 1),
+                        ),
                         firstDate: DateTime.now(),
                         lastDate: DateTime.now().add(const Duration(days: 365)),
                       );
                       if (d != null) setSheetState(() => nextDate = d);
                     },
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      decoration: BoxDecoration(color: AppColors.surfaceLight, borderRadius: BorderRadius.circular(10)),
-                      child: Row(children: [
-                        const Icon(Icons.calendar_today_rounded, size: 14, color: AppColors.textHint),
-                        const SizedBox(width: 8),
-                        Text(
-                          nextDate != null ? '${nextDate!.day}/${nextDate!.month}/${nextDate!.year}' : 'Pick next date',
-                          style: TextStyle(fontSize: 13, color: nextDate != null ? AppColors.textPrimary : AppColors.textHint),
-                        ),
-                      ]),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceLight,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.calendar_today_rounded,
+                            size: 14,
+                            color: AppColors.textHint,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            nextDate != null
+                                ? '${nextDate!.day}/${nextDate!.month}/${nextDate!.year}'
+                                : 'Pick next date',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: nextDate != null
+                                  ? AppColors.textPrimary
+                                  : AppColors.textHint,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -429,13 +511,31 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
                       return GestureDetector(
                         onTap: () => setSheetState(() => nextType = t),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: sel ? AppColors.primary : AppColors.scaffoldBg,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: sel ? AppColors.primary : AppColors.textHint.withValues(alpha: 0.3)),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
                           ),
-                          child: Text(t, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: sel ? Colors.white : AppColors.textSecondary)),
+                          decoration: BoxDecoration(
+                            color: sel
+                                ? AppColors.primary
+                                : AppColors.scaffoldBg,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: sel
+                                  ? AppColors.primary
+                                  : AppColors.textHint.withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: Text(
+                            t,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: sel
+                                  ? Colors.white
+                                  : AppColors.textSecondary,
+                            ),
+                          ),
                         ),
                       );
                     }).toList(),
@@ -446,7 +546,9 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
                   onPressed: () async {
                     if (selectedOutcome == null) {
                       ScaffoldMessenger.of(ctx).showSnackBar(
-                        const SnackBar(content: Text('Please select an outcome')),
+                        const SnackBar(
+                          content: Text('Please select an outcome'),
+                        ),
                       );
                       return;
                     }
@@ -454,30 +556,60 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
                       await _api.completeCrmFollowUp(
                         followUp['id'].toString(),
                         outcome: selectedOutcome!,
-                        notes: notesCtrl.text.trim().isEmpty ? null : notesCtrl.text.trim(),
-                        nextFollowUpDate: scheduleNext && nextDate != null ? nextDate!.toIso8601String() : null,
+                        notes: notesCtrl.text.trim().isEmpty
+                            ? null
+                            : notesCtrl.text.trim(),
+                        nextFollowUpDate: scheduleNext && nextDate != null
+                            ? nextDate!.toIso8601String()
+                            : null,
                         nextFollowUpType: scheduleNext ? nextType : null,
                       );
                       if (selectedFile != null) {
                         try {
                           final user = await AuthService().getUser();
                           await _api.createCall(
-                            customerName: followUp['contact']?['name']?.toString() ?? followUp['deal']?['contact']?['name']?.toString() ?? 'Unknown',
+                            customerName:
+                                followUp['contact']?['name']?.toString() ??
+                                followUp['deal']?['contact']?['name']
+                                    ?.toString() ??
+                                'Unknown',
                             companyId: user?.companyId ?? '',
                             userId: user?.id ?? '',
                             audioFilePath: selectedFile!.path,
                             audioFileName: selectedFile!.name,
                             followUpId: followUp['id'].toString(),
                           );
-                        } catch (_) {}
+                        } catch (uploadErr) {
+                          if (ctx.mounted) {
+                            String uploadErrMsg = 'Audio upload failed';
+                            if (uploadErr is DioException) {
+                              final data = uploadErr.response?.data;
+                              if (data is Map && data['message'] is String) {
+                                uploadErrMsg = data['message'];
+                              } else if (uploadErr.type ==
+                                      DioExceptionType.connectionTimeout ||
+                                  uploadErr.type ==
+                                      DioExceptionType.sendTimeout) {
+                                uploadErrMsg =
+                                    'Upload timed out. Check your internet.';
+                              }
+                            }
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              SnackBar(
+                                content: Text(uploadErrMsg),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        }
                       }
                       if (ctx.mounted) Navigator.pop(ctx);
                       _load();
                     } catch (e) {
                       if (ctx.mounted) {
-                        ScaffoldMessenger.of(ctx).showSnackBar(
-                          SnackBar(content: Text('Failed: $e')),
-                        );
+                        ScaffoldMessenger.of(
+                          ctx,
+                        ).showSnackBar(SnackBar(content: Text('Failed: $e')));
                       }
                     }
                   },
@@ -506,13 +638,20 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
       ),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSS) => Padding(
-          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+          padding: EdgeInsets.fromLTRB(
+            20,
+            20,
+            20,
+            MediaQuery.of(ctx).viewInsets.bottom + 20,
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text('Reschedule Follow-Up',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+              const Text(
+                'Reschedule Follow-Up',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+              ),
               const SizedBox(height: 16),
               ListTile(
                 contentPadding: EdgeInsets.zero,
@@ -521,7 +660,10 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
                   '${selected.day}/${selected.month}/${selected.year} ${selected.hour}:${selected.minute.toString().padLeft(2, '0')}',
                   style: const TextStyle(color: AppColors.textPrimary),
                 ),
-                trailing: const Icon(Icons.calendar_today, color: AppColors.primary),
+                trailing: const Icon(
+                  Icons.calendar_today,
+                  color: AppColors.primary,
+                ),
                 onTap: () async {
                   final date = await showDatePicker(
                     context: ctx,
@@ -536,7 +678,13 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
                     );
                     if (time != null) {
                       setSS(() {
-                        selected = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+                        selected = DateTime(
+                          date.year,
+                          date.month,
+                          date.day,
+                          time.hour,
+                          time.minute,
+                        );
                       });
                     }
                   }
@@ -554,7 +702,9 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
                     _load();
                   } catch (e) {
                     if (ctx.mounted) {
-                      ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text('Failed: $e')));
+                      ScaffoldMessenger.of(
+                        ctx,
+                      ).showSnackBar(SnackBar(content: Text('Failed: $e')));
                     }
                   }
                 },
@@ -593,7 +743,8 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
                         child: ListView.builder(
                           padding: const EdgeInsets.all(16),
                           itemCount: _followUps.length,
-                          itemBuilder: (_, i) => _buildFollowUpCard(_followUps[i]),
+                          itemBuilder: (_, i) =>
+                              _buildFollowUpCard(_followUps[i]),
                         ),
                       ),
               ),
@@ -635,12 +786,19 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
                     },
                     child: Container(
                       margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
-                        color: selected ? AppColors.primary : AppColors.scaffoldBg,
+                        color: selected
+                            ? AppColors.primary
+                            : AppColors.scaffoldBg,
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: selected ? AppColors.primary : AppColors.textHint.withValues(alpha: 0.3),
+                          color: selected
+                              ? AppColors.primary
+                              : AppColors.textHint.withValues(alpha: 0.3),
                         ),
                       ),
                       child: Text(
@@ -648,7 +806,9 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: selected ? Colors.white : AppColors.textSecondary,
+                          color: selected
+                              ? Colors.white
+                              : AppColors.textSecondary,
                         ),
                       ),
                     ),
@@ -666,24 +826,35 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: _filterOverdue ? AppColors.error.withValues(alpha: 0.1) : AppColors.scaffoldBg,
+                color: _filterOverdue
+                    ? AppColors.error.withValues(alpha: 0.1)
+                    : AppColors.scaffoldBg,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: _filterOverdue ? AppColors.error : AppColors.textHint.withValues(alpha: 0.3),
+                  color: _filterOverdue
+                      ? AppColors.error
+                      : AppColors.textHint.withValues(alpha: 0.3),
                 ),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.warning_amber_rounded, size: 13,
-                      color: _filterOverdue ? AppColors.error : AppColors.textHint),
+                  Icon(
+                    Icons.warning_amber_rounded,
+                    size: 13,
+                    color: _filterOverdue
+                        ? AppColors.error
+                        : AppColors.textHint,
+                  ),
                   const SizedBox(width: 4),
                   Text(
                     'Overdue',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: _filterOverdue ? AppColors.error : AppColors.textSecondary,
+                      color: _filterOverdue
+                          ? AppColors.error
+                          : AppColors.textSecondary,
                     ),
                   ),
                 ],
@@ -699,12 +870,15 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
     final isOverdue = _isOverdue(followUp);
     final status = (followUp['status'] ?? 'PENDING').toString().toUpperCase();
     final deal = followUp['deal'] is Map ? followUp['deal'] as Map : null;
-    final dealContact = deal?['contact'] is Map ? deal!['contact'] as Map : null;
-    final leadName = dealContact?['name']?.toString()
-        ?? deal?['name']?.toString()
-        ?? (followUp['lead'] is Map ? followUp['lead']['customerName'] : null)
-        ?? followUp['leadName']?.toString()
-        ?? 'Unknown';
+    final dealContact = deal?['contact'] is Map
+        ? deal!['contact'] as Map
+        : null;
+    final leadName =
+        dealContact?['name']?.toString() ??
+        deal?['name']?.toString() ??
+        (followUp['lead'] is Map ? followUp['lead']['customerName'] : null) ??
+        followUp['leadName']?.toString() ??
+        'Unknown';
     final scheduledAt = followUp['scheduledAt'] != null
         ? DateTime.tryParse(followUp['scheduledAt'].toString())
         : null;
@@ -813,7 +987,10 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
                   onTap: () => _completeFollowUp(followUp),
                   borderRadius: BorderRadius.circular(8),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.success.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(8),
@@ -821,10 +998,20 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.check_circle_outline, size: 14, color: AppColors.success),
+                        Icon(
+                          Icons.check_circle_outline,
+                          size: 14,
+                          color: AppColors.success,
+                        ),
                         SizedBox(width: 4),
-                        Text('Complete',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.success)),
+                        Text(
+                          'Complete',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.success,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -833,7 +1020,10 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
                   onTap: () => _rescheduleFollowUp(followUp),
                   borderRadius: BorderRadius.circular(8),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.primary.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(8),
@@ -841,10 +1031,20 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.schedule, size: 14, color: AppColors.primary),
+                        Icon(
+                          Icons.schedule,
+                          size: 14,
+                          color: AppColors.primary,
+                        ),
                         SizedBox(width: 4),
-                        Text('Reschedule',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primary)),
+                        Text(
+                          'Reschedule',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.primary,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -853,7 +1053,10 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
                   onTap: () => _cancelFollowUp(followUp),
                   borderRadius: BorderRadius.circular(8),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.error.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(8),
@@ -861,10 +1064,20 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.cancel_outlined, size: 14, color: AppColors.error),
+                        Icon(
+                          Icons.cancel_outlined,
+                          size: 14,
+                          color: AppColors.error,
+                        ),
                         SizedBox(width: 4),
-                        Text('Cancel',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.error)),
+                        Text(
+                          'Cancel',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.error,
+                          ),
+                        ),
                       ],
                     ),
                   ),
