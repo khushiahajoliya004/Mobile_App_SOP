@@ -219,6 +219,13 @@ class _CrmQuotationsScreenState extends State<CrmQuotationsScreen> {
                       };
                       await _api.createQuotation(data);
                       if (ctx.mounted) Navigator.pop(ctx);
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Quotation created successfully'),
+                          ),
+                        );
+                      }
                       _load();
                     } catch (e) {
                       if (ctx.mounted) {
@@ -241,6 +248,11 @@ class _CrmQuotationsScreenState extends State<CrmQuotationsScreen> {
   void _sendQuotation(Map<String, dynamic> quotation) async {
     try {
       await _api.updateQuotationStatus(quotation['id'], 'SENT');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Quotation sent successfully')),
+        );
+      }
       _load();
     } catch (e) {
       if (mounted) {
