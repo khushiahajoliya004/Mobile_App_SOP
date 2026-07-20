@@ -4,10 +4,12 @@ import 'dart:math' as math;
 import '../../main.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/notification_service.dart';
 import '../../models/user_model.dart';
 import '../call_upload_screen.dart';
 import '../ai_insights/ai_insights_screen.dart';
 import '../crm/crm_screen.dart';
+import '../notifications/notification_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -50,6 +52,8 @@ class _DashboardScreenState extends State<DashboardScreen>
   Future<void> _loadAll() async {
     setState(() => _loading = true);
     _user = await _auth.getUser();
+    // Refresh notification badge from server
+    NotificationService().refreshBadgeCount();
     try {
       final res = await _api.getCompanyDashboard(period: '30d');
       final raw = res.data;
@@ -306,6 +310,55 @@ class _DashboardScreenState extends State<DashboardScreen>
                   ],
                 ),
               ),
+              ValueListenableBuilder<int>(
+                valueListenable: NotificationService.unreadCount,
+                builder: (_, count, __) => GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const NotificationScreen()),
+                  ),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.notifications_rounded,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                      ),
+                      if (count > 0)
+                        Positioned(
+                          top: -4,
+                          right: -4,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: AppColors.warning,
+                              shape: BoxShape.circle,
+                            ),
+                            constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                            child: Text(
+                              count > 99 ? '99+' : '$count',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
               GestureDetector(
                 onTap: _loadAll,
                 child: Container(

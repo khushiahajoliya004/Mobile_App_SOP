@@ -7,11 +7,11 @@ import '../utils/navigator_key.dart';
 class ApiService {
   // Backend runs on port 3000, no /api prefix
   // For Android emulator use 10.0.2.2, for real device use your machine IP
-  static const String baseUrl = 'https://apimysterymentorqa.mysterymentor.in';
+  // static const String baseUrl = 'https://apimysterymentorqa.mysterymentor.in';
   // static const String baseUrl = 'http://192.168.1.8:3001';
   // static const String baseUrl = 'http://192.168.1.13:3001';
   // static const String baseUrl = 'https://api.mysterymentor.in';
-  // static const String baseUrl = 'http://192.168.1.24:3000'; // local
+  static const String baseUrl = 'http://192.168.1.24:3000'; // local
 
   late final Dio _dio;
   final AuthService _auth = AuthService();
@@ -1840,6 +1840,9 @@ class ApiService {
 
   Future<Response> markNotificationRead(String id) async =>
       _dio.post('/crm/notifications/$id/read');
+
+  Future<Response> markAllCrmNotificationsRead() async =>
+      _dio.post('/crm/notifications/read-all');
 
   Future<Response> startTask(String taskId) async =>
       _dio.post('/crm/tasks/$taskId/start');
