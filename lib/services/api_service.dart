@@ -7,11 +7,12 @@ import '../utils/navigator_key.dart';
 class ApiService {
   // Backend runs on port 3000, no /api prefix
   // For Android emulator use 10.0.2.2, for real device use your machine IP
-  // static const String baseUrl = 'https://apimysterymentorqa.mysterymentor.in';
+  static const String baseUrl = 'https://apimysterymentorqa.mysterymentor.in'; // QA
+  // static const String baseUrl = 'https://app.one.mysterymentor.in'; // production
   // static const String baseUrl = 'http://192.168.1.8:3001';
   // static const String baseUrl = 'http://192.168.1.13:3001';
   // static const String baseUrl = 'https://api.mysterymentor.in';
-  static const String baseUrl = 'http://192.168.1.24:3000'; // local
+  // static const String baseUrl = 'http://192.168.1.24:3000'; // local
 
   late final Dio _dio;
   final AuthService _auth = AuthService();
@@ -2743,4 +2744,69 @@ class ApiService {
         },
         options: Options(responseType: ResponseType.bytes),
       );
+
+  // ─── AI Sales Call ───────────────────────────────────────────────────────
+
+  // ─── Call Question Flows ─────────────────────────────────────────────────
+
+  Future<Response> getCallQuestionFlows() async =>
+      _dio.get('/call-question-flows');
+
+  Future<Response> getCallQuestionFlowTree(String categoryId) async =>
+      _dio.get('/call-question-flows/category/$categoryId');
+
+  Future<Response> saveCallQuestionFlowTree(
+    String categoryId,
+    Map<String, dynamic>? root,
+  ) async =>
+      _dio.put('/call-question-flows/category/$categoryId', data: {'root': root});
+
+  Future<Response> deleteCallQuestionFlow(String categoryId) async =>
+      _dio.delete('/call-question-flows/category/$categoryId');
+
+  Future<Response> aiGenerateCallQuestionFlow(
+    String categoryId, {
+    required String categoryName,
+    required String summary,
+  }) async =>
+      _dio.post(
+        '/call-question-flows/category/$categoryId/ai-generate',
+        data: {'categoryName': categoryName, 'summary': summary},
+      );
+
+  // ─── AI Call Numbers ─────────────────────────────────────────────────────
+
+  Future<Response> getAiCallNumbers() async => _dio.get('/ai-call-numbers');
+
+  Future<Response> createAiCallNumber(Map<String, dynamic> data) async =>
+      _dio.post('/ai-call-numbers', data: data);
+
+  Future<Response> updateAiCallNumber(String id, Map<String, dynamic> data) async =>
+      _dio.patch('/ai-call-numbers/$id', data: data);
+
+  Future<Response> deleteAiCallNumber(String id) async =>
+      _dio.delete('/ai-call-numbers/$id');
+
+  Future<Response> initiateAiSalesCall({
+    String? leadId,
+    String? contactId,
+    String? dealId,
+    String? categoryId,
+  }) async =>
+      _dio.post('/calls/ai-sales/initiate', data: {
+        if (leadId != null) 'leadId': leadId,
+        if (contactId != null) 'contactId': contactId,
+        if (dealId != null) 'dealId': dealId,
+        if (categoryId != null) 'categoryId': categoryId,
+      });
+
+  Future<Response> getAiSalesCallHistory({
+    int page = 1,
+    int limit = 20,
+  }) async =>
+      _dio.get('/calls', queryParameters: {
+        'callSource': 'AI_VOICE_REST',
+        'page': page,
+        'limit': limit,
+      });
 }

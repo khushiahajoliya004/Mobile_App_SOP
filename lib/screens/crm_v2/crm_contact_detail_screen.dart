@@ -4,6 +4,7 @@ import '../../main.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import 'crm_deal_detail_screen.dart';
+import '../ai_sales_call/ai_call_bottom_sheet.dart';
 
 class CrmContactDetailScreen extends StatefulWidget {
   final String contactId;
@@ -386,6 +387,15 @@ class _CrmContactDetailScreenState extends State<CrmContactDetailScreen> {
                 _headerBtn(Icons.add_rounded, AppColors.primarySurface, AppColors.primary, _showLogActivity, tooltip: 'Log Activity'),
                 const SizedBox(width: 6),
                 _headerBtn(Icons.calendar_today_rounded, AppColors.surfaceLight, AppColors.textSecondary, _showScheduleFollowUp, tooltip: 'Follow-up'),
+                const SizedBox(width: 6),
+                _headerBtn(Icons.smart_toy_rounded, const Color(0xFFEDE9FE), const Color(0xFF6366F1), () {
+                  showAiCallBottomSheet(
+                    context,
+                    targetName: _contact?['name'] ?? widget.contactName,
+                    contactId: widget.contactId,
+                    onSuccess: _load,
+                  );
+                }, tooltip: 'AI Call'),
                 const SizedBox(width: 6),
                 _headerBtn(Icons.refresh, AppColors.surfaceLight, AppColors.textSecondary, _load, tooltip: 'Refresh'),
               ]),

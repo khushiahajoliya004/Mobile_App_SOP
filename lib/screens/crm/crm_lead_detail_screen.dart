@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../main.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
+import '../ai_sales_call/ai_call_bottom_sheet.dart';
 import '../../models/user_model.dart';
 
 class CrmLeadDetailScreen extends StatefulWidget {
@@ -1005,6 +1006,17 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen>
             child: Text(status, style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.w700)),
           ),
           const SizedBox(width: 6),
+          // AI Call
+          _headerBtn('AI Call', const Color(0xFF6366F1), () {
+            showAiCallBottomSheet(
+              context,
+              targetName: widget.leadName,
+              leadId: widget.isDeal ? null : widget.leadId,
+              dealId: widget.isDeal ? widget.leadId : null,
+              onSuccess: _loadDetails,
+            );
+          }),
+          const SizedBox(width: 4),
           // Mark Lost / Reopen
           if (status.toUpperCase() != 'LOST')
             _headerBtn('Lost', AppColors.error, _markLost)
