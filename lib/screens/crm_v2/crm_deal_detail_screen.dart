@@ -7,6 +7,7 @@ import '../../services/auth_service.dart';
 import '../../models/user_model.dart';
 import '../call_recorder_screen.dart';
 import '../call_upload_screen.dart';
+import '../ai_sales_call/ai_call_bottom_sheet.dart';
 
 class CrmDealDetailScreen extends StatefulWidget {
   final String dealId;
@@ -755,6 +756,16 @@ class _CrmDealDetailScreenState extends State<CrmDealDetailScreen>
                 _actionBtn(Icons.edit_note_rounded, 'Log Activity', AppColors.warning, _showLogActivity),
                 const SizedBox(width: 6),
                 _actionBtn(Icons.calendar_month_rounded, 'Follow-up', const Color(0xFF8B5CF6), _showAddFollowUp),
+                const SizedBox(width: 6),
+                _actionBtn(Icons.smart_toy_rounded, 'AI Call', const Color(0xFF6366F1), () {
+                  showAiCallBottomSheet(
+                    context,
+                    targetName: widget.dealName,
+                    dealId: widget.dealId,
+                    contactId: _deal?['contactId'] as String?,
+                    onSuccess: _load,
+                  );
+                }),
               ]),
               // Action buttons row 2 (OPEN deals): Move Stage | Won | Lost | Delete
               if (status == 'OPEN') ...[

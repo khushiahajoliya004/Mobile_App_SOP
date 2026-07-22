@@ -40,6 +40,8 @@ import 'timesheet/timesheet_dashboard_screen.dart';
 import 'timesheet/my_timesheet_screen.dart';
 import 'timesheet/timesheet_projects_screen.dart';
 import 'timesheet/timesheet_reports_screen.dart';
+import 'ai_sales_call/ai_call_config_screen.dart';
+import 'ai_sales_call/call_flow_list_screen.dart';
 
 class MenuScreen extends StatelessWidget {
   final UserModel? user;
@@ -424,6 +426,22 @@ class MenuScreen extends StatelessWidget {
         const Color(0xFF128C7E),
         'WA audit & auto-send',
         const WaSettingsScreen(),
+      ),
+      _M(
+        'Call Config',
+        Icons.phone_in_talk_rounded,
+        const Color(0xFF6366F1),
+        const Color(0xFF818CF8),
+        'AI call numbers & scripts',
+        const AiCallConfigScreen(),
+      ),
+      _M(
+        'Question Flows',
+        Icons.account_tree_rounded,
+        const Color(0xFF7C3AED),
+        const Color(0xFFA78BFA),
+        'Yes/No call question trees',
+        const CallFlowListScreen(),
       ),
       if (_can('CATEGORY'))
         _M(
