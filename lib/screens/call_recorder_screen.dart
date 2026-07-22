@@ -354,12 +354,14 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
     }
     setState(() => _isSaving = true);
     int ok = 0, fail = 0;
+    String? lastError;
     for (int i = 0; i < list.length; i++) {
       try {
         final e = jsonDecode(list[i]) as Map<String, dynamic>;
         final fp = e['path'] as String;
         if (!await File(fp).exists()) {
           fail++;
+          lastError = 'File not found';
           continue;
         }
         setState(() => _statusMessage = 'Uploading ${i + 1}/${list.length}...');
@@ -374,8 +376,22 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
           audioFileName: fp.split('/').last,
         );
         ok++;
-      } catch (_) {
+      } catch (uploadErr) {
         fail++;
+        if (uploadErr is DioException) {
+          final data = uploadErr.response?.data;
+          if (data is Map && data['message'] is String) {
+            lastError = data['message'];
+          } else if (uploadErr.type == DioExceptionType.connectionTimeout ||
+              uploadErr.type == DioExceptionType.sendTimeout) {
+            lastError = 'Upload timed out';
+          } else {
+            lastError =
+                'Server error (${uploadErr.response?.statusCode ?? 'no response'})';
+          }
+        } else {
+          lastError = uploadErr.toString();
+        }
       }
     }
     await prefs.setStringList('local_recordings', []);
@@ -385,7 +401,10 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
         _isSaving = false;
         _statusMessage = null;
       });
-      _showMsg('Uploaded $ok, failed $fail', success: ok > 0);
+      final msg = fail > 0 && lastError != null
+          ? 'Uploaded $ok, failed $fail: $lastError'
+          : 'Uploaded $ok, failed $fail';
+      _showMsg(msg, success: ok > 0 && fail == 0);
     }
   }
 
