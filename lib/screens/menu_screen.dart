@@ -476,7 +476,7 @@ class MenuScreen extends StatelessWidget {
         const Color(0xFF06B6D4),
         const Color(0xFF22D3EE),
         'Local recordings',
-        const AudioLibraryScreen(showAppBar: true),
+        const AudioLibraryScreen(),
       ),
     ]),
   ].where((s) => s.items.isNotEmpty).toList();
@@ -633,7 +633,7 @@ class MenuScreen extends StatelessWidget {
         const Color(0xFF06B6D4),
         const Color(0xFF22D3EE),
         'Local recordings',
-        const AudioLibraryScreen(showAppBar: true),
+        const AudioLibraryScreen(),
       ),
     ]),
   ].where((s) => s.items.isNotEmpty).toList();
@@ -769,7 +769,7 @@ class MenuScreen extends StatelessWidget {
         const Color(0xFF06B6D4),
         const Color(0xFF22D3EE),
         'Local recordings',
-        const AudioLibraryScreen(showAppBar: true),
+        const AudioLibraryScreen(),
       ),
     ]),
     if (user != null)

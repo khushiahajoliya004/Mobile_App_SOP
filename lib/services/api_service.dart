@@ -189,6 +189,7 @@ class ApiService {
     String? dealId,
     String? phoneNumber,
     String? followUpId,
+    String? dealId,
   }) async {
     final map = <String, dynamic>{
       'customerName': customerName,
@@ -203,6 +204,7 @@ class ApiService {
       if (phoneNumber != null && phoneNumber.isNotEmpty)
         'phoneNumber': phoneNumber,
       if (followUpId != null && followUpId.isNotEmpty) 'followUpId': followUpId,
+      if (dealId != null && dealId.isNotEmpty) 'dealId': dealId,
     };
 
     if (audioFilePath != null) {
@@ -239,6 +241,11 @@ class ApiService {
   /// GET /calls/:id
   Future<Response> getCall(String id) async {
     return _dio.get('/calls/$id');
+  }
+
+  /// GET /calls?dealId=:dealId — get calls linked to a specific deal
+  Future<Response> getCallsByDeal(String dealId) async {
+    return _dio.get('/calls', queryParameters: {'dealId': dealId});
   }
 
   /// PATCH /calls/:id
@@ -788,6 +795,7 @@ class ApiService {
     String? status,
     String? startDate,
     String? endDate,
+    String? userId,
   }) async {
     final params = <String, dynamic>{'page': page, 'limit': limit};
     if (search != null && search.isNotEmpty) params['search'] = search;
@@ -797,6 +805,7 @@ class ApiService {
     if (status != null && status.isNotEmpty) params['status'] = status;
     if (startDate != null) params['startDate'] = startDate;
     if (endDate != null) params['endDate'] = endDate;
+    if (userId != null && userId.isNotEmpty) params['userId'] = userId;
     return _dio.get('/ai-insights', queryParameters: params);
   }
 
@@ -2514,11 +2523,16 @@ class ApiService {
     bool? isWon,
     bool? isLost,
   }) async {
+    // Determine type from isWon/isLost flags if provided
+    String resolvedType = type;
+    if (isWon == true) resolvedType = 'WON';
+    if (isLost == true) resolvedType = 'LOST';
+
     return _dio.post(
       '/crm/pipelines/$pipelineId/stages',
       data: {
         'name': name,
-        'type': type,
+        'type': resolvedType,
         if (slaDays != null) 'slaDays': slaDays,
         if (slaMaxDays != null) 'slaMaxDays': slaMaxDays,
         if (winProbability != null) 'winProbability': winProbability,
@@ -2587,17 +2601,23 @@ class ApiService {
   Future<Response> updateTimesheetProject(
     String projectId,
     Map<String, dynamic> data,
-  ) async =>
-      _dio.patch('/projects/$projectId', data: data);
+  ) async => _dio.patch('/projects/$projectId', data: data);
 
-  Future<Response> getTimesheetCompanyRoles(String companyId) async =>
-      _dio.get('/timesheet/company-roles', queryParameters: {'companyId': companyId});
+  Future<Response> getTimesheetCompanyRoles(String companyId) async => _dio.get(
+    '/timesheet/company-roles',
+    queryParameters: {'companyId': companyId},
+  );
 
-  Future<Response> getTimesheetCompanyUsers(String companyId, {String? roleName}) async =>
-      _dio.get('/timesheet/company-users', queryParameters: {
-        'companyId': companyId,
-        if (roleName != null) 'roleName': roleName,
-      });
+  Future<Response> getTimesheetCompanyUsers(
+    String companyId, {
+    String? roleName,
+  }) async => _dio.get(
+    '/timesheet/company-users',
+    queryParameters: {
+      'companyId': companyId,
+      if (roleName != null) 'roleName': roleName,
+    },
+  );
 
   Future<Response> getProjectTasks(String projectId) async =>
       _dio.get('/projects/$projectId/tasks');
@@ -2608,22 +2628,19 @@ class ApiService {
   Future<Response> createProjectTechRole(
     String projectId,
     Map<String, dynamic> data,
-  ) async =>
-      _dio.post('/projects/$projectId/tech-roles', data: data);
+  ) async => _dio.post('/projects/$projectId/tech-roles', data: data);
 
   Future<Response> assignUserToTechRole(
     String projectId,
     String roleId,
     String userId,
-  ) async =>
-      _dio.post('/tech-roles/$roleId/users', data: {'userId': userId});
+  ) async => _dio.post('/tech-roles/$roleId/users', data: {'userId': userId});
 
   Future<Response> removeUserFromTechRole(
     String projectId,
     String roleId,
     String userId,
-  ) async =>
-      _dio.delete('/tech-roles/$roleId/users/$userId');
+  ) async => _dio.delete('/tech-roles/$roleId/users/$userId');
 
   // ─── Timesheet: Entries ───
 
@@ -2635,13 +2652,15 @@ class ApiService {
     String? dateFrom,
     String? dateTo,
     String? projectId,
-  }) async =>
-      _dio.get('/timesheet-entries', queryParameters: {
-        'companyId': companyId,
-        if (dateFrom != null) 'dateFrom': dateFrom,
-        if (dateTo != null) 'dateTo': dateTo,
-        if (projectId != null && projectId.isNotEmpty) 'projectId': projectId,
-      });
+  }) async => _dio.get(
+    '/timesheet-entries',
+    queryParameters: {
+      'companyId': companyId,
+      if (dateFrom != null) 'dateFrom': dateFrom,
+      if (dateTo != null) 'dateTo': dateTo,
+      if (projectId != null && projectId.isNotEmpty) 'projectId': projectId,
+    },
+  );
 
   Future<Response> createTimesheetEntry(Map<String, dynamic> data) async =>
       _dio.post('/timesheet-entries', data: data);
@@ -2649,8 +2668,7 @@ class ApiService {
   Future<Response> updateTimesheetEntry(
     String entryId,
     Map<String, dynamic> data,
-  ) async =>
-      _dio.patch('/timesheet-entries/$entryId', data: data);
+  ) async => _dio.patch('/timesheet-entries/$entryId', data: data);
 
   Future<Response> deleteTimesheetEntry(String entryId) async =>
       _dio.delete('/timesheet-entries/$entryId');
@@ -2658,20 +2676,18 @@ class ApiService {
   Future<Response> getAvailableSubtasks(
     String projectId,
     String userId,
-  ) async =>
-      _dio.get(
-        '/timesheet-entries/available-subtasks',
-        queryParameters: {'userId': userId, 'projectId': projectId},
-      );
+  ) async => _dio.get(
+    '/timesheet-entries/available-subtasks',
+    queryParameters: {'userId': userId, 'projectId': projectId},
+  );
 
   Future<Response> getTimesheetHourRange(
     String userId,
     String subtaskId,
-  ) async =>
-      _dio.get('/timesheet-entries/hour-range', queryParameters: {
-        'userId': userId,
-        'subtaskId': subtaskId,
-      });
+  ) async => _dio.get(
+    '/timesheet-entries/hour-range',
+    queryParameters: {'userId': userId, 'subtaskId': subtaskId},
+  );
 
   // ─── Timesheet: Dashboard ───
 
@@ -2679,12 +2695,14 @@ class ApiService {
     String companyId, {
     String? dateFrom,
     String? dateTo,
-  }) async =>
-      _dio.get('/timesheet-dashboard/stats', queryParameters: {
-        'companyId': companyId,
-        if (dateFrom != null) 'dateFrom': dateFrom,
-        if (dateTo != null) 'dateTo': dateTo,
-      });
+  }) async => _dio.get(
+    '/timesheet-dashboard/stats',
+    queryParameters: {
+      'companyId': companyId,
+      if (dateFrom != null) 'dateFrom': dateFrom,
+      if (dateTo != null) 'dateTo': dateTo,
+    },
+  );
 
   Future<Response> getMyTimesheetStats(String userId) async =>
       _dio.get('/timesheet-dashboard/my-stats/$userId');
@@ -2696,14 +2714,12 @@ class ApiService {
 
   Future<Response> createSubtaskRoleAssignment(
     Map<String, dynamic> data,
-  ) async =>
-      _dio.post('/subtask-role-assignments', data: data);
+  ) async => _dio.post('/subtask-role-assignments', data: data);
 
   Future<Response> updateSubtaskRoleAssignment(
     String id,
     Map<String, dynamic> data,
-  ) async =>
-      _dio.patch('/subtask-role-assignments/$id', data: data);
+  ) async => _dio.patch('/subtask-role-assignments/$id', data: data);
 
   Future<Response> deleteSubtaskRoleAssignment(String id) async =>
       _dio.delete('/subtask-role-assignments/$id');
@@ -2719,8 +2735,7 @@ class ApiService {
   Future<Response> updateTaskMaster(
     String id,
     Map<String, dynamic> data,
-  ) async =>
-      _dio.patch('/task-masters/$id', data: data);
+  ) async => _dio.patch('/task-masters/$id', data: data);
 
   Future<Response> deleteTaskMaster(String id) async =>
       _dio.delete('/task-masters/$id');
