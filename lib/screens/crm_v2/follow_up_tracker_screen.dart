@@ -634,6 +634,16 @@ class _FollowUpTrackerScreenState extends State<FollowUpTrackerScreen> {
                                 backgroundColor: Colors.red,
                               ),
                             );
+                            // Report error to backend
+                            try {
+                              await _api.reportUploadError(
+                                errorCode: 'UPLOAD_FAILED',
+                                errorMessage: uploadErrMsg,
+                                customerName: _contactOrDeal(f),
+                                audioFileName: selectedFile?.name,
+                                uploadSource: 'FOLLOW_UP',
+                              );
+                            } catch (_) {}
                           }
                         }
                       }

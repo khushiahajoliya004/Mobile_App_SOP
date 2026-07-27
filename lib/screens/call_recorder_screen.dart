@@ -332,6 +332,18 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
             }
           }
         }
+        // Report error to backend for tracking
+        try {
+          await _api.reportUploadError(
+            errorCode: e is DioException && e.response?.statusCode == null
+                ? 'NETWORK_ERROR'
+                : 'UPLOAD_FAILED',
+            errorMessage: err,
+            customerName: widget.leadCustomerName,
+            audioFileName: path.split('/').last,
+            uploadSource: 'RECORD',
+          );
+        } catch (_) {}
         setState(() {
           _isSaving = false;
           _statusMessage = err;
@@ -356,9 +368,11 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
     int ok = 0, fail = 0;
     String? lastError;
     for (int i = 0; i < list.length; i++) {
+      String currentFile = '';
       try {
         final e = jsonDecode(list[i]) as Map<String, dynamic>;
         final fp = e['path'] as String;
+        currentFile = fp;
         if (!await File(fp).exists()) {
           fail++;
           lastError = 'File not found';
@@ -392,6 +406,15 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
         } else {
           lastError = uploadErr.toString();
         }
+        // Report to backend
+        try {
+          await _api.reportUploadError(
+            errorCode: 'UPLOAD_FAILED',
+            errorMessage: lastError ?? 'Unknown error',
+            audioFileName: currentFile.split('/').last,
+            uploadSource: 'LOCAL_BATCH',
+          );
+        } catch (_) {}
       }
     }
     await prefs.setStringList('local_recordings', []);

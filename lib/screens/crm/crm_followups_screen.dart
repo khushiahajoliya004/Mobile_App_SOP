@@ -600,6 +600,18 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
                                 backgroundColor: Colors.red,
                               ),
                             );
+                            // Report error to backend
+                            try {
+                              await _api.reportUploadError(
+                                errorCode: 'UPLOAD_FAILED',
+                                errorMessage: uploadErrMsg,
+                                customerName:
+                                    followUp['contact']?['name']?.toString() ??
+                                    'Unknown',
+                                audioFileName: selectedFile?.name,
+                                uploadSource: 'FOLLOW_UP',
+                              );
+                            } catch (_) {}
                           }
                         }
                       }

@@ -520,6 +520,7 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
     } catch (e) {
       if (mounted) {
         String errMsg = 'Upload failed. Try again.';
+        String errorCode = 'UNKNOWN';
         if (e is DioException) {
           var data = e.response?.data;
           final statusCode = e.response?.statusCode;
@@ -548,11 +549,14 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
               e.type == DioExceptionType.sendTimeout ||
               e.type == DioExceptionType.receiveTimeout) {
             errMsg = 'Connection timed out. Check your internet and try again.';
+            errorCode = 'TIMEOUT';
           } else if (e.type == DioExceptionType.connectionError) {
             errMsg =
                 'Cannot connect to server. Check your internet connection.';
+            errorCode = 'NETWORK_ERROR';
           } else if (e.type == DioExceptionType.badCertificate) {
             errMsg = 'Server certificate expired. Contact support.';
+            errorCode = 'CERTIFICATE_ERROR';
           } else if (statusCode != null) {
             switch (statusCode) {
               case 400:
@@ -573,6 +577,20 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
               default:
                 errMsg = 'Upload failed (Error $statusCode). Try again.';
             }
+          }
+
+          // Report client-side errors (network/timeout) to backend when possible
+          // Server-side errors are already logged by the backend automatically
+          if (statusCode == null && errorCode != 'UNKNOWN') {
+            try {
+              await _api.reportUploadError(
+                errorCode: errorCode,
+                errorMessage: errMsg,
+                customerName: _customerNameController.text.trim(),
+                audioFileName: _audioFileName,
+                uploadSource: 'MANUAL',
+              );
+            } catch (_) {}
           }
         }
         debugPrint(

@@ -7,12 +7,12 @@ import '../utils/navigator_key.dart';
 class ApiService {
   // Backend runs on port 3000, no /api prefix
   // For Android emulator use 10.0.2.2, for real device use your machine IP
-  static const String baseUrl = 'https://apimysterymentorqa.mysterymentor.in'; // QA
-  // static const String baseUrl = 'https://app.one.mysterymentor.in'; // production
+  static const String baseUrl = 'https://apimysterymentorqa.mysterymentor.in';
+  // static const String baseUrl = 'https://app.one.mysterymentor.in';
   // static const String baseUrl = 'http://192.168.1.8:3001';
   // static const String baseUrl = 'http://192.168.1.13:3001';
   // static const String baseUrl = 'https://api.mysterymentor.in';
-  // static const String baseUrl = 'http://192.168.1.24:3000'; // local
+  // static const String baseUrl = 'http://192.168.1.24:3000';
 
   late final Dio _dio;
   final AuthService _auth = AuthService();
@@ -189,7 +189,6 @@ class ApiService {
     String? dealId,
     String? phoneNumber,
     String? followUpId,
-    String? dealId,
   }) async {
     final map = <String, dynamic>{
       'customerName': customerName,
@@ -256,6 +255,38 @@ class ApiService {
   /// DELETE /calls/:id
   Future<Response> deleteCall(String id) async {
     return _dio.delete('/calls/$id');
+  }
+
+  /// GET /calls/upload-errors — get upload error logs
+  Future<Response> getUploadErrors({int page = 1, int limit = 20}) async {
+    return _dio.get(
+      '/calls/upload-errors',
+      queryParameters: {'page': page, 'limit': limit},
+    );
+  }
+
+  /// POST /calls/upload-errors/report — report a client-side upload failure (network errors)
+  Future<Response> reportUploadError({
+    required String errorCode,
+    required String errorMessage,
+    String? customerName,
+    String? audioFileName,
+    int? fileSizeBytes,
+    String? deviceInfo,
+    String? uploadSource,
+  }) async {
+    return _dio.post(
+      '/calls/upload-errors/report',
+      data: {
+        'errorCode': errorCode,
+        'errorMessage': errorMessage,
+        if (customerName != null) 'customerName': customerName,
+        if (audioFileName != null) 'audioFileName': audioFileName,
+        if (fileSizeBytes != null) 'fileSizeBytes': fileSizeBytes,
+        if (deviceInfo != null) 'deviceInfo': deviceInfo,
+        'uploadSource': uploadSource ?? 'MANUAL',
+      },
+    );
   }
 
   // ─── Call Approvals ───
@@ -795,7 +826,6 @@ class ApiService {
     String? status,
     String? startDate,
     String? endDate,
-    String? userId,
   }) async {
     final params = <String, dynamic>{'page': page, 'limit': limit};
     if (search != null && search.isNotEmpty) params['search'] = search;
@@ -1017,9 +1047,11 @@ class ApiService {
         if (search != null && search.isNotEmpty) 'search': search,
         if (page != null) 'page': page,
         if (limit != null) 'limit': limit,
-        if (lifecycleStage != null && lifecycleStage.isNotEmpty) 'lifecycleStage': lifecycleStage,
+        if (lifecycleStage != null && lifecycleStage.isNotEmpty)
+          'lifecycleStage': lifecycleStage,
         if (source != null && source.isNotEmpty) 'source': source,
-        if (ownerUserId != null && ownerUserId.isNotEmpty) 'ownerUserId': ownerUserId,
+        if (ownerUserId != null && ownerUserId.isNotEmpty)
+          'ownerUserId': ownerUserId,
       },
     );
   }
@@ -1910,9 +1942,6 @@ class ApiService {
   Future<Response> toggleMasterStatus(String id, String status) async =>
       _dio.patch('/crm/masters/$id/status', data: {'status': status});
 
-  Future<Response> getCallsByDeal(String dealId) async =>
-      _dio.get('/crm/deals/$dealId/calls');
-
   // ─── Team Mapping ───
 
   /// GET /users/seniors  — users who have at least one team member
@@ -2747,18 +2776,16 @@ class ApiService {
     String? dateFrom,
     String? dateTo,
     String? projectId,
-  }) async =>
-      _dio.get(
-        '/timesheet-entries/export',
-        queryParameters: {
-          'companyId': companyId,
-          if (dateFrom != null) 'dateFrom': dateFrom,
-          if (dateTo != null) 'dateTo': dateTo,
-          if (projectId != null && projectId.isNotEmpty)
-            'projectId': projectId,
-        },
-        options: Options(responseType: ResponseType.bytes),
-      );
+  }) async => _dio.get(
+    '/timesheet-entries/export',
+    queryParameters: {
+      'companyId': companyId,
+      if (dateFrom != null) 'dateFrom': dateFrom,
+      if (dateTo != null) 'dateTo': dateTo,
+      if (projectId != null && projectId.isNotEmpty) 'projectId': projectId,
+    },
+    options: Options(responseType: ResponseType.bytes),
+  );
 
   // ─── AI Sales Call ───────────────────────────────────────────────────────
 
@@ -2773,8 +2800,10 @@ class ApiService {
   Future<Response> saveCallQuestionFlowTree(
     String categoryId,
     Map<String, dynamic>? root,
-  ) async =>
-      _dio.put('/call-question-flows/category/$categoryId', data: {'root': root});
+  ) async => _dio.put(
+    '/call-question-flows/category/$categoryId',
+    data: {'root': root},
+  );
 
   Future<Response> deleteCallQuestionFlow(String categoryId) async =>
       _dio.delete('/call-question-flows/category/$categoryId');
@@ -2783,11 +2812,10 @@ class ApiService {
     String categoryId, {
     required String categoryName,
     required String summary,
-  }) async =>
-      _dio.post(
-        '/call-question-flows/category/$categoryId/ai-generate',
-        data: {'categoryName': categoryName, 'summary': summary},
-      );
+  }) async => _dio.post(
+    '/call-question-flows/category/$categoryId/ai-generate',
+    data: {'categoryName': categoryName, 'summary': summary},
+  );
 
   // ─── AI Call Numbers ─────────────────────────────────────────────────────
 
@@ -2796,8 +2824,10 @@ class ApiService {
   Future<Response> createAiCallNumber(Map<String, dynamic> data) async =>
       _dio.post('/ai-call-numbers', data: data);
 
-  Future<Response> updateAiCallNumber(String id, Map<String, dynamic> data) async =>
-      _dio.patch('/ai-call-numbers/$id', data: data);
+  Future<Response> updateAiCallNumber(
+    String id,
+    Map<String, dynamic> data,
+  ) async => _dio.patch('/ai-call-numbers/$id', data: data);
 
   Future<Response> deleteAiCallNumber(String id) async =>
       _dio.delete('/ai-call-numbers/$id');
@@ -2807,21 +2837,25 @@ class ApiService {
     String? contactId,
     String? dealId,
     String? categoryId,
-  }) async =>
-      _dio.post('/calls/ai-sales/initiate', data: {
-        if (leadId != null) 'leadId': leadId,
-        if (contactId != null) 'contactId': contactId,
-        if (dealId != null) 'dealId': dealId,
-        if (categoryId != null) 'categoryId': categoryId,
-      });
+  }) async => _dio.post(
+    '/calls/ai-sales/initiate',
+    data: {
+      if (leadId != null) 'leadId': leadId,
+      if (contactId != null) 'contactId': contactId,
+      if (dealId != null) 'dealId': dealId,
+      if (categoryId != null) 'categoryId': categoryId,
+    },
+  );
 
   Future<Response> getAiSalesCallHistory({
     int page = 1,
     int limit = 20,
-  }) async =>
-      _dio.get('/calls', queryParameters: {
-        'callSource': 'AI_VOICE_REST',
-        'page': page,
-        'limit': limit,
-      });
+  }) async => _dio.get(
+    '/calls',
+    queryParameters: {
+      'callSource': 'AI_VOICE_REST',
+      'page': page,
+      'limit': limit,
+    },
+  );
 }
