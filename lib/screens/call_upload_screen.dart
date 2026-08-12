@@ -469,37 +469,66 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
           ? _phoneController.text.trim()
           : null;
 
-      try {
-        await _api.createCall(
-          customerName: customerName,
-          companyId: companyId,
-          userId: userId,
-          categoryId: _sopCategoryId,
-          salesStageId: _sopSalesStageId,
-          notes: notes,
-          audioFilePath: _audioFilePath,
-          audioFileName: _audioFileName,
-          leadId: _linkedLeadId,
-          dealId: widget.dealId,
-          phoneNumber: phone,
-        );
-      } on DioException catch (e1) {
-        if (e1.response?.statusCode == 500) {
-          // Retry without optional relational IDs that may not exist in prod DB
-          debugPrint(
-            '[Upload] 500 on full payload, retrying without optional IDs...',
-          );
+      Future<void> attemptUpload() async {
+        try {
           await _api.createCall(
             customerName: customerName,
             companyId: companyId,
             userId: userId,
+            categoryId: _sopCategoryId,
+            salesStageId: _sopSalesStageId,
             notes: notes,
             audioFilePath: _audioFilePath,
             audioFileName: _audioFileName,
+            leadId: _linkedLeadId,
+            dealId: widget.dealId,
             phoneNumber: phone,
           );
-        } else {
-          rethrow;
+        } on DioException catch (e1) {
+          if (e1.response?.statusCode == 500) {
+            // Retry without optional relational IDs that may not exist in prod DB
+            debugPrint(
+              '[Upload] 500 on full payload, retrying without optional IDs...',
+            );
+            await _api.createCall(
+              customerName: customerName,
+              companyId: companyId,
+              userId: userId,
+              notes: notes,
+              audioFilePath: _audioFilePath,
+              audioFileName: _audioFileName,
+              phoneNumber: phone,
+            );
+          } else {
+            rethrow;
+          }
+        }
+      }
+
+      // Weak/mobile connections sometimes time out mid-upload. Retry a couple
+      // of times (with a short pause) before surfacing an error to the user —
+      // but only for timeout/connection failures, never for validation errors
+      // (e.g. missing SOP, bad request) which won't succeed on retry anyway.
+      const maxAttempts = 3;
+      for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          await attemptUpload();
+          break;
+        } on DioException catch (e) {
+          final isRetryable = e.type == DioExceptionType.connectionTimeout ||
+              e.type == DioExceptionType.sendTimeout ||
+              e.type == DioExceptionType.receiveTimeout ||
+              e.type == DioExceptionType.connectionError;
+          if (!isRetryable || attempt == maxAttempts) rethrow;
+          debugPrint(
+            '[Upload] attempt $attempt failed (${e.type}), retrying...',
+          );
+          if (mounted) {
+            setState(() {
+              _statusMessage = 'Upload interrupted, retrying (${attempt + 1}/$maxAttempts)...';
+            });
+          }
+          await Future.delayed(Duration(seconds: 3 * attempt));
         }
       }
 

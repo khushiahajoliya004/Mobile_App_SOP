@@ -23,6 +23,7 @@ class CallUploadWorker(
         const val KEY_FILE_PATH = "filePath"
         const val KEY_META_PATH = "metaPath"
 
+        // Must match api_service.dart baseUrl
         private const val BASE_URL = "https://api.mysterymentor.in"
         private const val UPLOAD_PATH = "/calls"
 
@@ -126,7 +127,7 @@ class CallUploadWorker(
             doOutput = true
             doInput = true
             connectTimeout = 30_000
-            readTimeout = 120_000
+            readTimeout = 300_000
             setRequestProperty("Authorization", "Bearer $token")
             setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
         }
