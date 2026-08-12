@@ -186,7 +186,6 @@ class ApiService {
     String? audioFilePath,
     String? audioFileName,
     String? leadId,
-    String? dealId,
     String? phoneNumber,
     String? followUpId,
     String? dealId,
@@ -200,7 +199,6 @@ class ApiService {
         'salesStageId': salesStageId,
       if (notes != null) 'notes': notes,
       if (leadId != null && leadId.isNotEmpty) 'leadId': leadId,
-      if (dealId != null && dealId.isNotEmpty) 'dealId': dealId,
       if (phoneNumber != null && phoneNumber.isNotEmpty)
         'phoneNumber': phoneNumber,
       if (followUpId != null && followUpId.isNotEmpty) 'followUpId': followUpId,
@@ -795,7 +793,6 @@ class ApiService {
     String? status,
     String? startDate,
     String? endDate,
-    String? userId,
   }) async {
     final params = <String, dynamic>{'page': page, 'limit': limit};
     if (search != null && search.isNotEmpty) params['search'] = search;
@@ -805,7 +802,6 @@ class ApiService {
     if (status != null && status.isNotEmpty) params['status'] = status;
     if (startDate != null) params['startDate'] = startDate;
     if (endDate != null) params['endDate'] = endDate;
-    if (userId != null && userId.isNotEmpty) params['userId'] = userId;
     return _dio.get('/ai-insights', queryParameters: params);
   }
 
@@ -1909,9 +1905,6 @@ class ApiService {
 
   Future<Response> toggleMasterStatus(String id, String status) async =>
       _dio.patch('/crm/masters/$id/status', data: {'status': status});
-
-  Future<Response> getCallsByDeal(String dealId) async =>
-      _dio.get('/crm/deals/$dealId/calls');
 
   // ─── Team Mapping ───
 

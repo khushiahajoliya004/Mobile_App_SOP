@@ -1287,64 +1287,6 @@ class _CrmDealDetailScreenState extends State<CrmDealDetailScreen>
                             color: Colors.white,
                           ),
                         ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-                const SizedBox(height: 10),
-              ],
-              // Action buttons row 1: Record | Upload | Log Activity | Follow-up
-              Row(children: [
-                _actionBtn(Icons.mic_rounded, 'Record', AppColors.primary, _navigateToRecorder),
-                const SizedBox(width: 6),
-                _actionBtn(Icons.cloud_upload_rounded, 'Upload Call', const Color(0xFF0EA5E9), _navigateToUpload),
-                const SizedBox(width: 6),
-                _actionBtn(Icons.edit_note_rounded, 'Log Activity', AppColors.warning, _showLogActivity),
-                const SizedBox(width: 6),
-                _actionBtn(Icons.calendar_month_rounded, 'Follow-up', const Color(0xFF8B5CF6), _showAddFollowUp),
-                const SizedBox(width: 6),
-                _actionBtn(Icons.smart_toy_rounded, 'AI Call', const Color(0xFF6366F1), () {
-                  showAiCallBottomSheet(
-                    context,
-                    targetName: widget.dealName,
-                    dealId: widget.dealId,
-                    contactId: _deal?['contactId'] as String?,
-                    onSuccess: _load,
-                  );
-                }),
-              ]),
-              // Action buttons row 2 (OPEN deals): Move Stage | Won | Lost | Delete
-              if (status == 'OPEN') ...[
-                const SizedBox(height: 8),
-                Row(children: [
-                  _actionBtn(Icons.swap_horiz_rounded, 'Move Stage', AppColors.primary, _showMoveStage),
-                  const SizedBox(width: 6),
-                  _actionBtn(Icons.check_circle_outline_rounded, 'Won', AppColors.success, () async {
-                    try { await _api.markDealWon(widget.dealId); _msg('Marked as won'); _load(); } catch (e) { _msg('Failed: $e', error: true); }
-                  }),
-                  const SizedBox(width: 6),
-                  _actionBtn(Icons.cancel_outlined, 'Lost', AppColors.error, _showMarkLost),
-                  const SizedBox(width: 6),
-                  _actionBtn(Icons.delete_outline_rounded, 'Delete', AppColors.error, () {
-                    showDialog(
-                      context: context,
-                      builder: (d) => AlertDialog(
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                        title: const Text('Delete Deal', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
-                        content: Text('Delete "$name"?'),
-                        actions: [
-                          TextButton(onPressed: () => Navigator.pop(d), child: const Text('Cancel')),
-                          FilledButton(
-                            onPressed: () async {
-                              Navigator.pop(d);
-                              final nav = Navigator.of(context);
-                              try { await _api.deleteCrmDeal(widget.dealId); _msg('Deal deleted'); if (mounted) nav.pop(); }
-                              catch (e) { _msg('Failed: $e', error: true); }
-                            },
-                            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
-                            child: const Text('Delete'),
-                          ),
-                        ],
                       ),
                     ),
                 ],
@@ -1439,6 +1381,21 @@ class _CrmDealDetailScreenState extends State<CrmDealDetailScreen>
                         'Follow-up',
                         const Color(0xFF8B5CF6),
                         _showAddFollowUp,
+                      ),
+                      const SizedBox(width: 6),
+                      _actionBtn(
+                        Icons.smart_toy_rounded,
+                        'AI Call',
+                        const Color(0xFF6366F1),
+                        () {
+                          showAiCallBottomSheet(
+                            context,
+                            targetName: widget.dealName,
+                            dealId: widget.dealId,
+                            contactId: _deal?['contactId'] as String?,
+                            onSuccess: _load,
+                          );
+                        },
                       ),
                     ],
                   ),

@@ -734,6 +734,23 @@ class _CrmContactDetailScreenState extends State<CrmContactDetailScreen> {
                               ),
                               const SizedBox(width: 6),
                               _headerBtn(
+                                Icons.smart_toy_rounded,
+                                const Color(0xFFEDE9FE),
+                                const Color(0xFF6366F1),
+                                () {
+                                  showAiCallBottomSheet(
+                                    context,
+                                    targetName:
+                                        _contact?['name'] ??
+                                        widget.contactName,
+                                    contactId: widget.contactId,
+                                    onSuccess: _load,
+                                  );
+                                },
+                                tooltip: 'AI Call',
+                              ),
+                              const SizedBox(width: 6),
+                              _headerBtn(
                                 Icons.refresh,
                                 AppColors.surfaceLight,
                                 AppColors.textSecondary,
@@ -894,42 +911,6 @@ class _CrmContactDetailScreenState extends State<CrmContactDetailScreen> {
                   ),
                   const SizedBox(height: 10),
                 ],
-              ]),
-              if (createdStr.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                Text('Added $createdStr', style: const TextStyle(fontSize: 10, color: AppColors.textHint)),
-              ],
-            ])),
-            // Action buttons
-            Column(children: [
-              Row(children: [
-                _headerBtn(Icons.add_rounded, AppColors.primarySurface, AppColors.primary, _showLogActivity, tooltip: 'Log Activity'),
-                const SizedBox(width: 6),
-                _headerBtn(Icons.calendar_today_rounded, AppColors.surfaceLight, AppColors.textSecondary, _showScheduleFollowUp, tooltip: 'Follow-up'),
-                const SizedBox(width: 6),
-                _headerBtn(Icons.smart_toy_rounded, const Color(0xFFEDE9FE), const Color(0xFF6366F1), () {
-                  showAiCallBottomSheet(
-                    context,
-                    targetName: _contact?['name'] ?? widget.contactName,
-                    contactId: widget.contactId,
-                    onSuccess: _load,
-                  );
-                }, tooltip: 'AI Call'),
-                const SizedBox(width: 6),
-                _headerBtn(Icons.refresh, AppColors.surfaceLight, AppColors.textSecondary, _load, tooltip: 'Refresh'),
-              ]),
-              const SizedBox(height: 6),
-              GestureDetector(
-                onTap: _createNewDeal,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(8)),
-                  child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.handshake_rounded, size: 12, color: Colors.white),
-                    SizedBox(width: 4),
-                    Text('New Deal', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white)),
-                  ]),
-                ),
               ),
             ),
             Expanded(
