@@ -262,7 +262,7 @@ class _ForceUpdateSettingsScreenState
         ),
         trailing: Switch(
           value: _forceUpdateEnabled,
-          activeThumbColor: AppColors.primary,
+          activeColor: AppColors.primary,
           activeTrackColor: AppColors.primaryLight,
           onChanged: (v) => setState(() => _forceUpdateEnabled = v),
         ),
