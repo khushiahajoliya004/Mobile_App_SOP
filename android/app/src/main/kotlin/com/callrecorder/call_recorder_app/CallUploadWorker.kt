@@ -7,7 +7,6 @@ import androidx.work.WorkerParameters
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
-import java.io.DataOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.net.HttpURLConnection
@@ -26,6 +25,7 @@ class CallUploadWorker(
         // Must match api_service.dart baseUrl
         private const val BASE_URL = "https://api.mysterymentor.in"
         private const val UPLOAD_PATH = "/calls"
+        private const val UPLOAD_URL_PATH = "/calls/upload-url"
 
         // SharedPreferences keys — must match Flutter's auth_service.dart
         private const val PREFS_NAME = "FlutterSharedPreferences"
@@ -84,14 +84,27 @@ class CallUploadWorker(
         val customerName = if (phoneNumber != "unknown") phoneNumber else "Auto-recorded call"
 
         return@withContext try {
-            val success = uploadCall(
+            val notesText = "Auto-recorded $callType call | Duration: ${durationMs / 1000}s"
+            val phoneOrNull = if (phoneNumber != "unknown") phoneNumber else null
+
+            // Direct-to-S3: the file goes straight to S3 instead of being
+            // relayed through this server. There is no server-relay fallback —
+            // the backend no longer accepts a multipart file on POST /calls,
+            // so any failure here (presign, S3 PUT, or the final metadata
+            // call) throws and this whole attempt is retried by WorkManager.
+            val (uploadUrl, audioUrl) = getUploadUrl(token, "audio/mp4", "m4a")
+                ?: throw Exception("Failed to get S3 upload URL")
+            if (!putFileToS3(uploadUrl, audioFile, "audio/mp4")) {
+                throw Exception("Direct S3 upload failed")
+            }
+            val success = uploadCallDirect(
                 token = token,
-                audioFile = audioFile,
-                phoneNumber = if (phoneNumber != "unknown") phoneNumber else null,
+                audioUrl = audioUrl,
+                phoneNumber = phoneOrNull,
                 customerName = customerName,
                 userId = userId,
                 companyId = companyId,
-                notes = "Auto-recorded $callType call | Duration: ${durationMs / 1000}s"
+                notes = notesText,
             )
 
             if (success) {
@@ -109,58 +122,95 @@ class CallUploadWorker(
         }
     }
 
-    private fun uploadCall(
-        token: String,
-        audioFile: File,
-        phoneNumber: String?,
-        customerName: String,
-        userId: String,
-        companyId: String,
-        notes: String
-    ): Boolean {
-        val boundary = "------Boundary${System.currentTimeMillis()}"
-        val url = URL("$BASE_URL$UPLOAD_PATH")
+    /** Asks the backend for a short-lived S3 upload URL. Returns (uploadUrl, audioUrl) or null on failure. */
+    private fun getUploadUrl(token: String, contentType: String, extension: String): Pair<String, String>? {
+        val url = URL("$BASE_URL$UPLOAD_URL_PATH")
         val connection = url.openConnection() as HttpURLConnection
-
         connection.apply {
             requestMethod = "POST"
             doOutput = true
             doInput = true
             connectTimeout = 30_000
-            readTimeout = 300_000
+            readTimeout = 30_000
             setRequestProperty("Authorization", "Bearer $token")
-            setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+            setRequestProperty("Content-Type", "application/json")
         }
 
-        val out = DataOutputStream(connection.outputStream)
-
-        fun writeField(name: String, value: String) {
-            out.writeBytes("--$boundary\r\n")
-            out.writeBytes("Content-Disposition: form-data; name=\"$name\"\r\n\r\n")
-            out.writeBytes("$value\r\n")
+        val body = JSONObject().apply {
+            put("contentType", contentType)
+            put("extension", extension)
+            put("fileType", "audio")
         }
-
-        writeField("customerName", customerName)
-        if (!phoneNumber.isNullOrEmpty()) writeField("phoneNumber", phoneNumber)
-        writeField("userId", userId)
-        writeField("companyId", companyId)
-        writeField("notes", notes)
-
-        // Write audio file
-        out.writeBytes("--$boundary\r\n")
-        out.writeBytes("Content-Disposition: form-data; name=\"audio\"; filename=\"${audioFile.name}\"\r\n")
-        out.writeBytes("Content-Type: audio/mp4\r\n\r\n")
-        FileInputStream(audioFile).use { it.copyTo(out) }
-        out.writeBytes("\r\n")
-
-        out.writeBytes("--$boundary--\r\n")
-        out.flush()
-        out.close()
+        connection.outputStream.use { it.write(body.toString().toByteArray()) }
 
         val responseCode = connection.responseCode
-        Log.i(TAG, "Upload response code: $responseCode")
-        connection.disconnect()
+        if (responseCode !in 200..299) {
+            Log.w(TAG, "getUploadUrl response code: $responseCode")
+            connection.disconnect()
+            return null
+        }
 
+        val responseText = connection.inputStream.bufferedReader().use { it.readText() }
+        connection.disconnect()
+        val data = JSONObject(responseText).getJSONObject("data")
+        return Pair(data.getString("uploadUrl"), data.getString("audioUrl"))
+    }
+
+    /** PUTs the raw audio bytes directly to S3 via the presigned URL. */
+    private fun putFileToS3(uploadUrl: String, audioFile: File, contentType: String): Boolean {
+        val connection = URL(uploadUrl).openConnection() as HttpURLConnection
+        connection.apply {
+            requestMethod = "PUT"
+            doOutput = true
+            connectTimeout = 30_000
+            readTimeout = 300_000
+            setRequestProperty("Content-Type", contentType)
+        }
+        connection.outputStream.use { out ->
+            FileInputStream(audioFile).use { it.copyTo(out) }
+        }
+        val responseCode = connection.responseCode
+        Log.i(TAG, "S3 PUT response code: $responseCode")
+        connection.disconnect()
+        return responseCode in 200..299
+    }
+
+    /** Sends call metadata + an already-uploaded S3 audioUrl (no file in this request). */
+    private fun uploadCallDirect(
+        token: String,
+        audioUrl: String,
+        phoneNumber: String?,
+        customerName: String,
+        userId: String,
+        companyId: String,
+        notes: String,
+    ): Boolean {
+        val url = URL("$BASE_URL$UPLOAD_PATH")
+        val connection = url.openConnection() as HttpURLConnection
+        connection.apply {
+            requestMethod = "POST"
+            doOutput = true
+            doInput = true
+            connectTimeout = 30_000
+            readTimeout = 30_000
+            setRequestProperty("Authorization", "Bearer $token")
+            setRequestProperty("Content-Type", "application/json")
+        }
+
+        val body = JSONObject().apply {
+            put("customerName", customerName)
+            if (!phoneNumber.isNullOrEmpty()) put("phoneNumber", phoneNumber)
+            put("userId", userId)
+            put("companyId", companyId)
+            put("notes", notes)
+            put("audioUrl", audioUrl)
+            put("audioFileType", "audio")
+        }
+        connection.outputStream.use { it.write(body.toString().toByteArray()) }
+
+        val responseCode = connection.responseCode
+        Log.i(TAG, "Direct upload response code: $responseCode")
+        connection.disconnect()
         return responseCode in 200..299
     }
 }

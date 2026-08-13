@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'auth_service.dart';
@@ -180,6 +181,55 @@ class ApiService {
   /// POST /calls  (multipart with audio file)
   /// Required: customerName, companyId, userId
   /// Optional: categoryId, salesStageId, notes, audio file
+  /// Requests a short-lived S3 upload URL so the audio file can be sent
+  /// straight to S3 instead of being relayed through this server.
+  /// Returns (uploadUrl, audioUrl) — PUT the file to uploadUrl, then pass
+  /// audioUrl to createCall().
+  Future<(String uploadUrl, String audioUrl)> getUploadUrl({
+    required String contentType,
+    required String extension,
+    required String fileType, // 'audio' or 'video'
+  }) async {
+    final res = await _dio.post(
+      '/calls/upload-url',
+      data: {
+        'contentType': contentType,
+        'extension': extension,
+        'fileType': fileType,
+      },
+    );
+    final data = res.data['data'];
+    return (data['uploadUrl'] as String, data['audioUrl'] as String);
+  }
+
+  /// Uploads raw file bytes directly to S3 via a presigned URL obtained from
+  /// getUploadUrl(). Uses a bare Dio instance (not _dio) since this goes to
+  /// S3, not our API — no auth header, no baseUrl, and it needs a longer
+  /// timeout since this is the leg carrying the actual file bytes.
+  Future<void> putFileToS3({
+    required String uploadUrl,
+    required String filePath,
+    required String contentType,
+  }) async {
+    final bytes = await File(filePath).readAsBytes();
+    final plainDio = Dio(
+      BaseOptions(
+        connectTimeout: const Duration(seconds: 30),
+        sendTimeout: const Duration(minutes: 5),
+        receiveTimeout: const Duration(minutes: 5),
+      ),
+    );
+    await plainDio.put(
+      uploadUrl,
+      data: bytes,
+      options: Options(headers: {'Content-Type': contentType}),
+    );
+  }
+
+  /// Creates a call. Audio (if any) must already be uploaded directly to S3
+  /// via getUploadUrl() + putFileToS3() — this only ever sends metadata and
+  /// the resulting audioUrl, never a file, since the server no longer
+  /// accepts a multipart file on this endpoint.
   Future<Response> createCall({
     required String customerName,
     required String companyId,
@@ -187,12 +237,13 @@ class ApiService {
     String? categoryId,
     String? salesStageId,
     String? notes,
-    String? audioFilePath,
-    String? audioFileName,
     String? leadId,
     String? phoneNumber,
     String? followUpId,
     String? dealId,
+    String? audioUrl,
+    String? audioFileType,
+    String? durationSeconds,
   }) async {
     final map = <String, dynamic>{
       'customerName': customerName,
@@ -207,16 +258,12 @@ class ApiService {
         'phoneNumber': phoneNumber,
       if (followUpId != null && followUpId.isNotEmpty) 'followUpId': followUpId,
       if (dealId != null && dealId.isNotEmpty) 'dealId': dealId,
+      if (audioUrl != null) 'audioUrl': audioUrl,
+      if (audioFileType != null) 'audioFileType': audioFileType,
+      if (durationSeconds != null) 'durationSeconds': durationSeconds,
     };
 
-    if (audioFilePath != null) {
-      map['audio'] = await MultipartFile.fromFile(
-        audioFilePath,
-        filename: audioFileName ?? 'recording.m4a',
-      );
-    }
-
-    return _dio.post('/calls', data: FormData.fromMap(map));
+    return _dio.post('/calls', data: map);
   }
 
   /// GET /calls

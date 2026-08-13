@@ -469,7 +469,50 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
           ? _phoneController.text.trim()
           : null;
 
+      // Map the recording's file extension to a content type for S3.
+      String contentTypeFor(String ext) {
+        switch (ext.toLowerCase()) {
+          case 'mp3':
+            return 'audio/mpeg';
+          case 'wav':
+            return 'audio/wav';
+          case 'mp4':
+            return 'video/mp4';
+          case 'webm':
+            return 'video/webm';
+          case 'm4a':
+          default:
+            return 'audio/mp4';
+        }
+      }
+
       Future<void> attemptUpload() async {
+        // Direct-to-S3: if there's a recording, upload the bytes straight to
+        // S3 first (bypassing the server entirely), then only send metadata
+        // + the resulting URL to /calls. There is no server-relay fallback —
+        // the backend no longer accepts a multipart file on this endpoint,
+        // so any failure here (including a non-retryable one) propagates up
+        // to the caller as a real upload failure.
+        String? uploadedAudioUrl;
+        String? uploadedFileType;
+        if (_audioFilePath != null) {
+          final ext = _audioFileName?.split('.').last ?? 'm4a';
+          final contentType = contentTypeFor(ext);
+          final fileType = contentType.startsWith('video/') ? 'video' : 'audio';
+          final (uploadUrl, audioUrl) = await _api.getUploadUrl(
+            contentType: contentType,
+            extension: ext,
+            fileType: fileType,
+          );
+          await _api.putFileToS3(
+            uploadUrl: uploadUrl,
+            filePath: _audioFilePath!,
+            contentType: contentType,
+          );
+          uploadedAudioUrl = audioUrl;
+          uploadedFileType = fileType;
+        }
+
         try {
           await _api.createCall(
             customerName: customerName,
@@ -478,8 +521,8 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
             categoryId: _sopCategoryId,
             salesStageId: _sopSalesStageId,
             notes: notes,
-            audioFilePath: _audioFilePath,
-            audioFileName: _audioFileName,
+            audioUrl: uploadedAudioUrl,
+            audioFileType: uploadedFileType,
             leadId: _linkedLeadId,
             dealId: widget.dealId,
             phoneNumber: phone,
@@ -495,8 +538,8 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
               companyId: companyId,
               userId: userId,
               notes: notes,
-              audioFilePath: _audioFilePath,
-              audioFileName: _audioFileName,
+              audioUrl: uploadedAudioUrl,
+              audioFileType: uploadedFileType,
               phoneNumber: phone,
             );
           } else {
