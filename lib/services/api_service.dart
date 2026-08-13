@@ -8,12 +8,12 @@ import '../utils/navigator_key.dart';
 class ApiService {
   // Backend runs on port 3000, no /api prefix
   // For Android emulator use 10.0.2.2, for real device use your machine IP
-  static const String baseUrl = 'https://apimysterymentorqa.mysterymentor.in'; // QA
+  static const String baseUrl = 'https://api.mysterymentor.in'; // production
+  // static const String baseUrl = 'https://apimysterymentorqa.mysterymentor.in'; // QA
   // static const String baseUrl = 'https://app.one.mysterymentor.in';
   // static const String baseUrl = 'http://192.168.1.8:3001';
   // static const String baseUrl = 'http://192.168.1.13:3001';
   // static const String baseUrl = 'http://192.168.1.24:3000'; // local
-  // static const String baseUrl = 'https://api.mysterymentor.in'; // production
   // static const String baseUrl = 'http://192.168.0.44:3000'; // local
   // static const String baseUrl = 'https://app.mysterymentor.in'; // deployed
 
