@@ -50,7 +50,7 @@ class MenuScreen extends StatelessWidget {
 
   bool _can(String code) {
     if (user == null) return false;
-    if (user!.isSuperAdmin) return true;
+    if (user!.isSuperAdmin || user!.isCompanyAdmin) return true;
     return user!.hasModule(code) || user!.hasPermission('${code}_VIEW');
   }
 
