@@ -127,16 +127,25 @@ class _AudioLibraryScreenState extends State<AudioLibraryScreen> {
         return;
       }
 
-      // Let user pick the folder to save
-      final selectedDir = await FilePicker.platform.getDirectoryPath(
+      // file.name already includes the extension (see AudioFileService,
+      // which derives it from the actual filename on disk) — appending
+      // '.m4a' again produced 'xxx.m4a.m4a'.
+      final fileName = file.name;
+      final bytes = await sourceFile.readAsBytes();
+
+      // Write via the platform's native "save as" flow (passing `bytes`
+      // makes file_picker use Android's Storage Access Framework under the
+      // hood) instead of picking a raw directory path and copying into it —
+      // modern Android blocks direct filesystem writes to arbitrary
+      // user-picked folders, which is what caused
+      // "PathAccessException: Operation not permitted".
+      final savedPath = await FilePicker.platform.saveFile(
         dialogTitle: 'Select folder to save audio',
+        fileName: fileName,
+        bytes: bytes,
       );
 
-      if (selectedDir == null) return; // User cancelled
-
-      final fileName = '${file.name}.m4a';
-      final destPath = '$selectedDir/$fileName';
-      await sourceFile.copy(destPath);
+      if (savedPath == null) return; // User cancelled
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../main.dart';
 import '../../services/api_service.dart';
@@ -477,7 +478,11 @@ class _UsersScreenState extends State<UsersScreen> {
       }
       _loadAll();
     } catch (e) {
-      _msg('Failed: $e', error: true);
+      if (e is DioException && e.response?.statusCode == 409) {
+        _msg('A user with this email already exists.', error: true);
+      } else {
+        _msg('Failed to save user. Please try again.', error: true);
+      }
       setState(() => _loading = false);
     }
   }
