@@ -605,12 +605,14 @@ class _FollowUpTrackerScreenState extends State<FollowUpTrackerScreen> {
                       );
                       if (selectedFile != null) {
                         try {
+                          final (audioUrl, audioFileType) = await _api
+                              .uploadAudioFile(selectedFile!.path!);
                           await _api.createCall(
                             customerName: _contactOrDeal(f),
                             companyId: _user?.companyId ?? '',
                             userId: _user?.id ?? '',
-                            audioFilePath: selectedFile!.path,
-                            audioFileName: selectedFile!.name,
+                            audioUrl: audioUrl,
+                            audioFileType: audioFileType,
                             followUpId: f['id'].toString(),
                           );
                         } catch (uploadErr) {

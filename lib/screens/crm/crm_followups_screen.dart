@@ -567,6 +567,8 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
                       if (selectedFile != null) {
                         try {
                           final user = await AuthService().getUser();
+                          final (audioUrl, audioFileType) = await _api
+                              .uploadAudioFile(selectedFile!.path!);
                           await _api.createCall(
                             customerName:
                                 followUp['contact']?['name']?.toString() ??
@@ -575,8 +577,8 @@ class _CrmFollowUpsScreenState extends State<CrmFollowUpsScreen> {
                                 'Unknown',
                             companyId: user?.companyId ?? '',
                             userId: user?.id ?? '',
-                            audioFilePath: selectedFile!.path,
-                            audioFileName: selectedFile!.name,
+                            audioUrl: audioUrl,
+                            audioFileType: audioFileType,
                             followUpId: followUp['id'].toString(),
                           );
                         } catch (uploadErr) {

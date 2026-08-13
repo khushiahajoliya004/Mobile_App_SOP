@@ -233,7 +233,7 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
     }
     try {
       final now = DateTime.now();
-      final fn = path.split('/').last;
+      final (audioUrl, audioFileType) = await _api.uploadAudioFile(path);
       final res = await _api.createCall(
         customerName:
             widget.leadCustomerName ??
@@ -243,8 +243,8 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
         categoryId: _sopCategoryId,
         salesStageId: _sopSalesStageId,
         notes: 'Recorded from mobile',
-        audioFilePath: path,
-        audioFileName: fn,
+        audioUrl: audioUrl,
+        audioFileType: audioFileType,
         leadId: widget.leadId,
         dealId: widget.dealId,
       );
@@ -365,6 +365,7 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
           continue;
         }
         setState(() => _statusMessage = 'Uploading ${i + 1}/${list.length}...');
+        final (audioUrl, audioFileType) = await _api.uploadAudioFile(fp);
         await _api.createCall(
           customerName: e['name'] ?? 'Local',
           companyId: _user!.companyId!,
@@ -372,8 +373,8 @@ class _CallRecorderScreenState extends State<CallRecorderScreen>
           categoryId: _sopCategoryId,
           salesStageId: _sopSalesStageId,
           notes: 'From local',
-          audioFilePath: fp,
-          audioFileName: fp.split('/').last,
+          audioUrl: audioUrl,
+          audioFileType: audioFileType,
         );
         ok++;
       } catch (uploadErr) {

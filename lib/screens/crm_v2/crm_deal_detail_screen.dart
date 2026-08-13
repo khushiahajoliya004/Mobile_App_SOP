@@ -2321,13 +2321,15 @@ class _CrmDealDetailScreenState extends State<CrmDealDetailScreen>
                       );
                       if (selectedFile != null) {
                         try {
+                          final (audioUrl, audioFileType) = await _api
+                              .uploadAudioFile(selectedFile!.path!);
                           await _api.createCall(
                             customerName: _displayName(_deal ?? {}),
                             companyId: _currentUser?.companyId ?? '',
                             userId: _currentUser?.id ?? '',
                             dealId: widget.dealId,
-                            audioFilePath: selectedFile!.path,
-                            audioFileName: selectedFile!.name,
+                            audioUrl: audioUrl,
+                            audioFileType: audioFileType,
                             followUpId: followUp['id'].toString(),
                           );
                         } catch (uploadErr) {

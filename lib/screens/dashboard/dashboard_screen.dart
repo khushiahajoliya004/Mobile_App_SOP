@@ -1551,11 +1551,12 @@ class _CallDetailSheetState extends State<_CallDetailSheet> {
 
   Widget _buildSummary() {
     final ai = _detail['aiAnalysis'] as Map<String, dynamic>? ?? {};
+    final rawCallSummary = _detail['callSummary'];
     dynamic summary =
         ai['summary'] ??
         ai['callSummary'] ??
-        _detail['callSummary']?['summary'] ??
-        _detail['callSummary'] ??
+        (rawCallSummary is Map ? rawCallSummary['summary'] : null) ??
+        rawCallSummary ??
         '';
     // Parse JSON-encoded string into a List if needed
     if (summary is String) {

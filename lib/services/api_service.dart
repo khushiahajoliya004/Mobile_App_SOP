@@ -8,12 +8,14 @@ import '../utils/navigator_key.dart';
 class ApiService {
   // Backend runs on port 3000, no /api prefix
   // For Android emulator use 10.0.2.2, for real device use your machine IP
-  // static const String baseUrl = 'https://apimysterymentorqa.mysterymentor.in'; // QA
+  static const String baseUrl = 'https://apimysterymentorqa.mysterymentor.in'; // QA
   // static const String baseUrl = 'https://app.one.mysterymentor.in';
   // static const String baseUrl = 'http://192.168.1.8:3001';
   // static const String baseUrl = 'http://192.168.1.13:3001';
   // static const String baseUrl = 'http://192.168.1.24:3000'; // local
-  static const String baseUrl = 'https://api.mysterymentor.in'; // production
+  // static const String baseUrl = 'https://api.mysterymentor.in'; // production
+  // static const String baseUrl = 'http://192.168.0.44:3000'; // local
+  // static const String baseUrl = 'https://app.mysterymentor.in'; // deployed
 
   late final Dio _dio;
   final AuthService _auth = AuthService();
@@ -224,6 +226,44 @@ class ApiService {
       data: bytes,
       options: Options(headers: {'Content-Type': contentType}),
     );
+  }
+
+  /// Convenience wrapper around getUploadUrl() + putFileToS3(): infers the
+  /// content type from the file's extension, uploads it to S3, and returns
+  /// (audioUrl, fileType) ready to pass into createCall().
+  Future<(String audioUrl, String fileType)> uploadAudioFile(
+    String filePath,
+  ) async {
+    String contentTypeFor(String ext) {
+      switch (ext.toLowerCase()) {
+        case 'mp3':
+          return 'audio/mpeg';
+        case 'wav':
+          return 'audio/wav';
+        case 'mp4':
+          return 'video/mp4';
+        case 'webm':
+          return 'video/webm';
+        case 'm4a':
+        default:
+          return 'audio/mp4';
+      }
+    }
+
+    final ext = filePath.split('.').last;
+    final contentType = contentTypeFor(ext);
+    final fileType = contentType.startsWith('video/') ? 'video' : 'audio';
+    final (uploadUrl, audioUrl) = await getUploadUrl(
+      contentType: contentType,
+      extension: ext,
+      fileType: fileType,
+    );
+    await putFileToS3(
+      uploadUrl: uploadUrl,
+      filePath: filePath,
+      contentType: contentType,
+    );
+    return (audioUrl, fileType);
   }
 
   /// Creates a call. Audio (if any) must already be uploaded directly to S3
