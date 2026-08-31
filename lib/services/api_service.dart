@@ -891,8 +891,11 @@ class ApiService {
       params['userSearch'] = userSearch;
     if (userId != null && userId.isNotEmpty) params['userId'] = userId;
     if (status != null && status.isNotEmpty) params['status'] = status;
-    if (startDate != null) params['startDate'] = startDate;
-    if (endDate != null) params['endDate'] = endDate;
+    // Backend's GET /ai-insights reads `fromDate`/`toDate` — not
+    // `startDate`/`endDate` — so the keys must match here or the date
+    // filter is silently ignored server-side.
+    if (startDate != null) params['fromDate'] = startDate;
+    if (endDate != null) params['toDate'] = endDate;
     return _dio.get('/ai-insights', queryParameters: params);
   }
 

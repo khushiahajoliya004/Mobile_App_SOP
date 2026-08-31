@@ -802,34 +802,40 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
                     ),
         ),
         // Pagination
+        // Wrapped in SafeArea so the controls stay clear of the device's
+        // on-screen navigation bar/gesture inset instead of sitting behind it
+        // (this screen has no Scaffold/bottom SafeArea of its own).
         if (_totalPages > 1)
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.chevron_left, size: 20),
-                  onPressed: _page > 1
-                      ? () {
-                          _page--;
-                          _load();
-                        }
-                      : null,
-                ),
-                Text('$_page / $_totalPages',
-                    style: const TextStyle(
-                        fontSize: 12, color: AppColors.textSecondary)),
-                IconButton(
-                  icon: const Icon(Icons.chevron_right, size: 20),
-                  onPressed: _page < _totalPages
-                      ? () {
-                          _page++;
-                          _load();
-                        }
-                      : null,
-                ),
-              ],
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.chevron_left, size: 20),
+                    onPressed: _page > 1
+                        ? () {
+                            _page--;
+                            _load();
+                          }
+                        : null,
+                  ),
+                  Text('$_page / $_totalPages',
+                      style: const TextStyle(
+                          fontSize: 12, color: AppColors.textSecondary)),
+                  IconButton(
+                    icon: const Icon(Icons.chevron_right, size: 20),
+                    onPressed: _page < _totalPages
+                        ? () {
+                            _page++;
+                            _load();
+                          }
+                        : null,
+                  ),
+                ],
+              ),
             ),
           ),
       ],

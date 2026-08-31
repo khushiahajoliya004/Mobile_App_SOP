@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -416,6 +417,35 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
       ? _selectedLocalRecording?.path
       : _selectedDeviceFile?.path;
 
+  /// Resolve the recording's duration in whole seconds before uploading.
+  /// Uploads go direct-to-S3, so the backend has no audio bytes of its own
+  /// to sniff the duration from — it relies entirely on what we report here.
+  Future<int?> _resolveDurationSeconds(String filePath) async {
+    // MediaStore already reports duration for device-picked files — trust it
+    // when present, no need to re-probe the file.
+    if (_audioSource == AudioSource.device &&
+        (_selectedDeviceFile?.durationMs ?? 0) > 0) {
+      return (_selectedDeviceFile!.durationMs / 1000).round();
+    }
+    // Otherwise (in-app recordings, or a file picked via "Browse Files
+    // Manually" which never reports duration) probe the file directly so we
+    // never send a 0/blank duration to the server.
+    AudioPlayer? probe;
+    try {
+      probe = AudioPlayer();
+      await probe.setSourceDeviceFile(filePath);
+      final duration = await probe.getDuration();
+      if (duration != null && duration.inSeconds > 0) {
+        return duration.inSeconds;
+      }
+    } catch (e) {
+      debugPrint('[Upload] duration probe failed: $e');
+    } finally {
+      await probe?.dispose();
+    }
+    return null;
+  }
+
   String? get _audioFileName {
     if (_audioSource == AudioSource.local && _selectedLocalRecording != null) {
       return _getFileName(_selectedLocalRecording!);
@@ -495,6 +525,7 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
         // to the caller as a real upload failure.
         String? uploadedAudioUrl;
         String? uploadedFileType;
+        int? durationSeconds;
         if (_audioFilePath != null) {
           final ext = _audioFileName?.split('.').last ?? 'm4a';
           final contentType = contentTypeFor(ext);
@@ -511,6 +542,7 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
           );
           uploadedAudioUrl = audioUrl;
           uploadedFileType = fileType;
+          durationSeconds = await _resolveDurationSeconds(_audioFilePath!);
         }
 
         try {
@@ -523,6 +555,7 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
             notes: notes,
             audioUrl: uploadedAudioUrl,
             audioFileType: uploadedFileType,
+            durationSeconds: durationSeconds?.toString(),
             leadId: _linkedLeadId,
             dealId: widget.dealId,
             phoneNumber: phone,
@@ -540,6 +573,7 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
               notes: notes,
               audioUrl: uploadedAudioUrl,
               audioFileType: uploadedFileType,
+              durationSeconds: durationSeconds?.toString(),
               phoneNumber: phone,
             );
           } else {

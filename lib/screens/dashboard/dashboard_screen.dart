@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import '../../main.dart';
@@ -1062,15 +1063,17 @@ class _DashboardScreenState extends State<DashboardScreen>
                 ),
               ),
               const Spacer(),
-              if (recentCalls.isNotEmpty)
-                Text(
-                  '${recentCalls.length}',
-                  style: const TextStyle(
+              GestureDetector(
+                onTap: () => _navigateTo(const AiInsightsScreen(), 'My Calls'),
+                child: const Text(
+                  'View All',
+                  style: TextStyle(
                     fontSize: 11,
-                    color: AppColors.textHint,
                     fontWeight: FontWeight.w600,
+                    color: AppColors.primary,
                   ),
                 ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -1272,7 +1275,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
-        status,
+        status == 'PROCESSING' ? 'PENDING' : status,
         style: TextStyle(fontSize: 8, fontWeight: FontWeight.w700, color: fg),
       ),
     );
@@ -1310,10 +1313,22 @@ class _CallDetailSheetState extends State<_CallDetailSheet> {
   bool _loading = true;
   Map<String, dynamic> _detail = {};
 
+  // Audio player
+  AudioPlayer? _audioPlayer;
+  bool _isAudioPlaying = false;
+  Duration _audioPosition = Duration.zero;
+  Duration _audioDuration = Duration.zero;
+
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _audioPlayer?.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -1325,6 +1340,120 @@ class _CallDetailSheetState extends State<_CallDetailSheet> {
       debugPrint('[CallDetailSheet] load error: $e');
     }
     if (mounted) setState(() => _loading = false);
+    final audioUrl = _detail['audioUrl'] as String?;
+    if (audioUrl != null && audioUrl.isNotEmpty) {
+      await _initAudioPlayer(audioUrl);
+    }
+  }
+
+  Future<void> _initAudioPlayer(String url) async {
+    _audioPlayer = AudioPlayer();
+    _audioPlayer!.onPositionChanged.listen((p) {
+      if (mounted) setState(() => _audioPosition = p);
+    });
+    _audioPlayer!.onDurationChanged.listen((d) {
+      if (mounted) setState(() => _audioDuration = d);
+    });
+    _audioPlayer!.onPlayerStateChanged.listen((s) {
+      if (mounted) setState(() => _isAudioPlaying = s == PlayerState.playing);
+    });
+    try {
+      await _audioPlayer!.setSource(UrlSource(url));
+    } catch (e) {
+      debugPrint('[CallDetailSheet] audio init error: $e');
+    }
+  }
+
+  Future<void> _toggleAudio() async {
+    if (_audioPlayer == null) return;
+    if (_isAudioPlaying) {
+      await _audioPlayer!.pause();
+    } else {
+      await _audioPlayer!.resume();
+    }
+  }
+
+  String _fmtDur(Duration d) {
+    final m = d.inMinutes.remainder(60);
+    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
+  Widget _buildAudioPlayer() {
+    final total = _audioDuration.inMilliseconds > 0
+        ? _audioDuration.inMilliseconds
+        : 1;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.primarySurface,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: _toggleAudio,
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: const BoxDecoration(
+                color: AppColors.primary,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                _isAudioPlaying
+                    ? Icons.pause_rounded
+                    : Icons.play_arrow_rounded,
+                color: Colors.white,
+                size: 22,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 3,
+                    thumbShape:
+                        const RoundSliderThumbShape(enabledThumbRadius: 6),
+                    overlayShape:
+                        const RoundSliderOverlayShape(overlayRadius: 12),
+                  ),
+                  child: Slider(
+                    value: _audioPosition.inMilliseconds
+                        .clamp(0, total)
+                        .toDouble(),
+                    max: total.toDouble(),
+                    activeColor: AppColors.primary,
+                    inactiveColor: AppColors.primary.withValues(alpha: 0.15),
+                    onChanged: (v) {
+                      _audioPlayer?.seek(Duration(milliseconds: v.round()));
+                    },
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(_fmtDur(_audioPosition),
+                          style: const TextStyle(
+                              fontSize: 10, color: AppColors.textHint)),
+                      Text(_fmtDur(_audioDuration),
+                          style: const TextStyle(
+                              fontSize: 10, color: AppColors.textHint)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -1360,6 +1489,11 @@ class _CallDetailSheetState extends State<_CallDetailSheet> {
                     ),
                     const SizedBox(height: 16),
                     _buildSheetHeader(),
+                    if ((_detail['audioUrl'] as String?)?.isNotEmpty ==
+                        true) ...[
+                      const SizedBox(height: 16),
+                      _buildAudioPlayer(),
+                    ],
                     const SizedBox(height: 16),
                     _buildSectionScores(),
                     const SizedBox(height: 16),

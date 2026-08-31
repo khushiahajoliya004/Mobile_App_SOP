@@ -464,10 +464,18 @@ class _EmployeePerformanceScreenState extends State<EmployeePerformanceScreen> {
   }
 
   Widget _empTile(Map<String, dynamic> emp) {
+    // Backend returns flat `userName`/`userEmail` fields for this list (see
+    // employee-performance.service.ts) — fall back to those when the
+    // firstName/lastName/user.* shape isn't present.
     final firstName = emp['firstName'] ?? emp['user']?['firstName'] ?? '';
     final lastName = emp['lastName'] ?? emp['user']?['lastName'] ?? '';
-    final name = '$firstName $lastName'.trim();
-    final email = emp['email'] ?? emp['user']?['email'] ?? '';
+    var name = '$firstName $lastName'.trim();
+    if (name.isEmpty) {
+      name = (emp['userName'] ?? emp['name'] ?? '').toString().trim();
+    }
+    final email =
+        (emp['email'] ?? emp['user']?['email'] ?? emp['userEmail'] ?? '')
+            .toString();
     final totalCalls = (emp['totalCalls'] as num?)?.toInt() ?? 0;
     final completedAnalysis = (emp['completedAnalysis'] as num?)?.toInt() ?? 0;
     final avgScore = (emp['averageScore'] as num?)?.toDouble() ?? 0.0;
