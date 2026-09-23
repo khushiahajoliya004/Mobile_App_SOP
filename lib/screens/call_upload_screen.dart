@@ -637,19 +637,30 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
             } catch (_) {}
           }
 
-          // Extract real error message from backend response
+          // Extract real error message from backend response, if it has one.
+          String? extracted;
           if (data is Map) {
             final msg = data['message'];
             if (msg is List && msg.isNotEmpty) {
-              errMsg = msg.join(', ');
+              extracted = msg.join(', ');
             } else if (msg is String && msg.isNotEmpty) {
-              errMsg = msg;
+              extracted = msg;
             } else if (data['error'] is String &&
                 data['error'] != 'Bad Request') {
-              errMsg = data['error'];
+              extracted = data['error'];
             }
           } else if (data is String && data.isNotEmpty) {
-            errMsg = data;
+            extracted = data;
+          }
+
+          // Otherwise fall back to the exception type/status code — this must
+          // run whenever the response body didn't yield a usable message
+          // (including when data was a Map/String with no relevant field),
+          // not just when there was no response body at all, so a real
+          // timeout/connection failure always gets a specific message
+          // instead of the generic default.
+          if (extracted != null) {
+            errMsg = extracted;
           } else if (e.type == DioExceptionType.connectionTimeout ||
               e.type == DioExceptionType.sendTimeout ||
               e.type == DioExceptionType.receiveTimeout) {
@@ -680,6 +691,11 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
                 errMsg = 'Upload failed (Error $statusCode). Try again.';
             }
           }
+        } else {
+          // Not a DioException at all — e.g. the recording file couldn't be
+          // read (deleted, moved, or a storage permission issue) before the
+          // upload request was even made.
+          errMsg = 'Could not read the recording file. Please try again.';
         }
         debugPrint(
           '[Upload] status: ${e is DioException ? e.response?.statusCode : "N/A"}',

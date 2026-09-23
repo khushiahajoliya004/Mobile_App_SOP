@@ -217,8 +217,11 @@ class ApiService {
     final plainDio = Dio(
       BaseOptions(
         connectTimeout: const Duration(seconds: 30),
-        sendTimeout: const Duration(minutes: 5),
-        receiveTimeout: const Duration(minutes: 5),
+        // 15 min: this leg carries the raw file bytes (up to 100MB) and must
+        // tolerate weak/slow mobile connections without tripping a timeout
+        // mid-upload.
+        sendTimeout: const Duration(minutes: 15),
+        receiveTimeout: const Duration(minutes: 15),
       ),
     );
     await plainDio.put(
