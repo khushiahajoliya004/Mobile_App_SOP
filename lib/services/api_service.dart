@@ -231,6 +231,39 @@ class ApiService {
     );
   }
 
+  /// Reports a client-side upload failure (e.g. the direct-to-S3 PUT timing
+  /// out or losing connection) to the backend's upload-error log, since that
+  /// leg never touches our server and would otherwise be invisible there —
+  /// see CallController.reportUploadError(). Deliberately swallows its own
+  /// errors so a failed report never masks the original upload error shown
+  /// to the user.
+  Future<void> reportUploadError({
+    required String errorCode,
+    required String errorMessage,
+    String? customerName,
+    String? audioFileName,
+    int? fileSizeBytes,
+    String? deviceInfo,
+    String uploadSource = 'MANUAL',
+  }) async {
+    try {
+      await _dio.post(
+        '/calls/upload-errors/report',
+        data: {
+          'errorCode': errorCode,
+          'errorMessage': errorMessage,
+          if (customerName != null) 'customerName': customerName,
+          if (audioFileName != null) 'audioFileName': audioFileName,
+          if (fileSizeBytes != null) 'fileSizeBytes': fileSizeBytes,
+          if (deviceInfo != null) 'deviceInfo': deviceInfo,
+          'uploadSource': uploadSource,
+        },
+      );
+    } catch (_) {
+      // Never let a failed error-report break the actual upload-failure flow.
+    }
+  }
+
   /// Convenience wrapper around getUploadUrl() + putFileToS3(): infers the
   /// content type from the file's extension, uploads it to S3, and returns
   /// (audioUrl, fileType) ready to pass into createCall().

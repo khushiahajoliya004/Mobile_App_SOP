@@ -704,6 +704,27 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
           '[Upload] response body: ${e is DioException ? e.response?.data : e}',
         );
         debugPrint('[Upload] error message shown: $errMsg');
+
+        // Report this failure to the backend's upload-error log — this is the
+        // ONLY way the S3-PUT leg of the upload (which never touches our
+        // server) becomes visible there at all; without this call, a failure
+        // here leaves zero trace on the backend even though the app clearly
+        // failed to upload.
+        int? fileSizeBytes;
+        try {
+          if (_audioFilePath != null) {
+            fileSizeBytes = await File(_audioFilePath!).length();
+          }
+        } catch (_) {}
+        await _api.reportUploadError(
+          errorCode: e is DioException ? _classifyDioErrorCode(e) : 'FILE_READ_ERROR',
+          errorMessage: errMsg,
+          customerName: _customerNameController.text.trim(),
+          audioFileName: _audioFileName,
+          fileSizeBytes: fileSizeBytes,
+          deviceInfo: '${Platform.operatingSystem} ${Platform.operatingSystemVersion}',
+        );
+
         setState(() {
           _statusMessage = errMsg;
           _isError = true;
@@ -712,6 +733,28 @@ class _CallUploadScreenState extends State<CallUploadScreen> {
       }
     } finally {
       if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  // Mirrors CallController.classifyError() on the backend so upload_error_logs
+  // rows from this client-reported path use the same errorCode vocabulary as
+  // ones the backend logs itself for the legacy/createCall path.
+  String _classifyDioErrorCode(DioException e) {
+    switch (e.type) {
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.receiveTimeout:
+        return 'TIMEOUT';
+      case DioExceptionType.connectionError:
+        return 'CONNECTION_ERROR';
+      case DioExceptionType.badCertificate:
+        return 'CERT_ERROR';
+      default:
+        final status = e.response?.statusCode;
+        if (status == 413) return 'FILE_TOO_LARGE';
+        if (status == 401) return 'SESSION_EXPIRED';
+        if (status != null) return 'HTTP_$status';
+        return 'S3_UPLOAD_FAILED';
     }
   }
 
