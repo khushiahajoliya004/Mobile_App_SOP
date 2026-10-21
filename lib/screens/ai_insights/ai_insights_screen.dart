@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../main.dart';
 import '../../services/api_service.dart';
+import '../../services/recording_download_service.dart';
 
 class AiInsightsScreen extends StatefulWidget {
   final String? initialStatus;
@@ -42,6 +44,10 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
   // Transcription visibility (company-wide setting)
   bool _showTranscription = true;
 
+  // Auto Manager Review (company-wide setting): when ON the backend generates
+  // the review after analysis, so no Generate button is shown.
+  bool _autoManagerReview = true;
+
   // Filters / Pagination
   String _search = '';
   String _userSearch = '';
@@ -61,6 +67,11 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
 
   // Bulk selection
   final Set<String> _selectedCallIds = {};
+
+  // Single-call recording downloads: callId → progress (null = size not
+  // known yet). _recordingSaved shows a brief ✓ on the button after saving.
+  final Map<String, double?> _recordingProgress = {};
+  final Set<String> _recordingSaved = {};
 
   // Generate states
   bool _summaryGenerating = false;
@@ -201,7 +212,10 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
       final res = await _api.getWaSettings();
       final d = res.data?['data'] ?? res.data;
       if (d is Map && mounted) {
-        setState(() => _showTranscription = d['showTranscription'] != false);
+        setState(() {
+          _showTranscription = d['showTranscription'] != false;
+          _autoManagerReview = d['autoManagerReview'] != false;
+        });
       }
     } catch (_) {}
   }
@@ -361,30 +375,156 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
 
   Future<void> _bulkDownload() async {
     if (_selectedCallIds.isEmpty || _bulkDownloading) return;
+
+    // One call selected = same as its own download button (real file name
+    // and type instead of a ZIP).
+    if (_selectedCallIds.length == 1) {
+      final call = _calls.firstWhere(
+          (c) => c['id']?.toString() == _selectedCallIds.first,
+          orElse: () => <String, dynamic>{});
+      if (call.isNotEmpty) {
+        setState(() => _selectedCallIds.clear());
+        await _downloadRecording(call);
+        return;
+      }
+    }
+
     setState(() => _bulkDownloading = true);
     try {
       final res =
           await _api.bulkDownloadRecordings(_selectedCallIds.toList());
-      final bytes = res.data;
-      if (bytes is List<int> && bytes.isNotEmpty) {
-        final dir = Platform.isAndroid
-            ? (await getExternalStorageDirectory() ?? await getApplicationDocumentsDirectory())
-            : await getApplicationDocumentsDirectory();
-        final isSingle = _selectedCallIds.length == 1;
-        final ext = isSingle ? 'wav' : 'zip';
-        final ts = DateTime.now().millisecondsSinceEpoch;
-        final name = isSingle ? 'recording_$ts.$ext' : 'recordings_$ts.$ext';
-        final file = File('${dir.path}/$name');
-        await file.writeAsBytes(bytes);
-        _msg('Saved: $name');
-        setState(() => _selectedCallIds.clear());
+      final data = res.data;
+      if (data is List<int> && data.isNotEmpty) {
+        final bytes = Uint8List.fromList(data);
+        final now = DateTime.now();
+        String two(int n) => n.toString().padLeft(2, '0');
+        final name =
+            'recordings_${now.year}-${two(now.month)}-${two(now.day)}_${two(now.hour)}-${two(now.minute)}.zip';
+        final saved = await RecordingDownloadService.saveToDevice(bytes, name);
+        if (saved && mounted) {
+          _recordingSavedSnack(name, bytes);
+          setState(() => _selectedCallIds.clear());
+        }
       } else {
-        _msg('No data received', error: true);
+        _msg('No recordings found for the selected calls', error: true);
       }
     } catch (e) {
-      _msg('Download failed', error: true);
+      _msg('Download failed. Please try again.', error: true);
     }
     if (mounted) setState(() => _bulkDownloading = false);
+  }
+
+  // ─── Single Recording Download ────────────────────────────────────────
+
+  Future<void> _downloadRecording(Map<String, dynamic> call) async {
+    final id = call['id']?.toString();
+    if (id == null || _recordingProgress.containsKey(id)) return;
+    if (!RecordingDownloadService.hasRecording(call)) {
+      _msg('No recording for this call', error: true);
+      return;
+    }
+
+    setState(() => _recordingProgress[id] = null);
+    final fileName = RecordingDownloadService.fileNameFor(call);
+    try {
+      final bytes = await RecordingDownloadService.fetch(
+        call,
+        _api,
+        onProgress: (p) {
+          // Throttle rebuilds to ~2% steps — this screen is large.
+          final last = _recordingProgress[id];
+          if (!mounted || (p != null && last != null && p - last < 0.02 && p < 1)) return;
+          setState(() => _recordingProgress[id] = p);
+        },
+      );
+      if (mounted) setState(() => _recordingProgress.remove(id));
+
+      final saved = await RecordingDownloadService.saveToDevice(bytes, fileName);
+      if (!saved || !mounted) return;
+      setState(() => _recordingSaved.add(id));
+      _recordingSavedSnack(fileName, bytes);
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted) setState(() => _recordingSaved.remove(id));
+      });
+    } catch (_) {
+      if (mounted) setState(() => _recordingProgress.remove(id));
+      _msg('Could not download the recording. Please try again.', error: true);
+    }
+  }
+
+  void _recordingSavedSnack(String fileName, Uint8List bytes) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppColors.success,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          content: Row(children: [
+            const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text('Saved $fileName',
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
+          ]),
+          action: SnackBarAction(
+            label: 'SHARE',
+            textColor: Colors.white,
+            onPressed: () => RecordingDownloadService.share(bytes, fileName),
+          ),
+        ),
+      );
+  }
+
+  /// Round download button: idle ↓, live progress ring while downloading,
+  /// brief ✓ after saving.
+  Widget _recordingDownloadButton(Map<String, dynamic> call, {double size = 36}) {
+    final id = call['id']?.toString() ?? '';
+    final downloading = _recordingProgress.containsKey(id);
+    final progress = _recordingProgress[id];
+    final saved = _recordingSaved.contains(id);
+    final color = saved ? AppColors.success : AppColors.primary;
+
+    return Tooltip(
+      message: 'Download recording',
+      child: Material(
+        color: color.withValues(alpha: 0.08),
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: downloading ? null : () => _downloadRecording(call),
+          child: SizedBox(
+            width: size,
+            height: size,
+            child: Center(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                child: downloading
+                    ? SizedBox(
+                        key: const ValueKey('progress'),
+                        width: size * 0.55,
+                        height: size * 0.55,
+                        child: CircularProgressIndicator(
+                          value: progress,
+                          strokeWidth: 2.2,
+                          color: AppColors.primary,
+                          backgroundColor: AppColors.primary.withValues(alpha: 0.15),
+                        ),
+                      )
+                    : Icon(
+                        saved ? Icons.check_rounded : Icons.download_rounded,
+                        key: ValueKey(saved),
+                        size: size * 0.5,
+                        color: color,
+                      ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   // ─── Merged PDF Download ──────────────────────────────────────────────
@@ -1196,6 +1336,10 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
                 ],
               ),
             ),
+            if (RecordingDownloadService.hasRecording(call)) ...[
+              const SizedBox(width: 8),
+              _recordingDownloadButton(call),
+            ],
           ],
         ),
       ),
@@ -1735,6 +1879,10 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
               color: AppColors.textSecondary,
             ),
           ),
+          if (_selected != null) ...[
+            const SizedBox(width: 10),
+            _recordingDownloadButton(_selected!, size: 34),
+          ],
         ],
       ),
     );
@@ -2587,6 +2735,28 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
 
   Widget _managerReviewTab(Map<String, dynamic> c) {
     final review = c['aiAnalysis']?['salesManagerReview'];
+
+    if (review == null && _autoManagerReview) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.rate_review_outlined, size: 48, color: AppColors.textHint),
+              SizedBox(height: 8),
+              Text('No manager review yet', style: TextStyle(color: AppColors.textHint)),
+              SizedBox(height: 4),
+              Text(
+                'Manager Review is generated automatically after analysis — it will appear here shortly.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: AppColors.textHint),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     if (review == null) {
       return Center(

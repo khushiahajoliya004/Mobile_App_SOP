@@ -2088,11 +2088,20 @@ class ApiService {
   }
 
   /// POST /calls/bulk-download — download multiple recordings as zip (or single file)
-  Future<Response> bulkDownloadRecordings(List<String> callIds) async {
+  Future<Response> bulkDownloadRecordings(
+    List<String> callIds, {
+    ProgressCallback? onReceiveProgress,
+    CancelToken? cancelToken,
+  }) async {
     return _dio.post(
       '/calls/bulk-download',
       data: {'callIds': callIds},
-      options: Options(responseType: ResponseType.bytes),
+      options: Options(
+        responseType: ResponseType.bytes,
+        receiveTimeout: const Duration(minutes: 5),
+      ),
+      onReceiveProgress: onReceiveProgress,
+      cancelToken: cancelToken,
     );
   }
 
