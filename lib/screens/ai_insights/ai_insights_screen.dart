@@ -312,11 +312,19 @@ class _AiInsightsScreenState extends State<AiInsightsScreen> {
     });
     await _audioPlayer!.setVolume(_audioVolume);
     await _audioPlayer!.setSource(UrlSource(url));
-    setState(() {
-      _audioPosition = Duration.zero;
-      _audioDuration = Duration.zero;
-      _isAudioPlaying = false;
-    });
+    // Don't reset _audioDuration here — onDurationChanged may already have
+    // fired during setSource, and wiping it pins the slider max to 1s.
+    // _stopAudio() above already reset position/duration/playing state.
+    if (_audioDuration == Duration.zero) {
+      Duration? d = await _audioPlayer?.getDuration();
+      if (d == null || d == Duration.zero) {
+        final secs = num.tryParse('${_selected?['durationSeconds'] ?? ''}');
+        if (secs != null && secs > 0) d = Duration(seconds: secs.round());
+      }
+      if (d != null && d > Duration.zero && mounted) {
+        setState(() => _audioDuration = d!);
+      }
+    }
   }
 
   Future<void> _stopAudio() async {
