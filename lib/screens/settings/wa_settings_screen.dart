@@ -73,7 +73,7 @@ class _WaSettingsScreenState extends State<WaSettingsScreen> {
             const Icon(Icons.info_outline_rounded, color: AppColors.primary, size: 20),
             const SizedBox(width: 10),
             const Expanded(child: Text(
-              'Manager Review PDFs are sent via WhatsApp to the salesperson, their senior, and the audit number below.',
+              'After a call is analysed, the person who uploaded it gets the Manager Review PDF and a permanent call recording link on WhatsApp. If the review can\'t be created, only the recording link is sent.',
               style: TextStyle(fontSize: 12, color: AppColors.primary, height: 1.4),
             )),
           ]),
@@ -83,7 +83,7 @@ class _WaSettingsScreenState extends State<WaSettingsScreen> {
         // Audit number
         const Text('Audit Number', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
         const SizedBox(height: 4),
-        const Text('This number receives all Manager Review PDFs (e.g. +919876543210)', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        const Text('Saved for reference — automatic WhatsApp messages currently go only to the person who uploaded the call', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
         const SizedBox(height: 10),
         TextField(
           controller: _auditNumber,
@@ -105,9 +105,9 @@ class _WaSettingsScreenState extends State<WaSettingsScreen> {
           decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.surfaceLight)),
           child: Row(children: [
             const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Auto-Send PDFs', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+              Text('Auto-Send on WhatsApp', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
               SizedBox(height: 2),
-              Text('Automatically send Manager Review PDFs via WhatsApp after processing', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+              Text('Send the Manager Review PDF and call recording link to the uploader after processing', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
             ])),
             Switch(
               value: _autoSendEnabled,
