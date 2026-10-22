@@ -2424,6 +2424,9 @@ class ApiService {
     String? waAuditNumber,
     bool? waAutoSendEnabled,
     bool? showTranscription,
+    bool? dailyReportEnabled,
+    bool? dailyReportPdf,
+    bool? dailyReportText,
   }) async {
     return _dio.patch(
       '/settings/wa',
@@ -2431,9 +2434,24 @@ class ApiService {
         if (waAuditNumber != null) 'waAuditNumber': waAuditNumber,
         if (waAutoSendEnabled != null) 'waAutoSendEnabled': waAutoSendEnabled,
         if (showTranscription != null) 'showTranscription': showTranscription,
+        if (dailyReportEnabled != null) 'dailyReportEnabled': dailyReportEnabled,
+        if (dailyReportPdf != null) 'dailyReportPdf': dailyReportPdf,
+        if (dailyReportText != null) 'dailyReportText': dailyReportText,
       },
     );
   }
+
+  // ─── Daily Call Report (WhatsApp, 7 PM) ───
+
+  /// GET /daily-call-report/pdf — today's report (company login: whole
+  /// company; others: own team).
+  Future<Response> downloadDailyCallReportPdf() async => _dio.get(
+        '/daily-call-report/pdf',
+        options: Options(responseType: ResponseType.bytes, receiveTimeout: const Duration(minutes: 2)),
+      );
+
+  /// POST /daily-call-report/send-now — company admin only.
+  Future<Response> sendDailyCallReportNow() async => _dio.post('/daily-call-report/send-now', data: {});
 
   // ─── CRM v2 Contacts ───
 
