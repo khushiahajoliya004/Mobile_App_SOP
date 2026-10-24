@@ -21,7 +21,7 @@ class _WaSettingsScreenState extends State<WaSettingsScreen> {
 
   // Daily Call Report (WhatsApp, 7 PM)
   bool _dailyEnabled = false;
-  bool _dailyPdf = true;
+  bool _dailyPdf = false;
   bool _dailyText = false;
   bool _isCompanyAdmin = false;
   String? _dailyBusy; // 'pdf' | 'send'
@@ -50,7 +50,7 @@ class _WaSettingsScreenState extends State<WaSettingsScreen> {
         _autoSendEnabled = data['waAutoSendEnabled'] == true;
         _auditNumber.text = data['waAuditNumber'] ?? '';
         _dailyEnabled = data['dailyReportEnabled'] == true;
-        _dailyPdf = data['dailyReportPdf'] != false;
+        _dailyPdf = data['dailyReportPdf'] == true;
         _dailyText = data['dailyReportText'] == true;
       }
     } catch (_) {}
